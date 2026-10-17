@@ -1,0 +1,148 @@
+import type { AssetKind, Market } from './types';
+
+/**
+ * A 股 / 指数 / 基金代码标准化工具。
+ * 上证与深证存在代码重叠（如 000001 既是上证指数又是平安银行），
+ * 因此指数用白名单显式判定，其余按板块规则落到股票。
+ */
+
+export const INDEX_WHITELIST: Record<string, { symbol: string; name: string; market: Market }> = {
+  '000001': { symbol: 'sh000001', name: '上证指数', market: 'SH' },
+  '000300': { symbol: 'sh000300', name: '沪深300', market: 'SH' },
+  '000016': { symbol: 'sh000016', name: '上证50', market: 'SH' },
+  '000010': { symbol: 'sh000010', name: '上证180', market: 'SH' },
+  '000009': { symbol: 'sh000009', name: '上证380', market: 'SH' },
+  '000905': { symbol: 'sh000905', name: '中证500', market: 'SH' },
+  '000852': { symbol: 'sh000852', name: '中证1000', market: 'SH' },
+  '000688': { symbol: 'sh000688', name: '科创50', market: 'SH' },
+  '000015': { symbol: 'sh000015', name: '红利指数', market: 'SH' },
+  '399001': { symbol: 'sz399001', name: '深证成指', market: 'SZ' },
+  '399006': { symbol: 'sz399006', name: '创业板指', market: 'SZ' },
+  '399005': { symbol: 'sz399005', name: '中小板指', market: 'SZ' },
+  '399300': { symbol: 'sz399300', name: '沪深300', market: 'SZ' },
+  '399905': { symbol: 'sz399905', name: '中证500', market: 'SZ' },
+  '899050': { symbol: 'bj899050', name: '北证50', market: 'BJ' },
+};
+
+const ETF_PREFIX_SH = ['50', '51', '52', '56', '58'];
+const ETF_PREFIX_SZ = ['15', '16', '18'];
+/** 场外基金（按代码段粗略识别） */
+const FUND_PREFIX_SH = ['50', '51', '52'];
+
+export interface NormalizedCode {
+  code: string;
+  symbol: string;
+  market: Market;
+  kind: AssetKind;
+  /** 板块名 */
+  board: string;
+  /** 东方财富 secid（1=沪, 0=深/北） */
+  secid: string;
+}
+
+function numOrNull(v: unknown): number | null {
+  if (v === null || v === undefined || v === '' || v === '-') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+export { numOrNull };
+
+/**
+ * 把任意用户输入（600519 / sh600519 / 600519.SH / 沪深300）标准化。
+ * 无法判定时返回 null，由调用方交给搜索接口去问上游。
+ */
+export function normalizeCode(input: string): NormalizedCode | null {
+  if (!input) return null;
+  let raw = String(input).trim().toLowerCase();
+  // 去掉 .SH / .SZ 之类的后缀
+  raw = raw.replace(/\.(sh|sz|bj|ss)$/, '');
+  // 去掉已有的市场前缀
+  const prefixed = raw.match(/^(sh|sz|bj)(\d{6})$/);
+  if (prefixed) {
+    return build(prefixed[2], prefixed[1].toUpperCase() as Market);
+  }
+  const digits = raw.match(/^(\d{6})$/);
+  if (!digits) return null;
+  const code = digits[1];
+
+  // 指数优先（解决 000001 歧义：默认返回指数，股票由搜索另行给出）
+  const idx = INDEX_WHITELIST[code];
+  if (idx) return build(code, idx.market);
+
+  // 板块规则
+  const head2 = code.slice(0, 2);
+  const head3 = code.slice(0, 3);
+
+  if (code.startsWith('6')) return build(code, 'SH');
+  if (code.startsWith('688') || code.startsWith('689')) return build(code, 'SH');
+  if (code.startsWith('0') || code.startsWith('3')) return build(code, 'SZ');
+  if (code.startsWith('4') || code.startsWith('8')) return build(code, 'BJ');
+  if (ETF_PREFIX_SH.includes(head2) || FUND_PREFIX_SH.includes(head2)) return build(code, 'SH');
+  if (ETF_PREFIX_SZ.includes(head2)) return build(code, 'SZ');
+  if (head3 === '110' || head3 === '113' || head3 === '123' || head3 === '127') return build(code, 'SH'); // 可转债
+  return build(code, 'SH');
+}
+
+function build(code: string, market: Market): NormalizedCode {
+  const symbol = `${market.toLowerCase()}${code}`;
+  const idx = INDEX_WHITELIST[code];
+  let kind: AssetKind = 'stock';
+  let board = 'A股';
+
+  if (idx && idx.market === market) {
+    kind = 'index';
+    board = '指数';
+  } else if (market === 'BJ') {
+    board = '北交所';
+  } else if (code.startsWith('688')) {
+    board = '科创板';
+  } else if (code.startsWith('300') || code.startsWith('301')) {
+    board = '创业板';
+  } else if (code.startsWith('6')) {
+    board = '沪市主板';
+  } else if (code.startsWith('0')) {
+    board = '深市主板';
+  } else if (ETF_PREFIX_SH.includes(code.slice(0, 2)) || ETF_PREFIX_SZ.includes(code.slice(0, 2))) {
+    kind = code.startsWith('15') && code.startsWith('159') ? 'etf' : 'etf';
+    board = 'ETF/基金';
+  }
+
+  const secid = `${market === 'SH' ? '1' : '0'}.${code}`;
+  return { code, symbol, market, kind, board, secid };
+}
+
+/** 批量标准化（行情接口一次可查多个代码，提高吞吐） */
+export function toSymbols(inputs: string[]): string[] {
+  const out: string[] = [];
+  for (const i of inputs) {
+    const n = normalizeCode(i);
+    if (n) out.push(n.symbol);
+  }
+  return Array.from(new Set(out));
+}
+
+/** 是否为交易时段（粗略，用于决定是否强缓存） */
+export function isTradingNow(d = new Date()): boolean {
+  const day = d.getDay();
+  if (day === 0 || day === 6) return false;
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const t = h * 60 + m;
+  return (t >= 9 * 60 + 15 && t <= 11 * 60 + 30) || (t >= 13 * 60 && t <= 15 * 60 + 5);
+}
+
+/** 数字格式化：亿元为单位时保留 2 位 */
+export function fmtNumber(v: number | null, digits = 2): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return '--';
+  return v.toFixed(digits);
+}
+
+/** 大数字智能单位（亿 / 万） */
+export function fmtCompact(v: number | null): string {
+  if (v === null || !Number.isFinite(v)) return '--';
+  const abs = Math.abs(v);
+  if (abs >= 1e8) return `${(v / 1e8).toFixed(2)}亿`;
+  if (abs >= 1e4) return `${(v / 1e4).toFixed(2)}万`;
+  return v.toFixed(2);
+}

@@ -1,0 +1,17 @@
+import type { NextRequest } from 'next/server';
+import { ok, fail, sp } from '@/lib/api';
+import { getFinancial } from '@/lib/datasource';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+/** GET /api/financial?code=600519 —— 财务摘要（iFinD 真实三表优先，否则恒等式派生） */
+export async function GET(request: NextRequest) {
+  const code = sp(request).get('code');
+  if (!code) return fail('缺少 code 参数', 400);
+  try {
+    return ok(await getFinancial(code));
+  } catch (e) {
+    return fail(e instanceof Error ? e.message : '财务数据获取失败', 502, e);
+  }
+}

@@ -1,0 +1,385 @@
+/**
+ * 新浪财经-三大报表 Provider（资产负债表 / 利润表 / 现金流量表，全字段）。
+ *
+ * 端点（HTML，GBK，单位：万元）：
+ *   https://money.finance.sina.com.cn/corp/go.php/vFD_BalanceSheet/stockid/{code}/ctrl/{year}/displaytype/4.phtml
+ *   https://money.finance.sina.com.cn/corp/go.php/vFD_ProfitStatement/...
+ *   https://money.finance.sina.com.cn/corp/go.php/vFD_CashFlow/...
+ *
+ * 每页 = 该年 4 个报告期 × 全部披露科目（资产负债表约 88 项、利润表约 22 项、现金流量表约 40 项），
+ * 页面自带分组标题（如「流动资产」「一、经营活动产生的现金流量」），据此生成字段目录。
+ *
+ * 字段 key 约定：`{表前缀}_{中文科目名}`，如 bs_货币资金 / pl_营业收入 / cf_销售商品、提供劳务收到的现金。
+ * 中文 key 直接用于 JSON 与前端展示，URL 传输时 encodeURIComponent 即可。
+ */
+
+import { fetchText } from './http';
+
+export const PROVIDER_NAME = 'sina-statements';
+
+export type StatementId = 'balance' | 'profit' | 'cashflow';
+
+export const STATEMENT_META: Record<StatementId, { label: string; url: string; prefix: string }> = {
+  balance: {
+    label: '资产负债表',
+    url: 'https://money.finance.sina.com.cn/corp/go.php/vFD_BalanceSheet/stockid/{code}/ctrl/{year}/displaytype/4.phtml',
+    prefix: 'bs',
+  },
+  profit: {
+    label: '利润表',
+    url: 'https://money.finance.sina.com.cn/corp/go.php/vFD_ProfitStatement/stockid/{code}/ctrl/{year}/displaytype/4.phtml',
+    prefix: 'pl',
+  },
+  cashflow: {
+    label: '现金流量表',
+    url: 'https://money.finance.sina.com.cn/corp/go.php/vFD_CashFlow/stockid/{code}/ctrl/{year}/displaytype/4.phtml',
+    prefix: 'cf',
+  },
+};
+
+/** 报表科目字段定义（与 sinaFinancial.IndicatorDef 保持兼容的最小形状） */
+export interface StatementFieldDef {
+  key: string;
+  /** 报表页上的中文科目名 */
+  sina: string;
+  label: string;
+  group: string;
+  statement: StatementId;
+  /** 三大报表数值单位均为「万元」（新浪披露口径） */
+  unit: 'wan';
+}
+
+export interface FieldGroup {
+  label: string;
+  fields: StatementFieldDef[];
+}
+
+export interface StatementCatalog {
+  id: StatementId;
+  label: string;
+  /** 披露单位，如「万元」 */
+  unit: string;
+  groups: FieldGroup[];
+  /** 字段总数 */
+  total: number;
+}
+
+/* ------------------------------------------------------- 页面解析 */
+
+interface ParsedRow {
+  kind: 'date' | 'group' | 'field';
+  name: string;
+  /** 各报告期原始值（field 行） */
+  vals: string[];
+}
+
+function parseStatementPage(html: string): { dates: string[]; rows: ParsedRow[]; unit: string } {
+  const dates: string[] = [];
+  const rows: ParsedRow[] = [];
+  const unitMatch = html.match(/单位：([^<]+)/);
+  const unit = unitMatch ? unitMatch[1].trim() : '万元';
+
+  const trRe = /<tr[^>]*>([\s\S]*?)<\/tr>/g;
+  let m: RegExpExecArray | null;
+  while ((m = trRe.exec(html)) !== null) {
+    const tr = m[1];
+    if (tr.includes('报表日期')) {
+      for (const d of tr.matchAll(/<td[^>]*>(\d{4}-\d{2}-\d{2})<\/td>/g)) dates.push(d[1]);
+      continue;
+    }
+    const colspan = tr.match(/<td colspan='\d+'><strong>([^<]+)<\/strong><\/td>/);
+    if (colspan) {
+      rows.push({ kind: 'group', name: colspan[1].trim(), vals: [] });
+      continue;
+    }
+    if (tr.includes('padding-left:30px')) {
+      const tds = Array.from(tr.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)).map((x) => stripTags(x[1]));
+      if (tds.length >= 2) {
+        rows.push({ kind: 'field', name: tds[0], vals: tds.slice(1) });
+      }
+    }
+  }
+  return { dates, rows, unit };
+}
+
+function stripTags(s: string): string {
+  return s
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .trim();
+}
+
+function toNum(s: string | null | undefined): number | null {
+  if (!s || s === '--' || s === '') return null;
+  const n = Number(s.replace(/,/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * 报告期 → 展示标签。
+ * mode='report'（默认，财报表格用）：12-31 → 年报，06-30 → 中报；
+ * mode='half'（趋势/图表用）：12-31 → H2，06-30 → H1。
+ */
+export function periodLabel(date: string, mode: 'report' | 'half' = 'report'): string {
+  const m = date.match(/^(\d{2})(\d{2})-(\d{2})-(\d{2})$/);
+  if (!m) return date;
+  const y = m[1] + m[2];
+  const md = `${m[3]}-${m[4]}`;
+  if (md === '12-31') return mode === 'report' ? `${y}年报` : `${y}H2`;
+  if (md === '06-30') return mode === 'report' ? `${y}中报` : `${y}H1`;
+  if (md === '03-31') return `${y}Q1`;
+  if (md === '09-30') return `${y}Q3`;
+  return date.slice(2);
+}
+
+/* ------------------------------------------------------- 字段目录 */
+
+const catalogCache = new Map<string, { at: number; catalog: StatementCatalog[] }>();
+const CATALOG_TTL = 24 * 60 * 60 * 1000;
+
+/** 解析单年页面 → 目录（失败返回 null） */
+function catalogFromPage(id: StatementId, parsed: { rows: ParsedRow[]; unit: string } | null): StatementCatalog | null {
+  if (!parsed || parsed.rows.length === 0) return null;
+  const meta = STATEMENT_META[id];
+  const groups: FieldGroup[] = [];
+  let cur: FieldGroup = { label: meta.label, fields: [] };
+  const flush = () => {
+    if (cur.fields.length > 0) groups.push(cur);
+  };
+  for (const row of parsed.rows) {
+    if (row.kind === 'group') {
+      flush();
+      cur = { label: row.name, fields: [] };
+    } else if (row.kind === 'field' && row.name) {
+      cur.fields.push({
+        key: `${meta.prefix}_${row.name}`,
+        sina: row.name,
+        label: row.name,
+        group: cur.label,
+        statement: id,
+        unit: 'wan',
+      });
+    }
+  }
+  flush();
+  if (groups.length === 0) return null;
+  return {
+    id,
+    label: meta.label,
+    unit: parsed.unit,
+    groups,
+    total: groups.reduce((a, g) => a + g.fields.length, 0),
+  };
+}
+
+/**
+ * 抓取字段目录（以最近一个有数据的年度页面为准）。
+ * 目录跨公司基本一致（新浪统一模板），按 code 缓存 24h。
+ */
+export async function fetchStatementCatalog(code: string): Promise<StatementCatalog[]> {
+  const hit = catalogCache.get(code);
+  if (hit && Date.now() - hit.at < CATALOG_TTL) return hit.catalog;
+
+  const thisYear = new Date().getFullYear();
+  const candidates = [thisYear, thisYear - 1];
+
+  for (const y of candidates) {
+    const pages = await Promise.all(
+      (Object.keys(STATEMENT_META) as StatementId[]).map(async (id) => {
+        const url = STATEMENT_META[id].url.replace('{code}', code).replace('{year}', String(y));
+        try {
+          const html = await fetchText(url, { encoding: 'gbk', timeoutMs: 10000 });
+          const parsed = parseStatementPage(html);
+          return { id, parsed };
+        } catch {
+          return { id, parsed: null };
+        }
+      }),
+    );
+    const catalog = pages
+      .map((p) => catalogFromPage(p.id, p.parsed))
+      .filter((c): c is StatementCatalog => c !== null);
+    if (catalog.length === 3) {
+      catalogCache.set(code, { at: Date.now(), catalog });
+      return catalog;
+    }
+  }
+  throw new Error(`新浪三大报表：${code} 字段目录获取失败`);
+}
+
+/* ------------------------------------------------------- 序列抓取 */
+
+/**
+ * 需要抓取的日历年份：「近 N 年」= 含当前年的 N 个自然年，
+ * 再多取 1 年，避免年报视图里最早一年缺失（例：10 年 → 10 个年报）。
+ * 最终裁剪由 cropRecentYears 按报告期长度完成。
+ */
+function yearListFor(years: number): number[] {
+  const thisYear = new Date().getFullYear();
+  const list: number[] = [];
+  const need = years + 1;
+  for (let y = thisYear; list.length < need && y >= 1998; y--) list.push(y);
+  return list;
+}
+
+/** 保留最近 N 个自然年内的报告期（以当前年 - N 的 1 月 1 日为界） */
+function cropRecentYears<T extends CustomFinancials>(f: T, years: number): T {
+  const now = new Date();
+  const from = `${now.getFullYear() - years + 1}-01-01`;
+  /** 当前年尚未出年报时，边界再往前推 1 年，保证年报视图仍是完整的 N 个年度 */
+  const annualLast = f.periods.at(-1) ?? '';
+  const fromAnnual = annualLast.endsWith('-12-31') && annualLast.slice(0, 4) === String(now.getFullYear())
+    ? from
+    : `${now.getFullYear() - years}-01-01`;
+  const candidates = f.periods
+    .map((p, i) => ({ p, i }))
+    .filter(({ p }) => p >= (p.endsWith('-12-31') ? fromAnnual : from));
+  // 若最新一期仍早于边界（数据源滞后），保留全部，避免出现空表
+  const keep = candidates.length > 0 ? candidates : f.periods.map((p, i) => ({ p, i }));
+  if (keep.length === f.periods.length) return f;
+  return {
+    ...f,
+    periods: keep.map((k) => k.p),
+    periodLabels: keep.map((k) => f.periodLabels[k.i]),
+    series: Object.fromEntries(Object.entries(f.series).map(([k, arr]) => [k, keep.map((x) => arr[x.i])])),
+  };
+}
+
+/** 单表多年数据：科目名 → 各期值（按 byDate 合并） */
+async function fetchOneStatement(
+  code: string,
+  id: StatementId,
+  years: number,
+  byDate: Map<string, Map<string, number | null>>,
+): Promise<void> {
+  const meta = STATEMENT_META[id];
+  const pages = await Promise.all(
+    yearListFor(years).map(async (y) => {
+      const url = meta.url.replace('{code}', code).replace('{year}', String(y));
+      try {
+        const html = await fetchText(url, { encoding: 'gbk', timeoutMs: 10000 });
+        return parseStatementPage(html);
+      } catch {
+        return null;
+      }
+    }),
+  );
+  for (const p of pages) {
+    if (!p || p.dates.length === 0) continue;
+    for (let i = 0; i < p.dates.length; i++) {
+      const date = p.dates[i];
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+      let rec = byDate.get(date);
+      if (!rec) {
+        rec = new Map();
+        byDate.set(date, rec);
+      }
+      for (const row of p.rows) {
+        if (row.kind === 'field' && row.name && row.vals[i] !== undefined) {
+          rec.set(`${meta.prefix}_${row.name}`, toNum(row.vals[i]));
+        }
+      }
+    }
+  }
+}
+
+export interface CustomFinancials {
+  code: string;
+  name: string;
+  periods: string[];
+  periodLabels: string[];
+  /** 字段 key（bs_x / pl_x / cf_x 或指标 key）→ 各期数值 */
+  series: Record<string, (number | null)[]>;
+  source: string;
+}
+
+/**
+ * 抓取自定义字段的多年序列。
+ * fields 为 `bs_货币资金,pl_营业收入` 这类 key 列表（中文 key 需由调用方 encodeURIComponent 后再逗号分隔）。
+ * 同时合并指标页数据：fields 中的非 bs/pl/cf 前缀 key 视为财务指标 key（roe 等）。
+ */
+export async function fetchCustomFinancials(
+  code: string,
+  fields: string[],
+  years: number,
+  name?: string,
+): Promise<CustomFinancials> {
+  if (fields.length === 0) throw new Error('未指定任何字段');
+
+  const byDate = new Map<string, Map<string, number | null>>();
+
+  const statementFields = fields.filter((k) => /^(bs|pl|cf)_/.test(k));
+  const indicatorKeys = fields.filter((k) => !/^(bs|pl|cf)_/.test(k));
+
+  const tasks: Promise<void>[] = [];
+  for (const key of statementFields) {
+    const id = (key.startsWith('bs_') ? 'balance' : key.startsWith('pl_') ? 'profit' : 'cashflow') as StatementId;
+    tasks.push(fetchOneStatement(code, id, years, byDate));
+  }
+
+  // 指标页数据（复用 sinaFinancial 的解析）：需要时才抓
+  if (indicatorKeys.length > 0) {
+    tasks.push(
+      (async () => {
+        const { fetchSinaFinancial } = await import('./sinaFinancial');
+        const f = await fetchSinaFinancial(code, years, name).catch(() => null);
+        if (!f) return;
+        for (let i = 0; i < f.periods.length; i++) {
+          let rec = byDate.get(f.periods[i]);
+          if (!rec) {
+            rec = new Map();
+            byDate.set(f.periods[i], rec);
+          }
+          for (const k of indicatorKeys) {
+            const v = f.series[k]?.[i];
+            if (v !== undefined) rec.set(k, v);
+          }
+        }
+      })(),
+    );
+  }
+
+  await Promise.all(tasks);
+
+  const periods = Array.from(byDate.keys()).sort();
+  if (periods.length === 0) throw new Error(`新浪三大报表：${code} 未取得任何报告期数据`);
+
+  const series: Record<string, (number | null)[]> = {};
+  for (const key of fields) {
+    series[key] = periods.map((d) => byDate.get(d)?.get(key) ?? null);
+  }
+
+  return cropRecentYears(
+    {
+      code,
+      name: name ?? code,
+      periods,
+      periodLabels: periods.map((d) => periodLabel(d, 'half')),
+      series,
+      source: PROVIDER_NAME,
+    },
+    years,
+  );
+}
+
+/** 按报告期粒度筛选（年报 / 中报 / 季报） */
+export function filterByGranularityCustom(
+  f: CustomFinancials,
+  g: 'annual' | 'semi' | 'quarter' = 'semi',
+): CustomFinancials {
+  if (g === 'quarter') return f;
+  const keep = f.periods
+    .map((p, i) => ({ p, i }))
+    .filter(({ p }) =>
+      g === 'annual' ? p.endsWith('-12-31') : p.endsWith('-12-31') || p.endsWith('-06-30'),
+    );
+  return {
+    ...f,
+    periods: keep.map((k) => k.p),
+    // 按明细粒度重算标签：年报/中报/季报的展示口径不同（12-31 在年报视图叫「年报」）
+    periodLabels: keep.map((k) => periodLabel(k.p, 'half')),
+    series: Object.fromEntries(
+      Object.entries(f.series).map(([k, arr]) => [k, keep.map((x) => arr[x.i])]),
+    ),
+  };
+}

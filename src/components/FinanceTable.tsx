@@ -1,0 +1,540 @@
+'use client';
+
+/**
+ * 合并报表（理杏仁式表格视图）：
+ *   - 行 = 指标（每指标含「数值 / 同比 / 环比」三行，红涨绿跌）
+ *   - 列 = 报告期（最新在左，倒序）
+ *   - 顶部：报告期粒度（年报/中报/季报）、区间（2/3/5/10 年）、对比公司（最多 3 家）、
+ *           数据显示设置（FieldPicker）、显示全部数据项、指标搜索、导出 CSV
+ * 数据复用 /api/finance-compare（多公司自定义字段序列，服务端聚合三大报表）。
+ */
+
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import FieldPicker, { allFieldMetas, type PickerCatalog } from '@/components/FieldPicker';
+import { INDICATORS } from '@/lib/datasource/sinaFinancial';
+import { STOCKS } from '@/lib/universe';
+
+interface CompanyFinancials {
+  code: string;
+  name: string;
+  periods: string[];
+  periodLabels: string[];
+  series: Record<string, (number | null)[]>;
+  source: string;
+}
+type CustomData = { companies: CompanyFinancials[] };
+
+/** 默认指标（理杏仁合并报表常用行；key 以新浪披露科目为准） */
+const DEFAULT_FIELDS = [
+  'pl_营业收入',
+  'pl_归属于母公司所有者的净利润',
+  'pl_营业成本',
+  'pl_销售费用',
+  'pl_管理费用',
+  'pl_研发费用',
+  'cf_经营活动产生的现金流量净额',
+  'bs_资产总计',
+  'bs_归属于母公司股东权益合计',
+  'bs_存货',
+  'bs_预收款项',
+  'roe',
+  'debtRatio',
+  'eps',
+];
+
+const GRAN: { key: 'annual' | 'semi' | 'quarter'; label: string; title: string }[] = [
+  { key: 'annual', label: '年报', title: '仅年度报告（12-31）' },
+  { key: 'semi', label: '中报', title: '半年报口径（H1 + H2）' },
+  { key: 'quarter', label: '季报', title: '全部季度报告（Q1/Q2/Q3/年报）' },
+];
+const RANGES = [2, 3, 5, 10] as const;
+
+const LS_FIELDS = 'fin.mergeTable.fields';
+
+function loadFields(): string[] {
+  try {
+    const raw = localStorage.getItem(LS_FIELDS);
+    const arr = raw ? JSON.parse(raw) : null;
+    if (Array.isArray(arr) && arr.length > 0) return arr.slice(0, 60);
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_FIELDS;
+}
+
+function loadShowAll(): boolean {
+  try {
+    return localStorage.getItem('fin.mergeTable.showAll') === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** 万元 → 亿自动折算（对齐理杏仁「默认单位: 亿元」观感） */
+function fmtWan(v: number | null): string {
+  if (v === null || !Number.isFinite(v)) return '--';
+  const a = Math.abs(v);
+  if (a >= 1e4) return (v / 1e4).toLocaleString('zh-CN', { maximumFractionDigits: 2 });
+  if (a === 0) return '0';
+  return v.toLocaleString('zh-CN', { maximumFractionDigits: 2 });
+}
+
+function fmtVal(v: number | null, unit: string): string {
+  if (v === null || !Number.isFinite(v)) return '--';
+  if (unit === 'pct') return `${v.toFixed(2)}%`;
+  if (unit === 'wan') return fmtWan(v);
+  if (unit === 'yuan') return v.toFixed(2);
+  return v.toLocaleString('zh-CN', { maximumFractionDigits: 2 });
+}
+
+/** 百分比变动（同比/环比），null 安全 */
+function pctChange(cur: number | null, prev: number | null): number | null {
+  if (cur === null || prev === null || !Number.isFinite(cur) || !Number.isFinite(prev)) return null;
+  if (prev === 0) return null;
+  return ((cur - prev) / Math.abs(prev)) * 100;
+}
+
+function pctCls(v: number | null): string {
+  if (v === null) return 'text-slate-300';
+  if (v > 0) return 'text-red-600';
+  if (v < 0) return 'text-emerald-600';
+  return 'text-slate-400';
+}
+
+export default function FinanceTable({ code }: { code: string }) {
+  const [granularity, setGranularity] = useState<'annual' | 'semi' | 'quarter'>('quarter');
+  const [years, setYears] = useState<number>(5);
+  const [extraCodes, setExtraCodes] = useState<string[]>([]);
+  const [fields, setFields] = useState<string[]>(DEFAULT_FIELDS);
+  const [showAll, setShowAll] = useState(false);
+  const [kw, setKw] = useState('');
+  const [data, setData] = useState<CustomData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<PickerCatalog | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [onlyHasData, setOnlyHasData] = useState(true);
+  const bootedRef = useRef(false);
+  const tableRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setFields(loadFields());
+    setShowAll(loadShowAll());
+    bootedRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!bootedRef.current) return;
+    try {
+      localStorage.setItem(LS_FIELDS, JSON.stringify(fields));
+      localStorage.setItem('fin.mergeTable.showAll', showAll ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }, [fields, showAll]);
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/finance-fields?code=${code}`)
+      .then((r) => r.json())
+      .then((j) => alive && j.ok && setCatalog(j.data as PickerCatalog))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [code]);
+
+  const fieldMetas = useMemo(() => {
+    const map = allFieldMetas(catalog);
+    for (const i of INDICATORS) {
+      if (!map.has(i.key)) {
+        map.set(i.key, { key: i.key, label: i.label, group: '财务指标', statement: 'indicator', unit: i.unit });
+      }
+    }
+    return map;
+  }, [catalog]);
+
+  /** 实际请求的字段：显示全部 = 目录内全部；否则用户所选 */
+  const fetchFields = useMemo(() => {
+    if (showAll) {
+      const all = Array.from(fieldMetas.keys()).filter((k) => !k.startsWith('fx_'));
+      return all.length > 0 ? all : fields;
+    }
+    return fields;
+  }, [showAll, fieldMetas, fields]);
+
+  const fieldsSig = useMemo(() => [...fetchFields].sort().join(','), [fetchFields]);
+  const codesSig = [code, ...extraCodes].join(',');
+
+  useEffect(() => {
+    if (fetchFields.length === 0) return;
+    let alive = true;
+    setLoading(true);
+    setErr(null);
+    fetch(
+      `/api/finance-compare?codes=${codesSig}&years=${years}&granularity=${granularity}&fields=${encodeURIComponent(fieldsSig)}`,
+    )
+      .then((r) => r.json())
+      .then((j) => {
+        if (!alive) return;
+        if (j.ok) setData(j.data as CustomData);
+        else setErr(j.error ?? '财报数据获取失败');
+      })
+      .catch((e) => alive && setErr(String(e)))
+      .finally(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, [codesSig, granularity, years, fieldsSig, fetchFields.length]);
+
+  const companies = data?.companies ?? [];
+  const primary = companies[0];
+  /** 列（报告期）以主公司为准，倒序 = 最新在左 */
+  const periodsAsc = primary?.periods ?? [];
+  const labelsAsc = primary?.periodLabels ?? [];
+  /** 列标题按当前粒度口径改写：年报视图的 12-31 显示「年报」，中报视图显示「中报」 */
+  const labelOf = (period: string, raw: string): string => {
+    if (granularity === 'annual' || granularity === 'semi') {
+      if (period.endsWith('-12-31')) return `${period.slice(2, 4)}年报`;
+      if (period.endsWith('-06-30')) return `${period.slice(2, 4)}中报`;
+    }
+    return raw;
+  };
+  const colsDesc = useMemo(() => {
+    const idx = periodsAsc.map((p, i) => ({ p, label: labelOf(p, labelsAsc[i] ?? p), i }));
+    return idx.reverse();
+  }, [periodsAsc.join(','), labelsAsc.join(','), granularity]);
+
+  /** 值查找：按公司 + 字段 + 列序号 */
+  const valOf = (c: CompanyFinancials, key: string, i: number): number | null => c.series?.[key]?.[i] ?? null;
+
+  /** 同比：上一年同期报告期 */
+  const yoyIndex = (i: number): number => {
+    const p = periodsAsc[i];
+    if (!p) return -1;
+    const prev = p.replace(/^(\d{4})/, (y) => String(Number(y) - 1));
+    return periodsAsc.indexOf(prev);
+  };
+  /** 环比：数组前一个报告期 */
+  const qoqIndex = (i: number): number => (i > 0 ? i - 1 : -1);
+
+  const peers = useMemo(() => {
+    const self = STOCKS.find((s) => s.code === code);
+    const pool = self ? STOCKS.filter((s) => s.industry === self.industry && s.code !== code) : [];
+    const rest = STOCKS.filter((s) => s.code !== code && !pool.includes(s));
+    return [...pool, ...rest];
+  }, [code]);
+
+  /** 行渲染列表：搜索过滤 + 「仅显示有数据」过滤 */
+  const rows = useMemo(() => {
+    let list = fetchFields.map((key) => ({ key, meta: fieldMetas.get(key) }));
+    if (kw.trim()) {
+      const k = kw.trim().toLowerCase();
+      list = list.filter(
+        (r) => r.meta?.label.toLowerCase().includes(k) || r.key.toLowerCase().includes(k),
+      );
+    }
+    if (onlyHasData && companies.length > 0) {
+      list = list.filter((r) =>
+        companies.some((c) => (c.series?.[r.key] ?? []).some((v) => v !== null && Number.isFinite(v))),
+      );
+    }
+    return list;
+  }, [fetchFields, fieldMetas, kw, onlyHasData, companies]);
+
+  const exportCsv = () => {
+    const header = ['指标', '单位', ...colsDesc.map((c) => c.label)];
+    const lines = [header.join(',')];
+    for (const r of rows) {
+      const unit = r.meta?.unit === 'pct' ? '%' : r.meta?.unit === 'wan' ? '万元' : '';
+      for (const c of companies) {
+        const name = companies.length > 1 ? `${c.name}(${c.code})` : '';
+        const cells = colsDesc.map((col) => {
+          const v = valOf(c, r.key, col.i);
+          return v === null ? '' : String(v);
+        });
+        lines.push([name || (r.meta?.label ?? r.key), unit, ...cells].map((x) => `"${x}"`).join(','));
+      }
+    }
+    const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `合并报表_${primary?.name ?? code}_${granularity}_${years}y.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const toggleExtra = (c: string) => {
+    setExtraCodes((xs) => (xs.includes(c) ? xs.filter((x) => x !== c) : xs.length < 3 ? [...xs, c] : xs));
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* 工具栏 */}
+      <div className="card flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
+        <div className="flex items-center gap-1">
+          {GRAN.map((g) => (
+            <button
+              key={g.key}
+              title={g.title}
+              onClick={() => setGranularity(g.key)}
+              className={`rounded px-2.5 py-1 text-xs transition ${
+                granularity === g.key ? 'bg-slate-200 font-medium text-slate-800' : 'text-slate-500 hover:bg-slate-100'
+              }`}
+            >
+              {g.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-1">
+          {RANGES.map((y) => (
+            <button
+              key={y}
+              onClick={() => setYears(y)}
+              className={`rounded px-2.5 py-1 text-xs transition ${
+                years === y ? 'bg-brand-50 font-medium text-brand-700' : 'text-slate-500 hover:bg-slate-100'
+              }`}
+            >
+              {y}年
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="hidden text-xs text-slate-500 sm:inline">对比公司：</span>
+          <div className="flex items-center gap-1">
+            <span className="chip bg-blue-100 text-blue-700">{primary?.name ?? code}</span>
+            {extraCodes.map((c) => {
+              const name = STOCKS.find((s) => s.code === c)?.name ?? c;
+              return (
+                <button
+                  key={c}
+                  onClick={() => toggleExtra(c)}
+                  className="chip bg-orange-100 text-orange-700 hover:bg-orange-200"
+                  title="点击移除"
+                >
+                  {name} ✕
+                </button>
+              );
+            })}
+            {extraCodes.length < 3 && (
+              <select
+                className="input w-32 py-1 text-xs md:w-40"
+                value=""
+                onChange={(e) => e.target.value && toggleExtra(e.target.value)}
+                aria-label="添加对比公司"
+              >
+                <option value="">+ 添加公司</option>
+                {peers
+                  .filter((p) => !extraCodes.includes(p.code))
+                  .map((p) => (
+                    <option key={p.code} value={p.code}>
+                      {p.name}（{p.code}）
+                    </option>
+                  ))}
+              </select>
+            )}
+          </div>
+        </div>
+
+        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+          <div className="relative">
+            <input
+              value={kw}
+              onChange={(e) => setKw(e.target.value)}
+              placeholder="搜索指标…"
+              className="input w-28 py-1 text-xs md:w-36"
+              aria-label="搜索指标"
+            />
+            {kw && (
+              <button
+                onClick={() => setKw('')}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                aria-label="清空搜索"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          <button
+            onClick={() => setShowAll((v) => !v)}
+            className={`rounded px-2 py-1 text-xs transition ${
+              showAll ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+            title="展示三大报表全部科目 + 21 项指标"
+          >
+            全部数据项
+          </button>
+          <button
+            onClick={() => setOnlyHasData((v) => !v)}
+            className={`rounded px-2 py-1 text-xs transition ${
+              onlyHasData ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+            title={onlyHasData ? '隐藏全空指标（点击显示）' : '显示全空指标（点击隐藏）'}
+          >
+            {onlyHasData ? '隐藏空行' : '含空行'}
+          </button>
+          <button
+            onClick={() => setPickerOpen(true)}
+            className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600 transition hover:bg-slate-200"
+          >
+            数据显示设置
+          </button>
+          <button
+            onClick={exportCsv}
+            className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600 transition hover:bg-slate-200"
+          >
+            导出CSV
+          </button>
+        </div>
+      </div>
+
+      {/* 表格 */}
+      <div className="card overflow-hidden px-0 py-0">
+        <div ref={tableRef} className="overflow-x-auto">
+          <table className="w-full border-collapse text-xs">
+            <thead>
+              <tr className="sticky top-0 z-20 bg-slate-50">
+                <th className="sticky left-0 z-30 min-w-[140px] border-b border-slate-200 bg-slate-50 px-3 py-2 text-left font-medium text-slate-600">
+                  指标 <span className="font-normal text-slate-400">（{years}年 · {granularity === 'annual' ? '年报' : granularity === 'semi' ? '半年报' : '季度'}）</span>
+                </th>
+                {colsDesc.map((c) => (
+                  <th
+                    key={c.p}
+                    className="min-w-[92px] border-b border-l border-slate-200 bg-slate-50 px-2.5 py-2 text-center font-medium text-slate-700"
+                  >
+                    {c.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            {loading && (
+              <tbody>
+                <tr>
+                  <td colSpan={colsDesc.length + 1} className="py-16 text-center text-slate-400">
+                    正在加载财报数据…
+                  </td>
+                </tr>
+              </tbody>
+              )}
+            {!loading && err && (
+              <tbody>
+                <tr>
+                  <td colSpan={colsDesc.length + 1} className="py-10 text-center text-red-600">{err}</td>
+                </tr>
+              </tbody>
+            )}
+            {!loading && !err && rows.length === 0 && (
+              <tbody>
+                <tr>
+                  <td colSpan={colsDesc.length + 1} className="py-10 text-center text-slate-400">
+                    {kw ? '没有匹配的指标' : '请在「数据显示设置」中选择指标'}
+                  </td>
+                </tr>
+              </tbody>
+              )}
+            {!loading &&
+                !err &&
+                rows.map((r) => {
+                  const unit = r.meta?.unit ?? '';
+                  const isPct = unit === 'pct';
+                  const unitText = isPct ? '%' : unit === 'wan' ? '亿' : '';
+                  return (
+                    <tbody key={r.key} className="border-b border-slate-100">
+                      {companies.map((c, ci) => {
+                        const showYoY = companies.length === 1;
+                        return (
+                          <Fragment key={c.code}>
+                            {/* 数值行 */}
+                            <tr key={`${r.key}-${c.code}-v`} className="hover:bg-slate-50">
+                              <td
+                                className={`sticky left-0 z-10 bg-white px-3 py-1.5 ${ci === 0 ? '' : 'pl-6'}`}
+                              >
+                                {ci === 0 && (
+                                  <div className="flex items-baseline gap-1.5">
+                                    <span className="font-medium text-slate-800">{r.meta?.label ?? r.key}</span>
+                                    <span className="text-[10px] text-slate-400">{unitText}</span>
+                                  </div>
+                                )}
+                                {ci > 0 && <span className="text-[11px] text-orange-600">{c.name}</span>}
+                              </td>
+                              {colsDesc.map((col) => (
+                                <td
+                                  key={col.p}
+                                  className="border-l border-slate-100 px-2.5 py-1.5 text-center tabular-nums text-slate-800"
+                                >
+                                  {fmtVal(valOf(c, r.key, col.i), unit)}
+                                </td>
+                              ))}
+                            </tr>
+                            {/* 同比 / 环比（仅单公司时展开；与理杏仁一致：上行同比、下行环比） */}
+                            {showYoY && (
+                              <>
+                                <tr className="text-[11px] hover:bg-slate-50/60">
+                                  <td className="sticky left-0 z-10 bg-white px-3 py-0.5 text-[10px] text-slate-400">
+                                    同比
+                                  </td>
+                                  {colsDesc.map((col) => {
+                                    const yi = yoyIndex(col.i);
+                                    const v = yi >= 0 ? pctChange(valOf(c, r.key, col.i), valOf(c, r.key, yi)) : null;
+                                    return (
+                                      <td key={col.p} className={`border-l border-slate-100 px-2.5 py-0.5 text-center tabular-nums ${pctCls(v)}`}>
+                                        {v === null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(1)}%`}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                                <tr className="text-[11px] hover:bg-slate-50/60">
+                                  <td className="sticky left-0 z-10 bg-white px-3 py-0.5 text-[10px] text-slate-400">
+                                    环比
+                                  </td>
+                                  {colsDesc.map((col) => {
+                                    const qi = qoqIndex(col.i);
+                                    const v = qi >= 0 ? pctChange(valOf(c, r.key, col.i), valOf(c, r.key, qi)) : null;
+                                    return (
+                                      <td key={col.p} className={`border-l border-slate-100 px-2.5 py-0.5 text-center tabular-nums ${pctCls(v)}`}>
+                                        {v === null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(1)}%`}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              </>
+                            )}
+                          </Fragment>
+                        );
+                      })}
+                    </tbody>
+                  );
+                })}
+          </table>
+        </div>
+        <div className="border-t border-slate-100 px-3 py-2 text-[11px] leading-relaxed text-slate-400">
+          口径：三大报表科目为新浪披露的累计值（单位：万元，超 1 亿自动折算为亿）；财务指标（ROE 等）来自新浪财务指标页。
+          同比 = 与上一年同期相比；环比 = 与上一报告期相比；null 表示当期未披露。
+          {showAll && ' 当前为「全部数据项」模式（178 个科目 + 21 项指标），科目为累计值口径，行较多可搜索定位。'}
+          {!showAll && ` 当前显示 ${rows.length} 项指标，可通过「数据显示设置」增减或搜索。`}
+        </div>
+      </div>
+
+      <FieldPicker
+        open={pickerOpen}
+        catalog={catalog}
+        selected={fields}
+        defaultSelected={DEFAULT_FIELDS}
+        onClose={() => setPickerOpen(false)}
+        onConfirm={(keys) => {
+          setFields(keys);
+          setShowAll(false);
+          setPickerOpen(false);
+        }}
+        onResetAll={() => {
+          setFields(DEFAULT_FIELDS);
+          setShowAll(false);
+          setPickerOpen(false);
+        }}
+        title="选择报表指标（合并报表）"
+      />
+    </div>
+  );
+}

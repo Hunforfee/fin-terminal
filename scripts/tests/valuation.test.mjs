@@ -112,3 +112,12 @@ test('unavailable financial statements fail explicitly instead of returning esti
  try {const ds=await load('datasource/index');await assert.rejects(ds.getValuation('600415',10),/财报数据不可用/);}
  finally{globalThis.fetch=original;clearCache();}
 });
+test('many custom fields fetch each statement once per year', async () => {
+ const source=await load('datasource/sinaStatements');
+ const original=globalThis.fetch,Decoder=globalThis.TextDecoder;let requests=0;
+ globalThis.TextDecoder=class extends Decoder{constructor(){super('utf-8');}};
+ globalThis.fetch=async()=>{requests++;return new Response('<table><tr><td>报表日期</td><td>2025-12-31</td></tr>'+Array.from({length:60},(_,i)=>`<tr><td style="padding-left:30px">Field${i}</td><td>1</td></tr>`).join('')+'</table>');};
+ const fields=[...Array.from({length:60},(_,i)=>'bs_Field'+i),'pl_Field0','cf_Field0'];
+ try {const result=await source.fetchCustomFinancials('600415',fields,2);assert.equal(requests,9);assert.equal(Object.keys(result.series).length,62);assert.equal(result.series.bs_Field0[0],1);}
+ finally{globalThis.fetch=original;globalThis.TextDecoder=Decoder;}
+});

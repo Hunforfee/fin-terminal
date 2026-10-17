@@ -523,14 +523,7 @@ export async function getCustomFinancialCompare(
         try {
           f = await sinaStatements.fetchCustomFinancials(n.code, fields, years, q?.name);
         } catch {
-          f = {
-            code: n.code,
-            name: q?.name ?? n.code,
-            periods: [],
-            periodLabels: [],
-            series: {},
-            source: sinaStatements.PROVIDER_NAME,
-          };
+          throw new Error(`无法获取 ${q?.name ?? n.code} 的财报数据，请稍后重试`);
         }
         return sinaStatements.filterByGranularityCustom(f, granularity);
       }),

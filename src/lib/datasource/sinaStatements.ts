@@ -312,8 +312,9 @@ export async function fetchCustomFinancials(
   const indicatorKeys = fields.filter((k) => !/^(bs|pl|cf)_/.test(k));
 
   const tasks: Promise<void>[] = [];
-  for (const key of statementFields) {
-    const id = (key.startsWith('bs_') ? 'balance' : key.startsWith('pl_') ? 'profit' : 'cashflow') as StatementId;
+  const statementIds = new Set(statementFields.map(key =>
+    (key.startsWith('bs_') ? 'balance' : key.startsWith('pl_') ? 'profit' : 'cashflow') as StatementId));
+  for (const id of statementIds) {
     tasks.push(fetchOneStatement(code, id, years, byDate));
   }
 
@@ -383,3 +384,4 @@ export function filterByGranularityCustom(
     ),
   };
 }
+

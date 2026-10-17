@@ -207,6 +207,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
     let alive = true;
     setLoading(true);
     setErr(null);
+    setCustomData(null);
     const codes = compareCode ? `${code},${compareCode}` : code;
     fetch(
       '/api/finance-compare', { method: 'POST', headers: { 'Content-Type': 'application/json' },

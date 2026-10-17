@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { searchStockContext, formatHits } from '@/lib/aiSearch';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -46,7 +47,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const userContent = `${prompt}\n\n分析对象：${name}（${code}），A股上市公司。要求：引用数据时注明来源与数据日期；对无法核实的数据明确标注“未核实”；不要编造数字。`;
+  // ── 第 1 步：联网检索最新资料（失败不阻塞，模型继续用自身知识） ──
+  const { hits, ok: searchOk } = await searchStockContext(name, code);
+  const contextBlock = formatHits(hits);
+
+  const searchNote = searchOk
+    ? `\n\n─── 以下是通过搜索引擎实时检索到的最新资料（截取自结果摘要，可能不完整）───\n${contextBlock}\n─── 检索资料结束 ───\n\n使用要求：\n1. 优先依据上述检索资料中的最新数据，引用时标注来源编号（如 [1]）与资料日期；\n2. 检索资料与你的既有知识冲突时，以检索资料为准并说明；\n3. 检索资料未覆盖的部分才使用你的知识，并明确标注“未核实（依据模型知识，截至训练时间）”；\n4. 绝不编造数字与来源。`
+    : `\n\n（实时检索本次不可用，以下分析完全基于模型自身知识，时效性有限，请务必自行核对最新公告。）`;
+
+  const userContent = `${prompt}\n\n分析对象：${name}（${code}），A股上市公司。要求：引用数据时注明来源与数据日期；对无法核实的数据明确标注“未核实”；不要编造数字。${searchNote}`;
+
+  const systemContent =
+    '你是一名严谨的 A 股基本面分析师。你会收到用户提示词和一组实时检索到的网络资料摘要。输出结构化 Markdown（使用中文），在开头列出“信息来源”小节引用所用链接。所有关键数字注明来源与日期；不确定的内容明确说明，绝不编造。';
 
   const upstream = await fetch(url, {
     method: 'POST',
@@ -57,11 +69,7 @@ export async function POST(req: NextRequest) {
     body: JSON.stringify({
       model,
       messages: [
-        {
-          role: 'system',
-          content:
-            '你是一名严谨的 A 股基本面分析师。基于你掌握的知识与最新公开信息进行分析，输出结构化 Markdown（使用中文）。所有关键数字都注明来源与日期；不确定的内容明确说明，绝不编造。',
-        },
+        { role: 'system', content: systemContent },
         { role: 'user', content: userContent },
       ],
       temperature: 0.4,
@@ -86,5 +94,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'AI 接口返回内容为空' }, { status: 502 });
   }
 
-  return NextResponse.json({ ok: true, data: { content, model, generatedAt: new Date().toISOString() } });
+  return NextResponse.json({ ok: true, data: { content, model, generatedAt: new Date().toISOString(), sources: hits.length } });
 }

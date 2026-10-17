@@ -14,6 +14,7 @@ interface Version {
   prompt: string;
   content: string;
   model?: string;
+  sources?: number;
 }
 
 const LS_PROMPT = 'fin.ai.prompt';
@@ -140,7 +141,7 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
       });
       const j = await r.json();
       if (!j.ok) throw new Error(j.error || `请求失败（${r.status}）`);
-      const v: Version = { ts: Date.now(), prompt, content: j.data.content, model: j.data.model };
+      const v: Version = { ts: Date.now(), prompt, content: j.data.content, model: j.data.model, sources: j.data.sources };
       setVersions((vs) => [v, ...vs].slice(0, 30));
       setActive(0);
     } catch (e) {
@@ -300,7 +301,11 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
       )}
 
       {err && <p className="mt-2 rounded bg-red-50 px-3 py-2 text-xs text-red-600">{err}</p>}
-      {loading && <p className="mt-2 animate-pulse text-xs text-slate-400">正在生成分析…</p>}
+      {loading && (
+        <p className="mt-2 animate-pulse text-xs text-slate-400">
+          正在联网检索最新资料并生成分析（先搜索、后分析），通常需要 30 秒到 2 分钟…
+        </p>
+      )}
 
       {/* 历史版本 */}
       {open && versions.length > 0 && (
@@ -324,7 +329,7 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
             {cur && (
               <>
                 <p className="mb-1 text-[10px] text-slate-400">
-                  {cur.model ? `${cur.model} · ` : ''}生成于 {fmtTs(cur.ts)} · 提示词{' '}
+                  {cur.model ? `${cur.model} · ` : ''}{cur.sources !== undefined ? `联网检索 ${cur.sources} 条 · ` : ''}生成于 {fmtTs(cur.ts)} · 提示词{' '}
                   {cur.prompt.length} 字
                 </p>
                 <div

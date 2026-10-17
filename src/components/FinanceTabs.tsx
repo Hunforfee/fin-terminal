@@ -14,19 +14,18 @@ export default function FinanceTabs({ code }: { code: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-1">
+      <div role="group" aria-label="财报视图" className="segmented">
         {(
           [
-            ['chart', '图表体检'],
+            ['chart', '指标趋势'],
             ['table', '合并报表'],
           ] as const
         ).map(([k, label]) => (
           <button
             key={k}
             onClick={() => setView(k)}
-            className={`rounded px-3 py-1.5 text-xs font-medium transition ${
-              view === k ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
+            aria-pressed={view === k}
+            className={`segment ${view === k ? 'segment-active' : ''}`}
           >
             {label}
           </button>

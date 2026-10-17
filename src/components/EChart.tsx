@@ -49,13 +49,21 @@ export interface EChartProps {
  * ECharts 通用容器：按需注册组件、随容器尺寸自适应、卸载时销毁实例。
  * 只在客户端渲染，避免 SSR 阶段访问 DOM。
  */
-export default function EChart({ option, height = 360, className, onReady, onPointClick }: EChartProps) {
+export default function EChart({
+  option,
+  height = 360,
+  className,
+  onReady,
+  onPointClick,
+}: EChartProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const instRef = useRef<echarts.ECharts | null>(null);
 
   useEffect(() => {
     if (!boxRef.current) return;
-    const chart = echarts.init(boxRef.current, undefined, { renderer: 'canvas' });
+    const chart = echarts.init(boxRef.current, undefined, {
+      renderer: 'canvas',
+    });
     instRef.current = chart;
     onReady?.(chart);
 
@@ -63,9 +71,16 @@ export default function EChart({ option, height = 360, className, onReady, onPoi
     ro.observe(boxRef.current);
 
     const onClick = (p: unknown) => {
-      const e = p as { name?: string; event?: { offsetX?: number; offsetY?: number } };
+      const e = p as {
+        name?: string;
+        event?: { offsetX?: number; offsetY?: number };
+      };
       if (!onPointClick || !e?.name) return;
-      onPointClick({ name: String(e.name), px: e.event?.offsetX ?? 0, py: e.event?.offsetY ?? 0 });
+      onPointClick({
+        name: String(e.name),
+        px: e.event?.offsetX ?? 0,
+        py: e.event?.offsetY ?? 0,
+      });
     };
     chart.on('click', onClick);
 
@@ -82,5 +97,5 @@ export default function EChart({ option, height = 360, className, onReady, onPoi
     instRef.current?.setOption(option, true);
   }, [option]);
 
-  return <div ref={boxRef} style={{ height, width: '100%' }} className={className} />;
+  return <div ref={boxRef} style={{ height, width: '100%', minWidth: 0 }} className={className} />;
 }

@@ -1,9 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
 import FinanceCompareChart, { type CompanySeries } from '@/components/FinanceCompareChart';
-import FieldPicker, { allFieldMetas, type FieldMeta, type PickerCatalog } from '@/components/FieldPicker';
+import FieldPicker, {
+  allFieldMetas,
+  type FieldMeta,
+  type PickerCatalog,
+} from '@/components/FieldPicker';
 import { INDICATORS, type IndicatorGroup } from '@/lib/datasource/sinaFinancial';
 import {
   checkExpr,
@@ -43,12 +46,19 @@ const GROUP_LABEL: Record<IndicatorGroup, string> = {
   pershare: '每股指标',
 };
 
-/** 默认模块（与精选 21 项指标一致；数据显示设置中可任意改配） */
-const DEFAULT_MODULES: Module[] = GROUPS.map((g) => ({
-  id: `m-${g}`,
-  name: GROUP_LABEL[g],
-  fields: INDICATORS.filter((i) => i.group === g).map((i) => i.key),
-}));
+/** 默认模块（与精选 21 项指标一致；配置指标中可任意改配） */
+const DEFAULT_MODULES: Module[] = [
+  {
+    id: 'm-overview',
+    name: '关键指标',
+    fields: ['roe', 'netMargin', 'revenueGrowth', 'profitGrowth', 'ocfPerShare', 'debtRatio'],
+  },
+  ...GROUPS.map((g) => ({
+    id: `m-${g}`,
+    name: GROUP_LABEL[g],
+    fields: INDICATORS.filter((i) => i.group === g).map((i) => i.key),
+  })),
+];
 
 const LS_MODULES = 'fin.financeModules';
 const LS_ACTIVE = 'fin.financeModules.active';
@@ -76,9 +86,17 @@ function loadModules(): Module[] {
     if (raw) {
       const arr = JSON.parse(raw);
       if (Array.isArray(arr) && arr.length > 0) {
-        return arr
-          .filter((m) => m && typeof m.id === 'string' && typeof m.name === 'string' && Array.isArray(m.fields))
-          .map((m) => ({ id: m.id, name: m.name, fields: m.fields.slice(0, 36) }));
+        const valid = arr
+          .filter(
+            (m) =>
+              m && typeof m.id === 'string' && typeof m.name === 'string' && Array.isArray(m.fields)
+          )
+          .map((m) => ({
+            id: m.id,
+            name: m.name,
+            fields: m.fields.slice(0, 36),
+          }));
+        if (valid.length > 0) return valid;
       }
     }
   } catch {
@@ -89,7 +107,7 @@ function loadModules(): Module[] {
 
 /**
  * 财务体检（理杏仁式）：
- * 顶部分析模块条（可重命名 / 数据显示设置 / 新增），左侧指标列表可拖拽排序，图表顺序跟随。
+ * 顶部分析模块与指标卡可配置，选择指标查看趋势，拖动指标卡调整顺序。
  * 每个模块从三大报表 178 个披露科目 + 21 项财务指标中自由配置。
  */
 export default function FinanceExplorer({ code }: { code: string }) {
@@ -99,13 +117,14 @@ export default function FinanceExplorer({ code }: { code: string }) {
   const [renameDraft, setRenameDraft] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [compareCode, setCompareCode] = useState<string>('');
-  const [granularity, setGranularity] = useState<'annual' | 'semi' | 'quarter'>('semi');
+  const [granularity, setGranularity] = useState<'annual' | 'semi' | 'quarter'>('annual');
   const [years, setYears] = useState<5 | 10>(10);
   const [customData, setCustomData] = useState<CustomData | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<PickerCatalog | null>(null);
   const [formulas, setFormulas] = useState<Formula[]>([]);
+  const [selectedField, setSelectedField] = useState<string | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -209,10 +228,16 @@ export default function FinanceExplorer({ code }: { code: string }) {
     setErr(null);
     setCustomData(null);
     const codes = compareCode ? `${code},${compareCode}` : code;
-    fetch(
-      '/api/finance-compare', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codes: codes, years, granularity, fields: fieldsSig.split(',') }) },
-    )
+    fetch('/api/finance-compare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        codes: codes,
+        years,
+        granularity,
+        fields: fieldsSig.split(','),
+      }),
+    })
       .then((r) => r.json())
       .then((j) => {
         if (!alive) return;
@@ -237,7 +262,9 @@ export default function FinanceExplorer({ code }: { code: string }) {
     if (key.startsWith('fx_')) {
       const f = formulas.find((x) => formulaKey(x.id) === key);
       values = f
-        ? evalFormula(f.expr, c?.series ?? {}, c?.periods.length ?? 0, { nullAsZero: f.nullAsZero })
+        ? evalFormula(f.expr, c?.series ?? {}, c?.periods.length ?? 0, {
+            nullAsZero: f.nullAsZero,
+          })
         : [];
     } else {
       values = c?.series?.[key] ?? [];
@@ -266,7 +293,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
 
   const addModule = () => {
     const id = `m-${Date.now()}`;
-    setModules((ms) => [...ms, { id, name: `新模块 ${ms.length - DEFAULT_MODULES.length + 1}`, fields: [] }]);
+    setModules((ms) => [...ms, { id, name: `新模块 ${ms.length + 1}`, fields: [] }]);
     setActiveId(id);
     setPickerOpen(true);
   };
@@ -303,7 +330,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
         const [moved] = fields.splice(from, 1);
         fields.splice(to, 0, moved);
         return { ...m, fields };
-      }),
+      })
     );
   };
 
@@ -321,23 +348,23 @@ export default function FinanceExplorer({ code }: { code: string }) {
   });
 
   const scrollTo = (key: string) => {
-    sectionRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setSelectedField(key);
   };
 
   return (
     <div className="space-y-4">
       {/* 顶栏：主/对比公司 + 报告期粒度（紧凑） */}
-      <div className="card flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
+      <div className="card flex flex-wrap items-center gap-x-4 gap-y-4 px-5 py-4">
         <div className="flex items-center gap-1.5 text-sm">
           <span className="font-medium text-slate-800">{primary?.name ?? code}</span>
           <span className="font-mono text-xs text-slate-400">{code}</span>
-          <span className="chip bg-blue-100 text-blue-700">主公司</span>
         </div>
 
         <div className="flex items-center gap-1.5">
           <span className="hidden text-xs text-slate-500 sm:inline">对比公司：</span>
           <select
-            className="input w-40 py-1 text-xs md:w-48"
+            aria-label="对比公司"
+            className="input !w-44 text-sm md:!w-48"
             value={compareCode}
             onChange={(e) => setCompareCode(e.target.value)}
           >
@@ -351,7 +378,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
           {compare && <span className="chip bg-orange-100 text-orange-700">对比公司</span>}
         </div>
 
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex flex-wrap items-center gap-1 rounded-lg bg-slate-50 p-1">
           {(
             [
               ['annual', '年报'],
@@ -362,6 +389,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
             <button
               key={k}
               onClick={() => setGranularity(k)}
+              aria-pressed={granularity === k}
               title={
                 k === 'annual'
                   ? '仅年度报告（12-31）'
@@ -369,8 +397,10 @@ export default function FinanceExplorer({ code }: { code: string }) {
                     ? '半年报口径（H1 + H2）'
                     : '全部季度报告（Q1/H1/Q3/年报）'
               }
-              className={`rounded px-2.5 py-1 text-xs transition ${
-                granularity === k ? 'bg-slate-200 font-medium text-slate-800' : 'text-slate-500 hover:bg-slate-100'
+              className={`min-h-9 rounded-md px-2.5 py-1 text-xs transition ${
+                granularity === k
+                  ? 'bg-slate-200 font-medium text-slate-800'
+                  : 'text-slate-500 hover:bg-slate-100'
               }`}
             >
               {label}
@@ -386,9 +416,12 @@ export default function FinanceExplorer({ code }: { code: string }) {
             <button
               key={k}
               onClick={() => setYears(k)}
+              aria-pressed={years === k}
               title={`展示最近 ${k} 个自然年的报告期`}
-              className={`rounded px-2.5 py-1 text-xs transition ${
-                years === k ? 'bg-brand-50 font-medium text-brand-700' : 'text-slate-500 hover:bg-slate-100'
+              className={`min-h-9 rounded-md px-2.5 py-1 text-xs transition ${
+                years === k
+                  ? 'bg-brand-50 font-medium text-brand-700'
+                  : 'text-slate-500 hover:bg-slate-100'
               }`}
             >
               {label}
@@ -397,9 +430,9 @@ export default function FinanceExplorer({ code }: { code: string }) {
         </div>
       </div>
 
-      {/* 分析模块条（理杏仁式）+ 重命名 / 数据显示设置 */}
-      <div className="card flex items-center gap-1 overflow-x-auto px-1 py-0">
-        <div className="flex min-w-0 flex-1 items-center">
+      {/* 分析模块条（理杏仁式）+ 重命名 / 配置指标 */}
+      <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 pb-3">
+        <div className="flex min-w-0 flex-1 items-center overflow-x-auto">
           {modules.map((m) => (
             <div key={m.id} className="relative shrink-0">
               {renaming && m.id === activeId ? (
@@ -416,7 +449,11 @@ export default function FinanceExplorer({ code }: { code: string }) {
                 />
               ) : (
                 <button
-                  onClick={() => setActiveId(m.id)}
+                  onClick={() => {
+                    setActiveId(m.id);
+                    setSelectedField(null);
+                  }}
+                  aria-pressed={m.id === active.id}
                   className={`relative px-3.5 py-2 text-sm transition md:px-4 ${
                     m.id === active.id
                       ? 'font-semibold text-brand-700'
@@ -424,7 +461,9 @@ export default function FinanceExplorer({ code }: { code: string }) {
                   }`}
                 >
                   {m.name}
-                  <span className="ml-1 text-xs font-normal text-slate-400">{m.fields.length}项</span>
+                  <span className="ml-1 text-xs font-normal text-slate-400">
+                    {m.fields.length}项
+                  </span>
                   {m.id === active.id && (
                     <span className="absolute inset-x-2 bottom-0 h-[3px] rounded-t bg-brand-600" />
                   )}
@@ -441,7 +480,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
           </button>
         </div>
 
-        <div className="ml-auto flex shrink-0 items-center gap-1.5 px-2 py-1">
+        <div className="flex w-full shrink-0 items-center justify-end gap-1.5 px-2 py-1 sm:ml-auto sm:w-auto">
           {renaming ? null : (
             <>
               <button
@@ -450,11 +489,8 @@ export default function FinanceExplorer({ code }: { code: string }) {
               >
                 重命名
               </button>
-              <button
-                onClick={() => setPickerOpen(true)}
-                className="rounded border border-red-300 px-2.5 py-1 text-xs text-red-500 transition hover:bg-red-50"
-              >
-                数据显示设置
+              <button onClick={() => setPickerOpen(true)} className="btn !min-h-9 !py-1 !text-xs">
+                配置指标
               </button>
               {modules.length > 1 && (
                 <button
@@ -471,27 +507,29 @@ export default function FinanceExplorer({ code }: { code: string }) {
       </div>
 
       {err && <div className="card-pad text-sm text-red-600">加载失败：{err}</div>}
-      {loading && !data && <div className="card-pad text-sm text-slate-400">财报数据加载中…（首次抓取约需 3-8 秒）</div>}
+      {loading && !data && <div className="card-pad text-sm text-slate-400">财报数据加载中…</div>}
 
       {data && (
-        <div className="grid gap-3 lg:grid-cols-[150px_1fr]">
-          {/* 左侧指标列表：理杏仁式蓝色块；移动端横向滚动 chips */}
-          <div className="lg:sticky lg:top-16 lg:h-fit">
-            <div className="hidden pb-1.5 pl-1 text-xs text-slate-400 lg:block">
-              可选单位点击 · 拖 ⠿ 排序
-            </div>
-            <ul className="flex gap-1.5 overflow-x-auto pb-1 lg:flex-col lg:gap-1 lg:overflow-visible lg:pb-0">
-              {entries.length === 0 && (
-                <li className="whitespace-nowrap px-3 py-2 text-xs text-slate-400">
-                  暂无指标，请点「数据显示设置」勾选
-                </li>
-              )}
-              {entries.map((e, idx) => (
-                <li
+        <div className="space-y-5">
+          <div
+            className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6"
+            role="group"
+            aria-label="财务指标"
+          >
+            {entries.map((e) => {
+              const selected =
+                (entries.some((x) => x.key === selectedField) ? selectedField : entries[0]?.key) ===
+                e.key;
+              const v =
+                toSeries(primary ?? null, e.key).values[(primary?.periods.length ?? 0) - 1] ?? null;
+              const display =
+                v === null ? '—' : e.unit === 'wan' ? (v / 1e4).toFixed(2) : v.toFixed(2);
+              return (
+                <button
                   key={e.key}
                   draggable
-                  onDragStart={() => setDragIdx(idx)}
-                  onDragEnter={() => setOverIdx(idx)}
+                  onDragStart={() => setDragIdx(entries.indexOf(e))}
+                  onDragEnter={() => setOverIdx(entries.indexOf(e))}
                   onDragOver={(ev) => ev.preventDefault()}
                   onDragEnd={() => {
                     if (dragIdx !== null && overIdx !== null) reorder(dragIdx, overIdx);
@@ -499,32 +537,35 @@ export default function FinanceExplorer({ code }: { code: string }) {
                     setOverIdx(null);
                   }}
                   onClick={() => scrollTo(e.key)}
-                  className={`flex shrink-0 cursor-grab items-center gap-1 rounded px-2 py-1.5 text-xs leading-snug transition active:cursor-grabbing ${
-                    dragIdx === idx ? 'opacity-40' : ''
-                  } ${
-                    overIdx === idx && dragIdx !== null && dragIdx !== idx
-                      ? 'lg:border-t-2 lg:border-brand-300'
-                      : ''
-                  } ${
-                    idx % 2 === 0
-                      ? 'bg-brand-500 text-white hover:bg-brand-600'
-                      : 'bg-brand-400 text-white hover:bg-brand-600'
-                  }`}
-                  title={e.hover ?? `${e.label}（点击跳转，拖动排序）`}
+                  aria-pressed={selected}
+                  className={`min-w-0 rounded-xl border bg-white p-4 text-left transition ${selected ? 'border-brand-500 ring-1 ring-brand-500' : 'border-slate-200 hover:border-slate-400'}`}
                 >
-                  <span
-                    className="hidden select-none text-white/50 hover:text-white lg:inline"
-                    title="拖动排序"
-                  >
-                    ⠿
-                  </span>
-                  <span className="max-w-[110px] truncate lg:max-w-none">{e.label}</span>
-                </li>
-              ))}
-            </ul>
+                  <div className="truncate text-xs text-slate-500" title={e.label}>
+                    {e.label}
+                  </div>
+                  <div className="mt-3 text-2xl font-semibold tabular-nums text-slate-900">
+                    {display}
+                    <span className="ml-1 text-xs font-normal text-slate-500">
+                      {e.unit === 'pct'
+                        ? '%'
+                        : e.unit === 'yuan'
+                          ? '元'
+                          : e.unit === 'wan'
+                            ? '亿'
+                            : e.unit === 'ratio'
+                              ? '倍'
+                              : ''}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-[11px] text-slate-400">
+                    {primary?.periods.at(-1) ?? '—'}
+                  </div>
+                </button>
+              );
+            })}
           </div>
 
-          {/* 右侧多图堆叠（顺序 = 左侧列表顺序） */}
+          {/* 当前所选指标的趋势与区间统计 */}
           <div className="min-w-0 space-y-3">
             {!primary || primary.periods.length === 0 ? (
               <div className="card-pad text-sm text-slate-500">
@@ -532,41 +573,49 @@ export default function FinanceExplorer({ code }: { code: string }) {
               </div>
             ) : entries.length === 0 ? (
               <div className="card-pad text-sm text-slate-500">
-                当前模块未配置任何指标。点击右上角「数据显示设置」开始勾选。
+                当前模块未配置任何指标。点击右上角「配置指标」开始勾选。
               </div>
             ) : (
-              entries.map((e) => {
-                const pS = toSeries(primary, e.key);
-                const cS = compare ? toSeries(compare, e.key) : null;
-                const hasData = pS.values.some((v) => v !== null);
-                const hasCompare = cS !== null && cS.values.some((v) => v !== null);
-                return (
-                  <div
-                    key={e.key}
-                    ref={(el) => {
-                      sectionRefs.current[e.key] = el;
-                    }}
-                    className="card scroll-mt-20 p-3 md:p-4"
-                  >
-                    <div className="mb-2 flex flex-wrap items-baseline justify-between gap-1">
-                      <h3 className="text-sm font-semibold text-brand-600">{e.label}</h3>
-                      <span className="text-[11px] text-slate-400">
-                        {unitText(e.unit)} · 新浪财经（披露口径）
-                      </span>
+              entries
+                .filter(
+                  (e) =>
+                    e.key ===
+                    (entries.some((x) => x.key === selectedField) ? selectedField : entries[0]?.key)
+                )
+                .map((e) => {
+                  const pS = toSeries(primary, e.key);
+                  const cS = compare ? toSeries(compare, e.key) : null;
+                  const hasData = pS.values.some((v) => v !== null);
+                  const hasCompare = cS !== null && cS.values.some((v) => v !== null);
+                  return (
+                    <div
+                      key={e.key}
+                      ref={(el) => {
+                        sectionRefs.current[e.key] = el;
+                      }}
+                      className="card scroll-mt-40 p-4 sm:p-6"
+                    >
+                      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-1">
+                        <h3 className="text-base font-semibold text-slate-900">{e.label}</h3>
+                        <span className="text-[11px] text-slate-400">
+                          {unitText(e.unit)} · 新浪财经（披露口径）
+                        </span>
+                      </div>
+                      {hasData ? (
+                        <FinanceCompareChart
+                          indicator={{ unit: e.unit }}
+                          primary={pS}
+                          compare={hasCompare ? cS : null}
+                          height={360}
+                        />
+                      ) : (
+                        <div className="py-10 text-center text-sm text-slate-400">
+                          该科目暂未披露
+                        </div>
+                      )}
                     </div>
-                    {hasData ? (
-                      <FinanceCompareChart
-                        indicator={{ unit: e.unit }}
-                        primary={pS}
-                        compare={hasCompare ? cS : null}
-                        height={280}
-                      />
-                    ) : (
-                      <div className="py-10 text-center text-sm text-slate-400">该科目暂未披露</div>
-                    )}
-                  </div>
-                );
-              })
+                  );
+                })
             )}
           </div>
         </div>
@@ -594,23 +643,24 @@ export default function FinanceExplorer({ code }: { code: string }) {
           setFormulas(formulas.filter((x) => x.id !== id));
           // 同步从所有模块中移除该公式字段
           setModules((ms) =>
-            ms.map((m) => ({ ...m, fields: m.fields.filter((k) => k !== formulaKey(id)) })),
+            ms.map((m) => ({
+              ...m,
+              fields: m.fields.filter((k) => k !== formulaKey(id)),
+            }))
           );
         }}
-        formulaSourceFields={fieldMetas.size > 0 ? Array.from(fieldMetas.values()).filter((m) => !m.key.startsWith('fx_')).map((m) => ({ key: m.key, label: `${m.label}（${m.key}）` })) : []}
+        formulaSourceFields={
+          fieldMetas.size > 0
+            ? Array.from(fieldMetas.values())
+                .filter((m) => !m.key.startsWith('fx_'))
+                .map((m) => ({ key: m.key, label: `${m.label}（${m.key}）` }))
+            : []
+        }
         onClose={() => setPickerOpen(false)}
         onConfirm={confirmFields}
-        title={`数据显示设置 · ${active?.name ?? ''}`}
+        title={`配置指标 · ${active?.name ?? ''}`}
         onResetAll={resetAll}
       />
-
-      <div className="flex items-center justify-between text-xs text-slate-400">
-        <span>数据来自新浪财经三大报表与财务指标页（交易所披露口径），每报告期更新。模块配置保存在本地浏览器。</span>
-        <Link href={`/stock/${code}`} className="text-brand-600 hover:underline">
-          ← 返回个股行情页
-        </Link>
-      </div>
     </div>
   );
 }
-

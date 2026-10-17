@@ -1,13 +1,6 @@
 'use client';
 
-/**
- * 合并报表（理杏仁式表格视图）：
- *   - 行 = 指标（每指标含「数值 / 同比 / 环比」三行，红涨绿跌）
- *   - 列 = 报告期（最新在左，倒序）
- *   - 顶部：报告期粒度（年报/中报/季报）、区间（2/3/5/10 年）、对比公司（最多 3 家）、
- *           数据显示设置（FieldPicker）、显示全部数据项、指标搜索、导出 CSV
- * 数据复用 /api/finance-compare（多公司自定义字段序列，服务端聚合三大报表）。
- */
+/** 单公司财报：自选指标与完整三表，支持报告期切换、搜索和 CSV 导出。 */
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import FieldPicker, { allFieldMetas, type PickerCatalog } from '@/components/FieldPicker';
@@ -41,7 +34,11 @@ const DEFAULT_FIELDS = [
   'eps',
 ];
 
-const GRAN: { key: 'annual' | 'semi' | 'quarter'; label: string; title: string }[] = [
+const GRAN: {
+  key: 'annual' | 'semi' | 'quarter';
+  label: string;
+  title: string;
+}[] = [
   { key: 'annual', label: '年报', title: '仅年度报告（12-31）' },
   { key: 'semi', label: '中报', title: '半年报口径（H1 + H2）' },
   { key: 'quarter', label: '季报', title: '全部季度报告（Q1/Q2/Q3/年报）' },
@@ -93,8 +90,8 @@ function pctChange(cur: number | null, prev: number | null): number | null {
 
 function pctCls(v: number | null): string {
   if (v === null) return 'text-slate-300';
-  if (v > 0) return 'text-red-600';
-  if (v < 0) return 'text-emerald-600';
+  if (v > 0) return 'text-slate-600';
+  if (v < 0) return 'text-slate-600';
   return 'text-slate-400';
 }
 
@@ -145,7 +142,13 @@ export default function FinanceTable({ code }: { code: string }) {
     const map = allFieldMetas(catalog);
     for (const i of INDICATORS) {
       if (!map.has(i.key)) {
-        map.set(i.key, { key: i.key, label: i.label, group: '财务指标', statement: 'indicator', unit: i.unit });
+        map.set(i.key, {
+          key: i.key,
+          label: i.label,
+          group: '财务指标',
+          statement: 'indicator',
+          unit: i.unit,
+        });
       }
     }
     return map;
@@ -170,14 +173,25 @@ export default function FinanceTable({ code }: { code: string }) {
   const codesSig = code;
 
   useEffect(() => {
-    if (fetchFields.length === 0) return;
+    if (fetchFields.length === 0) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
     let alive = true;
     setLoading(true);
     setErr(null);
-    fetch(
-      '/api/finance-compare', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codes: codesSig, years, granularity, fields: fieldsSig.split(',') }) },
-    )
+    setData(null);
+    fetch('/api/finance-compare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        codes: codesSig,
+        years,
+        granularity,
+        fields: fieldsSig.split(','),
+      }),
+    })
       .then((r) => r.json())
       .then((j) => {
         if (!alive) return;
@@ -205,14 +219,18 @@ export default function FinanceTable({ code }: { code: string }) {
     return raw;
   };
   const colsDesc = useMemo(() => {
-    const idx = periodsAsc.map((p, i) => ({ p, label: labelOf(p, labelsAsc[i] ?? p), i }));
+    const idx = periodsAsc.map((p, i) => ({
+      p,
+      label: labelOf(p, labelsAsc[i] ?? p),
+      i,
+    }));
     return idx.reverse();
   }, [periodsAsc.join(','), labelsAsc.join(','), granularity]);
 
   /** 值查找：按公司 + 字段 + 列序号 */
   const valOf = (c: CompanyFinancials, key: string, i: number): number | null => {
     const ownIndex = c.periods.indexOf(periodsAsc[i]);
-    return ownIndex >= 0 ? c.series?.[key]?.[ownIndex] ?? null : null;
+    return ownIndex >= 0 ? (c.series?.[key]?.[ownIndex] ?? null) : null;
   };
 
   /** 同比：上一年同期报告期 */
@@ -279,12 +297,14 @@ export default function FinanceTable({ code }: { code: string }) {
     if (kw.trim()) {
       const k = kw.trim().toLowerCase();
       list = list.filter(
-        (r) => r.meta?.label.toLowerCase().includes(k) || r.key.toLowerCase().includes(k),
+        (r) => r.meta?.label.toLowerCase().includes(k) || r.key.toLowerCase().includes(k)
       );
     }
     if (onlyHasData && companies.length > 0) {
       list = list.filter((r) =>
-        companies.some((c) => (c.series?.[r.key] ?? []).some((v) => v !== null && Number.isFinite(v))),
+        companies.some((c) =>
+          (c.series?.[r.key] ?? []).some((v) => v !== null && Number.isFinite(v))
+        )
       );
     }
     return list;
@@ -301,10 +321,14 @@ export default function FinanceTable({ code }: { code: string }) {
           const v = valOf(c, r.key, col.i);
           return v === null ? '' : String(v);
         });
-        lines.push([name || (r.meta?.label ?? r.key), unit, ...cells].map((x) => `"${x}"`).join(','));
+        lines.push(
+          [name || (r.meta?.label ?? r.key), unit, ...cells].map((x) => `"${x}"`).join(',')
+        );
       }
     }
-    const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const blob = new Blob(['\uFEFF' + lines.join('\n')], {
+      type: 'text/csv;charset=utf-8',
+    });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `合并报表_${primary?.name ?? code}_${granularity}_${years}y.csv`;
@@ -314,129 +338,119 @@ export default function FinanceTable({ code }: { code: string }) {
 
   return (
     <div className="space-y-3">
-      {/* 工具栏 */}
-      <div className="card flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
-        {/* 报表切换：指标 / 三大报表 */}
-        <div className="flex items-center gap-1">
-          {([
-            ['indicators', '指标'],
-            ['pl', '利润表'],
-            ['bs', '资产负债表'],
-            ['cf', '现金流量表'],
-          ] as const).map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => setView(key)}
-              className={`rounded px-2.5 py-1 text-xs transition ${
-                view === key ? 'bg-brand-600 font-medium text-white' : 'text-slate-500 hover:bg-slate-100'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        <div className="h-4 w-px bg-slate-200" />
-
-        <div className="flex items-center gap-1">
-          {GRAN.map((g) => (
-            <button
-              key={g.key}
-              title={g.title}
-              onClick={() => setGranularity(g.key)}
-              className={`rounded px-2.5 py-1 text-xs transition ${
-                granularity === g.key ? 'bg-slate-200 font-medium text-slate-800' : 'text-slate-500 hover:bg-slate-100'
-              }`}
-            >
-              {g.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-1">
-          {RANGES.map((y) => (
-            <button
-              key={y}
-              onClick={() => setYears(y)}
-              className={`rounded px-2.5 py-1 text-xs transition ${
-                years === y ? 'bg-brand-50 font-medium text-brand-700' : 'text-slate-500 hover:bg-slate-100'
-              }`}
-            >
-              {y}年
-            </button>
-          ))}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          <div className="flex items-center gap-1">
-            <span className="chip bg-blue-100 text-blue-700">{primary?.name ?? code}</span>
-          </div>
-        </div>
-
-        <div className="ml-auto flex flex-wrap items-center gap-1.5">
-          <div className="relative">
-            <input
-              value={kw}
-              onChange={(e) => setKw(e.target.value)}
-              placeholder="搜索指标…"
-              className="input w-28 py-1 text-xs md:w-36"
-              aria-label="搜索指标"
-            />
-            {kw && (
+      <div className="card overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-5">
+          <div className="flex max-w-full gap-1 overflow-x-auto" role="group" aria-label="报表视图">
+            {(
+              [
+                ['indicators', '指标'],
+                ['pl', '利润表'],
+                ['bs', '资产负债表'],
+                ['cf', '现金流量表'],
+              ] as const
+            ).map(([key, label]) => (
               <button
-                onClick={() => setKw('')}
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
-                aria-label="清空搜索"
+                key={key}
+                onClick={() => setView(key)}
+                aria-pressed={view === key}
+                className={`min-h-10 shrink-0 rounded-lg px-3 text-sm font-medium transition ${view === key ? 'bg-brand-50 text-brand-700' : 'text-slate-500 hover:bg-slate-50'}`}
               >
-                ✕
+                {label}
+              </button>
+            ))}
+          </div>
+          <span className="text-sm font-medium text-slate-700">{primary?.name ?? code}</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 px-4 py-4 sm:px-5">
+          <div className="segmented" role="group" aria-label="报告类型">
+            {GRAN.map((g) => (
+              <button
+                key={g.key}
+                title={g.title}
+                onClick={() => setGranularity(g.key)}
+                aria-pressed={granularity === g.key}
+                className={`segment !px-2.5 !text-xs ${granularity === g.key ? 'segment-active' : ''}`}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-1" role="group" aria-label="报表年份">
+            {RANGES.map((y) => (
+              <button
+                key={y}
+                onClick={() => setYears(y)}
+                aria-pressed={years === y}
+                className={`min-h-9 rounded-lg px-2.5 text-xs ${years === y ? 'bg-brand-50 font-medium text-brand-700' : 'text-slate-500 hover:bg-slate-50'}`}
+              >
+                {y}年
+              </button>
+            ))}
+          </div>
+          <div className="ml-auto flex min-w-0 flex-wrap items-center gap-2">
+            <div className="relative">
+              <input
+                value={kw}
+                onChange={(e) => setKw(e.target.value)}
+                placeholder="搜索指标"
+                className="input !w-36 !pr-7 !text-xs"
+                aria-label="搜索指标"
+              />
+              {kw && (
+                <button
+                  onClick={() => setKw('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400"
+                  aria-label="清空搜索"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+            {view === 'indicators' && (
+              <button
+                onClick={() => setShowAll((v) => !v)}
+                aria-pressed={showAll}
+                className={`btn !min-h-9 !px-2.5 !text-xs ${showAll ? '!border-brand-300 !bg-brand-50 !text-brand-700' : ''}`}
+              >
+                全部数据项
               </button>
             )}
+            <button
+              onClick={() => setOnlyHasData((v) => !v)}
+              aria-pressed={onlyHasData}
+              className="btn !min-h-9 !px-2.5 !text-xs"
+            >
+              {onlyHasData ? '隐藏空行' : '含空行'}
+            </button>
+            {view === 'indicators' && (
+              <button onClick={() => setPickerOpen(true)} className="btn !min-h-9 !px-2.5 !text-xs">
+                配置指标
+              </button>
+            )}
+            <button
+              onClick={exportCsv}
+              disabled={loading || !primary}
+              className="btn !min-h-9 !px-2.5 !text-xs"
+            >
+              导出 CSV
+            </button>
           </div>
-          {view === 'indicators' && (
-            <button
-              onClick={() => setShowAll((v) => !v)}
-              className={`rounded px-2 py-1 text-xs transition ${
-                showAll ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-              title="展示三大报表全部科目 + 21 项指标"
-            >
-              全部数据项
-            </button>
-          )}
-          <button
-            onClick={() => setOnlyHasData((v) => !v)}
-            className={`rounded px-2 py-1 text-xs transition ${
-              onlyHasData ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-            title={onlyHasData ? '隐藏全空指标（点击显示）' : '显示全空指标（点击隐藏）'}
-          >
-            {onlyHasData ? '隐藏空行' : '含空行'}
-          </button>
-          {view === 'indicators' && (
-            <button
-              onClick={() => setPickerOpen(true)}
-              className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600 transition hover:bg-slate-200"
-            >
-              数据显示设置
-            </button>
-          )}
-          <button
-            onClick={exportCsv}
-            className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600 transition hover:bg-slate-200"
-          >
-            导出CSV
-          </button>
         </div>
       </div>
 
       {/* 表格 */}
       <div className="card overflow-hidden px-0 py-0">
-        <div ref={tableRef} className="overflow-x-auto">
+        <div ref={tableRef} className="max-h-[720px] overflow-auto">
           <table className="w-full border-collapse text-xs">
             <thead>
               <tr className="sticky top-0 z-20 bg-slate-50">
                 <th className="sticky left-0 z-30 min-w-[140px] border-b border-slate-200 bg-slate-50 px-3 py-2 text-left font-medium text-slate-600">
-                  指标 <span className="font-normal text-slate-400">（{years}年 · {granularity === 'annual' ? '年报' : granularity === 'semi' ? '半年报' : '季度'}）</span>
+                  指标{' '}
+                  <span className="font-normal text-slate-400">
+                    （{years}年 ·{' '}
+                    {granularity === 'annual' ? '年报' : granularity === 'semi' ? '半年报' : '季度'}
+                    ）
+                  </span>
                 </th>
                 {colsDesc.map((c) => (
                   <th
@@ -456,11 +470,13 @@ export default function FinanceTable({ code }: { code: string }) {
                   </td>
                 </tr>
               </tbody>
-              )}
+            )}
             {!loading && err && (
               <tbody>
                 <tr>
-                  <td colSpan={colsDesc.length + 1} className="py-10 text-center text-red-600">{err}</td>
+                  <td colSpan={colsDesc.length + 1} className="py-10 text-center text-red-600">
+                    {err}
+                  </td>
                 </tr>
               </tbody>
             )}
@@ -472,86 +488,104 @@ export default function FinanceTable({ code }: { code: string }) {
                   </td>
                 </tr>
               </tbody>
-              )}
+            )}
             {!loading &&
-                !err &&
-                rows.map((r) => {
-                  const unit = r.meta?.unit ?? '';
-                  const isPct = unit === 'pct';
-                  const unitText = isPct ? '%' : unit === 'wan' ? '亿' : '';
-                  return (
-                    <tbody key={r.key} className="border-b-2 border-slate-200">
-                      {companies.map((c, ci) => {
-                        const showYoY = companies.length === 1;
-                        return (
-                          <Fragment key={c.code}>
-                            {/* 数值行 */}
-                            <tr key={`${r.key}-${c.code}-v`} className="hover:bg-slate-50">
+              !err &&
+              rows.map((r) => {
+                const unit = r.meta?.unit ?? '';
+                const isPct = unit === 'pct';
+                const unitText = isPct ? '%' : unit === 'wan' ? '亿' : '';
+                return (
+                  <tbody key={r.key} className="border-b-2 border-slate-200">
+                    {companies.map((c, ci) => {
+                      const showYoY = companies.length === 1;
+                      return (
+                        <Fragment key={c.code}>
+                          {/* 数值行 */}
+                          <tr key={`${r.key}-${c.code}-v`} className="hover:bg-slate-50">
+                            <td
+                              className={`sticky left-0 z-10 bg-white px-3 pb-1 ${ci === 0 ? 'pt-2.5' : 'pl-6 pt-2.5'}`}
+                            >
+                              {ci === 0 && (
+                                <div className="flex items-baseline gap-1.5">
+                                  <span className="font-medium text-slate-800">
+                                    {r.meta?.label ?? r.key}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400">{unitText}</span>
+                                </div>
+                              )}
+                              {ci > 0 && (
+                                <span className="text-[11px] text-orange-600">{c.name}</span>
+                              )}
+                            </td>
+                            {colsDesc.map((col) => (
                               <td
-                                className={`sticky left-0 z-10 bg-white px-3 pb-1 ${ci === 0 ? 'pt-2.5' : 'pl-6 pt-2.5'}`}
+                                key={col.p}
+                                className="border-l border-slate-100 px-2.5 pb-1 pt-2.5 text-center tabular-nums text-slate-800"
                               >
-                                {ci === 0 && (
-                                  <div className="flex items-baseline gap-1.5">
-                                    <span className="font-medium text-slate-800">{r.meta?.label ?? r.key}</span>
-                                    <span className="text-[10px] text-slate-400">{unitText}</span>
-                                  </div>
-                                )}
-                                {ci > 0 && <span className="text-[11px] text-orange-600">{c.name}</span>}
+                                {fmtVal(valOf(c, r.key, col.i), unit)}
                               </td>
-                              {colsDesc.map((col) => (
-                                <td
-                                  key={col.p}
-                                  className="border-l border-slate-100 px-2.5 pb-1 pt-2.5 text-center tabular-nums text-slate-800"
-                                >
-                                  {fmtVal(valOf(c, r.key, col.i), unit)}
+                            ))}
+                          </tr>
+                          {/* 同比 / 环比（仅单公司时展开；与理杏仁一致：上行同比、下行环比） */}
+                          {showYoY && (
+                            <>
+                              <tr className="text-[11px] hover:bg-slate-50/60">
+                                <td className="sticky left-0 z-10 bg-white px-3 py-0.5 text-[10px] text-slate-400">
+                                  累积
                                 </td>
-                              ))}
-                            </tr>
-                            {/* 同比 / 环比（仅单公司时展开；与理杏仁一致：上行同比、下行环比） */}
-                            {showYoY && (
-                              <>
-                                <tr className="text-[11px] hover:bg-slate-50/60">
-                                  <td className="sticky left-0 z-10 bg-white px-3 py-0.5 text-[10px] text-slate-400">
-                                    累积
-                                  </td>
-                                  {colsDesc.map((col) => {
-                                    const yi = yoyIndex(col.i);
-                                    const v = yi >= 0 ? pctChange(valOf(c, r.key, col.i), valOf(c, r.key, yi)) : null;
-                                    return (
-                                      <td key={col.p} className={`border-l border-slate-100 px-2.5 py-0.5 text-center tabular-nums ${pctCls(v)}`}>
-                                        {v === null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(1)}%`}
-                                      </td>
-                                    );
-                                  })}
-                                </tr>
-                                <tr className="text-[11px] hover:bg-slate-50/60">
-                                  <td className="sticky left-0 z-10 bg-white px-3 pb-2 pt-0.5 text-[10px] text-slate-400">
-                                    单季
-                                  </td>
-                                  {colsDesc.map((col) => {
-                                    const v = sqYoy(c, r.key, col.i);
-                                    return (
-                                      <td key={col.p} className={`border-l border-slate-100 px-2.5 py-0.5 text-center tabular-nums ${pctCls(v)}`}>
-                                        {v === null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(1)}%`}
-                                      </td>
-                                    );
-                                  })}
-                                </tr>
-                              </>
-                            )}
-                          </Fragment>
-                        );
-                      })}
-                    </tbody>
-                  );
-                })}
+                                {colsDesc.map((col) => {
+                                  const yi = yoyIndex(col.i);
+                                  const v =
+                                    yi >= 0
+                                      ? pctChange(valOf(c, r.key, col.i), valOf(c, r.key, yi))
+                                      : null;
+                                  return (
+                                    <td
+                                      key={col.p}
+                                      className={`border-l border-slate-100 px-2.5 py-0.5 text-center tabular-nums ${pctCls(v)}`}
+                                    >
+                                      {v === null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(1)}%`}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                              <tr className="text-[11px] hover:bg-slate-50/60">
+                                <td className="sticky left-0 z-10 bg-white px-3 pb-2 pt-0.5 text-[10px] text-slate-400">
+                                  单季
+                                </td>
+                                {colsDesc.map((col) => {
+                                  const v = sqYoy(c, r.key, col.i);
+                                  return (
+                                    <td
+                                      key={col.p}
+                                      className={`border-l border-slate-100 px-2.5 py-0.5 text-center tabular-nums ${pctCls(v)}`}
+                                    >
+                                      {v === null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(1)}%`}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            </>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                );
+              })}
           </table>
         </div>
-        <div className="border-t border-slate-100 px-3 py-2 text-[11px] leading-relaxed text-slate-400">
-          口径：三大报表科目为新浪披露的累计值（单位：万元，统一折算为亿元展示）；财务指标（ROE 等）来自新浪财务指标页。
-          累积 = 与上一年同期累计值相比；单季 = 单季值（当期累计 − 同年上一报告期累计）与上年同期单季相比，仅季报视图提供；null 表示当期未披露。
-          {showAll && ' 当前为「全部数据项」模式（178 个科目 + 21 项指标），科目为累计值口径，行较多可搜索定位。'}
-          {!showAll && ` 当前显示 ${rows.length} 项指标，可通过「数据显示设置」增减或搜索。`}
+        <div className="border-t border-slate-100 px-4 py-3 text-xs leading-6 text-slate-500">
+          <details>
+            <summary>报表口径</summary>
+            口径：三大报表科目为新浪披露的累计值（单位：万元，统一折算为亿元展示）；财务指标（ROE
+            等）来自新浪财务指标页。 累积 = 与上一年同期累计值相比；单季 = 单季值（当期累计 −
+            同年上一报告期累计）与上年同期单季相比，仅季报视图提供；null 表示当期未披露。
+            {showAll &&
+              ' 当前为「全部数据项」模式（178 个科目 + 21 项指标），科目为累计值口径，行较多可搜索定位。'}
+            {view === 'indicators' && !showAll && ` 当前显示 ${rows.length} 项指标。`}
+          </details>
         </div>
       </div>
 
@@ -576,4 +610,3 @@ export default function FinanceTable({ code }: { code: string }) {
     </div>
   );
 }
-

@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { INDUSTRIES } from '@/lib/universe';
-import { pct, price, signedPct, toneClass, yi } from '@/lib/format';
+import { pct, price, yi } from '@/lib/format';
 
 interface Row {
   code: string;
@@ -63,12 +63,18 @@ function buildQuery(c: Criteria): string {
 
 function ScreenerInner() {
   const sp = useSearchParams();
-  const [criteria, setCriteria] = useState<Criteria>({ ...EMPTY, industry: sp.get('industry') ?? '' });
+  const [criteria, setCriteria] = useState<Criteria>({
+    ...EMPTY,
+    industry: sp.get('industry') ?? '',
+  });
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [sort, setSort] = useState<{ key: keyof Row; desc: boolean }>({ key: 'totalMarketCap', desc: true });
+  const [sort, setSort] = useState<{ key: keyof Row; desc: boolean }>({
+    key: 'totalMarketCap',
+    desc: true,
+  });
 
   const query = buildQuery(criteria);
 
@@ -115,9 +121,11 @@ function ScreenerInner() {
         r.pb ?? '',
         r.roe?.toFixed(2) ?? '',
         r.totalMarketCap ?? '',
-      ].join(','),
+      ].join(',')
     );
-    const blob = new Blob([`\uFEFF${head.join(',')}\n${lines.join('\n')}`], { type: 'text/csv;charset=utf-8' });
+    const blob = new Blob([`\uFEFF${head.join(',')}\n${lines.join('\n')}`], {
+      type: 'text/csv;charset=utf-8',
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -137,16 +145,17 @@ function ScreenerInner() {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-lg font-semibold text-slate-900">条件选股</h1>
+        <h1 className="page-title">条件选股</h1>
         <p className="mt-1 text-xs text-slate-500">
-          候选池为 {INDUSTRIES.length} 个行业的龙头股样本，实时抓取行情后按条件过滤。ROE 由 PB ÷ PE 派生。
+          候选池为 {INDUSTRIES.length} 个行业的龙头股样本，实时抓取行情后按条件过滤。ROE 由 PB ÷ PE
+          派生。
         </p>
       </div>
 
       {/* 筛选面板 */}
-      <div className="card-pad space-y-3">
+      <div className="card-pad space-y-5">
         <div className="flex flex-wrap gap-1.5">
           {PRESETS.map((p) => (
             <button
@@ -157,14 +166,21 @@ function ScreenerInner() {
               {p.label}
             </button>
           ))}
-          <button onClick={() => setCriteria(EMPTY)} className="rounded border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:bg-slate-50">
+          <button
+            onClick={() => setCriteria(EMPTY)}
+            className="rounded border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:bg-slate-50"
+          >
             清空条件
           </button>
         </div>
 
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="行业">
-            <select className="input" value={criteria.industry} onChange={(e) => set('industry', e.target.value)}>
+            <select
+              className="input"
+              value={criteria.industry}
+              onChange={(e) => set('industry', e.target.value)}
+            >
               <option value="">全部行业</option>
               {INDUSTRIES.map((i) => (
                 <option key={i} value={i}>
@@ -173,10 +189,28 @@ function ScreenerInner() {
               ))}
             </select>
           </Field>
-          <RangeField label="PE(TTM)" a={criteria.peMin} b={criteria.peMax} setA={(v) => set('peMin', v)} setB={(v) => set('peMax', v)} />
-          <RangeField label="PB" a={criteria.pbMin} b={criteria.pbMax} setA={(v) => set('pbMin', v)} setB={(v) => set('pbMax', v)} />
-          <Field label="ROE 下限(%)">
-            <input className="input" type="number" placeholder="如 15" value={criteria.roeMin} onChange={(e) => set('roeMin', e.target.value)} />
+          <RangeField
+            label="PE(TTM)"
+            a={criteria.peMin}
+            b={criteria.peMax}
+            setA={(v) => set('peMin', v)}
+            setB={(v) => set('peMax', v)}
+          />
+          <RangeField
+            label="PB"
+            a={criteria.pbMin}
+            b={criteria.pbMax}
+            setA={(v) => set('pbMin', v)}
+            setB={(v) => set('pbMax', v)}
+          />
+          <Field label="ROE 估算值下限(%)">
+            <input
+              className="input"
+              type="number"
+              placeholder="如 15"
+              value={criteria.roeMin}
+              onChange={(e) => set('roeMin', e.target.value)}
+            />
           </Field>
           <RangeField
             label="总市值(亿)"
@@ -201,17 +235,16 @@ function ScreenerInner() {
         )}
       </div>
 
-      <div className="card overflow-x-auto">
+      <div className="card max-h-[680px] overflow-auto">
         <table className="min-w-full">
-          <thead className="border-b border-slate-100 bg-slate-50/60">
+          <thead className="sticky top-0 z-10 border-b border-slate-100 bg-slate-50">
             <tr>
               {head('code', '名称/代码')}
               {head('industry', '行业')}
               {head('price', '最新价')}
-              {head('changePct', '涨跌幅')}
               {head('pe', 'PE(TTM)')}
               {head('pb', 'PB')}
-              {head('roe', 'ROE')}
+              {head('roe', 'ROE（估算）')}
               {head('totalMarketCap', '总市值')}
               <th className="th text-right">操作</th>
             </tr>
@@ -219,7 +252,7 @@ function ScreenerInner() {
           <tbody className="divide-y divide-slate-50">
             {!loading && sorted.length === 0 && (
               <tr>
-                <td colSpan={9} className="td py-8 text-center text-slate-400">
+                <td colSpan={8} className="td py-8 text-center text-slate-400">
                   没有符合条件的标的，试试放宽区间
                 </td>
               </tr>
@@ -233,8 +266,7 @@ function ScreenerInner() {
                   </Link>
                 </td>
                 <td className="td text-xs text-slate-500">{r.industry}</td>
-                <td className={`td font-medium ${toneClass(r.changePct)}`}>{price(r.price)}</td>
-                <td className={`td ${toneClass(r.changePct)}`}>{signedPct(r.changePct)}</td>
+                <td className="td font-medium">{price(r.price)}</td>
                 <td className="td">{r.pe ? r.pe.toFixed(2) : '亏损/--'}</td>
                 <td className="td">{r.pb ? r.pb.toFixed(2) : '--'}</td>
                 <td className="td">{pct(r.roe)}</td>
@@ -269,14 +301,22 @@ function WatchButton({ code }: { code: string }) {
       const next = list.includes(code) ? list.filter((x) => x !== code) : [...list, code];
       localStorage.setItem('fin-terminal.watchlist.v1', JSON.stringify(next));
       setInList(next.includes(code));
-      window.dispatchEvent(new StorageEvent('storage', { key: 'fin-terminal.watchlist.v1', newValue: JSON.stringify(next) }));
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'fin-terminal.watchlist.v1',
+          newValue: JSON.stringify(next),
+        })
+      );
     } catch {
       /* ignore */
     }
   };
 
   return (
-    <button onClick={toggle} className="rounded px-2 py-1 text-xs text-slate-500 hover:bg-slate-100">
+    <button
+      onClick={toggle}
+      className="rounded px-2 py-1 text-xs text-slate-500 hover:bg-slate-100"
+    >
       {inList ? '★ 已自选' : '☆ 自选'}
     </button>
   );
@@ -308,9 +348,21 @@ function RangeField({
     <div>
       <span className="label mb-1 block">{label}</span>
       <div className="flex items-center gap-1.5">
-        <input className="input" type="number" placeholder="最小" value={a} onChange={(e) => setA(e.target.value)} />
+        <input
+          className="input"
+          type="number"
+          placeholder="最小"
+          value={a}
+          onChange={(e) => setA(e.target.value)}
+        />
         <span className="text-slate-400">~</span>
-        <input className="input" type="number" placeholder="最大" value={b} onChange={(e) => setB(e.target.value)} />
+        <input
+          className="input"
+          type="number"
+          placeholder="最大"
+          value={b}
+          onChange={(e) => setB(e.target.value)}
+        />
       </div>
     </div>
   );

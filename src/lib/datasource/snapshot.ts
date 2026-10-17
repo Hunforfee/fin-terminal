@@ -1,3 +1,4 @@
+import { normalizeCode } from './codes';
 /**
  * 兜底快照层。
  *
@@ -44,15 +45,17 @@ function markStale<T extends { stale: boolean; source: string }>(v: T): T {
 export async function snapshotQuote(code: string): Promise<Quote | null> {
   const snap = await load();
   if (!snap) return null;
-  const hit = snap.quotes.find((q) => q.code === code);
+  const n = normalizeCode(code);
+  const hit = snap.quotes.find((q) => q.symbol === n?.symbol);
+  if (hit && n) return markStale({ ...hit, kind: n.kind });
   return hit ? markStale(hit) : null;
 }
 
 export async function snapshotQuotes(codes: string[]): Promise<Quote[]> {
   const snap = await load();
   if (!snap) return [];
-  const set = new Set(codes);
-  return snap.quotes.filter((q) => set.has(q.code)).map(markStale);
+  const values = await Promise.all(codes.map(snapshotQuote));
+  return values.filter((q): q is Quote => q !== null);
 }
 
 export async function snapshotKLine(
@@ -80,3 +83,4 @@ export async function snapshotInfo(): Promise<{ generatedAt: string | null; coun
   if (!snap) return { generatedAt: null, count: 0 };
   return { generatedAt: snap.generatedAt, count: snap.quotes.length };
 }
+

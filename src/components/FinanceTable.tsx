@@ -172,7 +172,8 @@ export default function FinanceTable({ code }: { code: string }) {
     setLoading(true);
     setErr(null);
     fetch(
-      `/api/finance-compare?codes=${codesSig}&years=${years}&granularity=${granularity}&fields=${encodeURIComponent(fieldsSig)}`,
+      '/api/finance-compare', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codes: codesSig, years, granularity, fields: fieldsSig.split(',') }) },
     )
       .then((r) => r.json())
       .then((j) => {
@@ -206,7 +207,10 @@ export default function FinanceTable({ code }: { code: string }) {
   }, [periodsAsc.join(','), labelsAsc.join(','), granularity]);
 
   /** 值查找：按公司 + 字段 + 列序号 */
-  const valOf = (c: CompanyFinancials, key: string, i: number): number | null => c.series?.[key]?.[i] ?? null;
+  const valOf = (c: CompanyFinancials, key: string, i: number): number | null => {
+    const ownIndex = c.periods.indexOf(periodsAsc[i]);
+    return ownIndex >= 0 ? c.series?.[key]?.[ownIndex] ?? null : null;
+  };
 
   /** 同比：上一年同期报告期 */
   const yoyIndex = (i: number): number => {
@@ -585,3 +589,4 @@ export default function FinanceTable({ code }: { code: string }) {
     </div>
   );
 }
+

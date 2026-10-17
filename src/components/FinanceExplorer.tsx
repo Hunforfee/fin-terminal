@@ -207,9 +207,11 @@ export default function FinanceExplorer({ code }: { code: string }) {
     let alive = true;
     setLoading(true);
     setErr(null);
+    setCustomData(null);
     const codes = compareCode ? `${code},${compareCode}` : code;
     fetch(
-      `/api/finance-compare?codes=${codes}&years=${years}&granularity=${granularity}&fields=${encodeURIComponent(fieldsSig)}`,
+      '/api/finance-compare', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codes: codes, years, granularity, fields: fieldsSig.split(',') }) },
     )
       .then((r) => r.json())
       .then((j) => {
@@ -611,3 +613,4 @@ export default function FinanceExplorer({ code }: { code: string }) {
     </div>
   );
 }
+

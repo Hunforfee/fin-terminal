@@ -82,7 +82,7 @@ export async function fetchQuotes(symbols: string[]): Promise<Quote[]> {
       symbol,
       name: f[0],
       market: norm?.market ?? (symbol.startsWith('sh') ? 'SH' : 'SZ'),
-      kind: idx ? 'index' : (norm?.kind ?? 'stock'),
+      kind: norm?.kind ?? 'stock',
       price,
       prevClose,
       open: numOrNull(f[1]),
@@ -114,3 +114,4 @@ export async function fetchQuotes(symbols: string[]): Promise<Quote[]> {
   if (out.length === 0) throw new Error('sina quote parse yielded nothing');
   return out;
 }
+

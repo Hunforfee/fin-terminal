@@ -104,7 +104,7 @@ function parseQuote(symbol, body) {
   const m = tsRaw.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/);
   return {
     code, symbol, name: f[1].replace(/\s+/g, ''), market,
-    kind: ['000001','000300','000016','000905','000852','000688','399001','399006','899050'].includes(code) ? 'index' : 'stock',
+    kind: INDICES.some(([, s]) => s === symbol) ? 'index' : FUNDS.includes(code) ? 'etf' : 'stock',
     price,
     prevClose: num(f[4]), open: num(f[5]),
     high: num(f[33]), low: num(f[34]),
@@ -177,7 +177,7 @@ async function main() {
   console.log('FinTerminal 快照生成\n');
 
   const allCodes = [...INDICES.map(([c]) => c), ...STOCKS, ...FUNDS];
-  const symbols = allCodes.map(toSymbol);
+  const symbols = [...INDICES.map(([, symbol]) => symbol), ...STOCKS.map(toSymbol), ...FUNDS.map(toSymbol)];
   console.log(`行情：${symbols.length} 个标的`);
 
   const quotes = await fetchQuotes(symbols);
@@ -212,3 +212,4 @@ main().catch((e) => {
   console.error('生成失败：', e);
   process.exit(1);
 });
+

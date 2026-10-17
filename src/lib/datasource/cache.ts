@@ -1,3 +1,4 @@
+import { isShanghaiTradingTime } from './tradingTime';
 /**
  * 进程内 TTL 缓存。
  * 行情类接口上游有频率限制，且同一页面多个组件会重复请求同一标的，
@@ -14,12 +15,7 @@ const inflight = new Map<string, Promise<unknown>>();
 
 /** 默认 TTL：交易时段 15s，非交易时段 10 分钟（收盘后数据不再变化） */
 export function defaultTtl(): number {
-  const d = new Date();
-  const day = d.getDay();
-  if (day === 0 || day === 6) return 10 * 60 * 1000;
-  const t = d.getHours() * 60 + d.getMinutes();
-  const trading = (t >= 9 * 60 + 15 && t <= 11 * 60 + 30) || (t >= 13 * 60 && t <= 15 * 60 + 5);
-  return trading ? 15 * 1000 : 10 * 60 * 1000;
+  return isShanghaiTradingTime() ? 15_000 : 600_000;
 }
 
 export async function cached<T>(key: string, ttlMs: number, producer: () => Promise<T>): Promise<T> {
@@ -39,7 +35,15 @@ export async function cached<T>(key: string, ttlMs: number, producer: () => Prom
     } catch (e) {
       // 上游失败时，若有过期旧值则降级使用，避免整页报错
       const stale = store.get(key);
-      if (stale) return stale.value as T;
+      if (stale) {
+        const mark = (value: unknown): unknown => {
+          if (!value || typeof value !== 'object' || !('stale' in value)) throw e;
+          const item = value as { stale: boolean; warnings?: string[] };
+          return { ...item, stale: true,
+            ...(Array.isArray(item.warnings) ? { warnings: [...item.warnings, '更新失败，当前使用上次缓存的数据，请留意日期。'] } : {}) };
+        };
+        return (Array.isArray(stale.value) ? stale.value.map(mark) : mark(stale.value)) as T;
+      }
       throw e;
     } finally {
       inflight.delete(key);
@@ -64,3 +68,4 @@ export function clearCache(): void {
 export function cacheStats(): { size: number; pending: number } {
   return { size: store.size, pending: inflight.size };
 }
+

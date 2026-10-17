@@ -52,18 +52,19 @@ export async function fetchSearch(keyword: string, count = 12): Promise<SearchHi
     if (!r.Code || !r.Name) continue;
     const code = r.Code;
     const market: 'SH' | 'SZ' | 'BJ' = r.QuoteID?.startsWith('1.') ? 'SH' : r.MktNum === '0' ? 'BJ' : 'SZ';
-    const norm = normalizeCode(code);
+    const norm = normalizeCode(`${market.toLowerCase()}${code}`);
     const idx = INDEX_WHITELIST[code];
     hits.push({
       code,
       symbol: `${market.toLowerCase()}${code}`,
       name: r.Name,
       market,
-      kind: idx ? 'index' : (norm?.kind ?? 'stock'),
+      kind: norm?.kind ?? 'stock',
       pinyin: r.PinYin,
-      board: idx ? '指数' : (r.SecurityTypeName ?? norm?.board ?? 'A股'),
+      board: r.SecurityTypeName ?? norm?.board ?? 'A股',
       secid: r.QuoteID ?? norm?.secid,
     });
   }
   return hits;
 }
+

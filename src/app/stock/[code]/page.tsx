@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import QuoteHeader from '@/components/QuoteHeader';
 import ValuationSection from '@/components/ValuationSection';
+import AiAnalysis from '@/components/AiAnalysis';
 import { getQuote } from '@/lib/datasource';
 
 export const dynamic = 'force-dynamic';
@@ -35,6 +36,8 @@ export default async function StockPage({ params }: { params: Promise<{ code: st
           </Link>
         }
       />
+
+      <AiAnalysis code={quote.code} name={quote.name} />
 
       <ValuationSection code={symbol} />
     </div>

@@ -83,8 +83,8 @@
 | 路由 | 类型 | 内容 |
 |---|---|---|
 | `/` | Client | **研究工作台**：关注公司的 PE/PB、累计 ROE、净利率、每股经营现金流及报告期；支持名称/代码筛选、排序；研究笔记和财报索引。PE/PB 行情口径与财报指标分别标注，最新报告期缺值时不沿用旧值。 |
-| `/stock/[code]` | Server + Client | PE-TTM / PB / 股息率指标卡切换，共用大图；前复权收盘价、5/10 年分位、区间统计、点选参考线、可选口径对比；计算说明默认折叠。 |
-| `/stock/[code]/finance` | Server + Client | **指标趋势**：关键指标、盈利、成长、偿债、现金流、每股指标模块；选择指标查看多年趋势和区间统计，支持双公司对比、年报/中报/季报、5/10 年切换。保留模块配置、自定义公式和指标卡拖动排序。 |
+| `/stock/[code]` | Server + Client | PE-TTM / PB / 股息率指标卡切换，共用大图；前复权收盘价、5/10 年分位、区间统计、点选参考线、可选口径对比；计算说明默认折叠。保留 AI 深入分析、提示词编辑、接口设置及历史版本；提示词默认收起，生成内容按需展示。 |
+| `/stock/[code]/finance` | Server + Client | **指标趋势**：模块内全部图表纵向排列，左侧吸附指标导航，点击定位、拖动排序；每图展示当前值与区间统计。支持双公司对比、年报/中报/季报、5/10 年切换，保留模块配置与自定义公式。移动端导航横向滚动。 |
 | `/stock/[code]/finance` | Client | **合并报表**：保留单公司模式；在指标、完整利润表、资产负债表和现金流量表之间切换；2/3/5/10 年、报告类型、搜索、空行切换、指标配置和 CSV 导出；金额统一亿元，首行/首列吸附，表内滚动。保留「累积」「单季」增长率行。 |
 | `/watchlist` | Client | **关注公司**：基本面比较表，可逐项移除；原有指数/基金关注项保留在折叠的「其他关注标的」中。 |
 | `/industry` | Client | **行业研究**：申万 2021 三级分类，名称/代码筛选、PE/PB 中位数、估算 ROE、市值及排序；保留亏损股。短期涨跌和换手率移出主表，分类口径默认折叠。 |
@@ -93,9 +93,9 @@
 | `/fund`、`/fund/[code]` | Server + Client | 基金/ETF 列表与历史走势。 |
 | `/health` | Server | 数据源可用性、延迟与降级状态。 |
 
-自选、研究笔记和指标配置存储在当前浏览器的 localStorage，沿用原有自选存储键；没有云端同步。页面采用统一导航、灰白底色、蓝色操作按钮，适配电脑和手机。
+自选、研究笔记和指标配置存储在当前浏览器的 localStorage，沿用原有自选存储键；没有云端同步。全站采用紧凑导航与小边距的全宽布局，宽屏上导航、标志和搜索同排；财务页标题与视图切换同排，报表高度根据实际剩余窗口空间调整。保留灰白底色、蓝色操作按钮，并适配电脑和手机。
 
-**API**（`src/app/api/`）：`quote` `kline` `minute` `search` `valuation` `financial` `finance-fields` `finance-compare` `peers` `screen` `market` `industry` `sw-industry` `health`
+**API**（`src/app/api/`）：`quote` `kline` `minute` `search` `valuation` `financial` `finance-fields` `finance-compare` `peers` `screen` `market` `industry` `sw-industry` `health` `ai-analyze`
 
 ---
 

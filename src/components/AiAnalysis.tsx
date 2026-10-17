@@ -50,7 +50,10 @@ function renderMd(md: string): string {
     const inline = (s: string) =>
       s
         .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-        .replace(/`([^`]+)`/g, '<code class="rounded bg-slate-100 px-1 py-0.5 text-[11px]">$1</code>');
+        .replace(
+          /`([^`]+)`/g,
+          '<code class="rounded bg-slate-100 px-1 py-0.5 text-[11px]">$1</code>'
+        );
     const h = /^(#{1,4})\s+(.*)$/.exec(line);
     const li = /^\s*[-*]\s+(.*)$/.exec(line);
     if (li) {
@@ -80,6 +83,7 @@ function renderMd(md: string): string {
 
 export default function AiAnalysis({ code, name }: { code: string; name: string }) {
   const [open, setOpen] = useState(false);
+  const [promptOpen, setPromptOpen] = useState(false);
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
   const [editingPrompt, setEditingPrompt] = useState(false);
   const [versions, setVersions] = useState<Version[]>([]);
@@ -105,18 +109,23 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
     if (!booted.current) return;
     try {
       localStorage.setItem(LS_PROMPT, prompt);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [prompt]);
 
   useEffect(() => {
     if (!booted.current) return;
     try {
       localStorage.setItem(histKey(code), JSON.stringify(versions.slice(0, 30)));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [versions, code]);
 
   const run = async () => {
     if (loading) return;
+    setOpen(true);
     setLoading(true);
     setErr(null);
     try {
@@ -144,33 +153,53 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
   const cur = versions[active];
   const fillPrompt = () => {
     setPrompt(
-      `深入分析${name}（${code}），` + DEFAULT_PROMPT.replace('深入分析该股票，包括但不限于', '包括但不限于'),
+      `深入分析${name}（${code}），` +
+        DEFAULT_PROMPT.replace('深入分析该股票，包括但不限于', '包括但不限于')
     );
     setEditingPrompt(false);
   };
 
   return (
-    <section className="card px-4 py-3">
+    <section className="card px-3 py-2">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-sm font-semibold text-slate-700">AI 深入分析</h2>
-        <span className="text-[11px] text-slate-400">提示词可编辑 · 生成结果按版本保存 · 更新生成新版本</span>
-        <div className="ml-auto flex items-center gap-1.5">
+
+        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+          <button
+            onClick={() => setPromptOpen((v) => !v)}
+            aria-expanded={promptOpen}
+            aria-controls="ai-prompt"
+            className="btn !min-h-8 !px-2.5 !py-1 !text-xs"
+          >
+            提示词
+          </button>
           {versions.length > 0 && (
-            <button onClick={() => setOpen((v) => !v)} className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600 hover:bg-slate-200">
+            <button
+              onClick={() => setOpen((v) => !v)}
+              className="btn !min-h-8 !px-2.5 !py-1 !text-xs"
+            >
               查看历史（{versions.length}）
             </button>
           )}
           <button
             onClick={() => setSettingsOpen((v) => !v)}
-            className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600 hover:bg-slate-200"
+            aria-expanded={settingsOpen}
+            className="btn !min-h-8 !px-2.5 !py-1 !text-xs"
             title="配置 AI 接口（OpenAI 兼容）"
           >
             设置
           </button>
           <button
-            onClick={versions.length ? run : () => { setOpen(true); run(); }}
+            onClick={
+              versions.length
+                ? run
+                : () => {
+                    setOpen(true);
+                    run();
+                  }
+            }
             disabled={loading}
-            className={`rounded px-3 py-1 text-xs font-medium transition ${
+            className={`min-h-8 rounded-lg px-3 py-1 text-xs font-medium transition ${
               loading ? 'bg-slate-200 text-slate-400' : 'bg-brand-600 text-white hover:bg-brand-700'
             }`}
           >
@@ -179,60 +208,112 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
         </div>
       </div>
 
-      {/* 提示词区 */}
-      <div className="mt-2">
-        {editingPrompt ? (
-          <div className="space-y-1.5">
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              rows={4}
-              className="input w-full font-mono text-xs leading-relaxed"
-              placeholder="输入希望 AI 执行的分析指令…"
-            />
-            <div className="flex items-center gap-2 text-[11px]">
-              <button onClick={() => { setEditingPrompt(false); }} className="rounded bg-brand-600 px-2 py-0.5 text-white">完成</button>
-              <button onClick={() => setPrompt(DEFAULT_PROMPT)} className="text-slate-500 hover:text-slate-700">恢复默认</button>
-              <span className="text-slate-400">{prompt.length} 字</span>
+      {promptOpen && (
+        <div id="ai-prompt" className="mt-3">
+          {editingPrompt ? (
+            <div className="space-y-1.5">
+              <textarea
+                aria-label="AI 分析提示词"
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                rows={4}
+                className="input w-full font-mono text-xs leading-relaxed"
+                placeholder="输入希望 AI 执行的分析指令…"
+              />
+              <div className="flex items-center gap-2 text-[11px]">
+                <button
+                  onClick={() => {
+                    setEditingPrompt(false);
+                  }}
+                  className="rounded bg-brand-600 px-2 py-0.5 text-white"
+                >
+                  完成
+                </button>
+                <button
+                  onClick={() => setPrompt(DEFAULT_PROMPT)}
+                  className="text-slate-500 hover:text-slate-700"
+                >
+                  恢复默认
+                </button>
+                <span className="text-slate-400">{prompt.length} 字</span>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="flex items-start gap-2">
-            <p className="flex-1 rounded bg-slate-50 px-2.5 py-1.5 text-xs leading-relaxed text-slate-500">{prompt}</p>
-            <button onClick={() => setEditingPrompt(true)} className="shrink-0 text-[11px] text-brand-600 hover:underline">
-              编辑
-            </button>
-          </div>
-        )}
-      </div>
+          ) : (
+            <div className="flex items-start gap-2">
+              <p className="flex-1 rounded bg-slate-50 px-2.5 py-1.5 text-xs leading-relaxed text-slate-500">
+                {prompt}
+              </p>
+              <button
+                onClick={() => setEditingPrompt(true)}
+                className="shrink-0 text-[11px] text-brand-600 hover:underline"
+              >
+                编辑
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 设置 */}
       {settingsOpen && (
         <div className="mt-2 space-y-1.5 rounded border border-slate-200 bg-slate-50 px-3 py-2">
-          <p className="text-[11px] text-slate-500">
-            需要一个 OpenAI 兼容的对话接口（DeepSeek / 通义 / Kimi / OpenAI 均可）。Key 只保存在你的浏览器本地。
-          </p>
-          <input value={apiKey} onChange={(e) => setApiKey(e.target.value)} onBlur={() => { try { localStorage.setItem(LS_KEY, apiKey); } catch {} }} placeholder="API Key（sk-…）" className="input w-full py-1 text-xs" type="password" />
-          <div className="flex gap-2">
-            <input value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} onBlur={() => { try { localStorage.setItem(LS_URL, apiUrl); } catch {} }} placeholder="接口地址（默认 DeepSeek）" className="input flex-1 py-1 text-xs" />
-            <input value={apiModel} onChange={(e) => setApiModel(e.target.value)} onBlur={() => { try { localStorage.setItem(LS_MODEL, apiModel); } catch {} }} placeholder="模型（默认 deepseek-chat）" className="input w-40 py-1 text-xs" />
+          <input
+            aria-label="AI API Key"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            onBlur={() => {
+              try {
+                localStorage.setItem(LS_KEY, apiKey);
+              } catch {}
+            }}
+            placeholder="API Key（sk-…）"
+            className="input w-full py-1 text-xs"
+            type="password"
+          />
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              aria-label="AI 接口地址"
+              value={apiUrl}
+              onChange={(e) => setApiUrl(e.target.value)}
+              onBlur={() => {
+                try {
+                  localStorage.setItem(LS_URL, apiUrl);
+                } catch {}
+              }}
+              placeholder="接口地址（默认 DeepSeek）"
+              className="input min-w-0 flex-1 py-1 text-xs"
+            />
+            <input
+              aria-label="AI 模型"
+              value={apiModel}
+              onChange={(e) => setApiModel(e.target.value)}
+              onBlur={() => {
+                try {
+                  localStorage.setItem(LS_MODEL, apiModel);
+                } catch {}
+              }}
+              placeholder="模型（默认 deepseek-chat）"
+              className="input !w-full py-1 text-xs sm:!w-40"
+            />
           </div>
         </div>
       )}
 
       {err && <p className="mt-2 rounded bg-red-50 px-3 py-2 text-xs text-red-600">{err}</p>}
-      {loading && <p className="mt-2 animate-pulse text-xs text-slate-400">AI 正在搜索与分析，通常需要 30 秒到 2 分钟…</p>}
+      {loading && <p className="mt-2 animate-pulse text-xs text-slate-400">正在生成分析…</p>}
 
       {/* 历史版本 */}
       {open && versions.length > 0 && (
-        <div className="mt-2 flex gap-3">
-          <div className="w-40 shrink-0 space-y-1 border-r border-slate-100 pr-2">
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+          <div className="flex max-h-40 shrink-0 gap-1 overflow-auto border-b border-slate-100 pb-2 sm:block sm:max-h-[520px] sm:w-48 sm:space-y-1 sm:border-b-0 sm:border-r sm:pb-0 sm:pr-2">
             {versions.map((v, i) => (
               <button
                 key={v.ts}
                 onClick={() => setActive(i)}
-                className={`block w-full rounded px-2 py-1 text-left text-[11px] ${
-                  i === active ? 'bg-brand-50 font-medium text-brand-700' : 'text-slate-500 hover:bg-slate-50'
+                className={`block w-full shrink-0 whitespace-nowrap rounded px-2 py-2 text-left text-[11px] sm:whitespace-normal ${
+                  i === active
+                    ? 'bg-brand-50 font-medium text-brand-700'
+                    : 'text-slate-500 hover:bg-slate-50'
                 }`}
               >
                 {i === 0 ? '最新 · ' : ''}v{versions.length - i} · {fmtTs(v.ts)}
@@ -243,7 +324,8 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
             {cur && (
               <>
                 <p className="mb-1 text-[10px] text-slate-400">
-                  {cur.model ? `${cur.model} · ` : ''}生成于 {fmtTs(cur.ts)} · 提示词 {cur.prompt.length} 字
+                  {cur.model ? `${cur.model} · ` : ''}生成于 {fmtTs(cur.ts)} · 提示词{' '}
+                  {cur.prompt.length} 字
                 </p>
                 <div
                   className="max-h-[520px] overflow-y-auto pr-1 text-xs text-slate-700"

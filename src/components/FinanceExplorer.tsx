@@ -107,7 +107,7 @@ function loadModules(): Module[] {
 
 /**
  * 财务体检（理杏仁式）：
- * 顶部分析模块与指标卡可配置，选择指标查看趋势，拖动指标卡调整顺序。
+ * 左侧指标导航可拖动排序，右侧同时展示模块内的全部趋势图。
  * 每个模块从三大报表 178 个披露科目 + 21 项财务指标中自由配置。
  */
 export default function FinanceExplorer({ code }: { code: string }) {
@@ -349,12 +349,16 @@ export default function FinanceExplorer({ code }: { code: string }) {
 
   const scrollTo = (key: string) => {
     setSelectedField(key);
+    sectionRefs.current[key]?.scrollIntoView({
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      block: 'start',
+    });
   };
 
   return (
     <div className="space-y-4">
       {/* 顶栏：主/对比公司 + 报告期粒度（紧凑） */}
-      <div className="card flex flex-wrap items-center gap-x-4 gap-y-4 px-5 py-4">
+      <div className="card flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2">
         <div className="flex items-center gap-1.5 text-sm">
           <span className="font-medium text-slate-800">{primary?.name ?? code}</span>
           <span className="font-mono text-xs text-slate-400">{code}</span>
@@ -431,7 +435,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
       </div>
 
       {/* 分析模块条（理杏仁式）+ 重命名 / 配置指标 */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 pb-3">
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
         <div className="flex min-w-0 flex-1 items-center overflow-x-auto">
           {modules.map((m) => (
             <div key={m.id} className="relative shrink-0">
@@ -471,38 +475,50 @@ export default function FinanceExplorer({ code }: { code: string }) {
               )}
             </div>
           ))}
-          <button
-            onClick={addModule}
-            title="新增分析模块"
-            className="shrink-0 rounded px-2 py-1 text-lg leading-none text-slate-400 transition hover:bg-slate-100 hover:text-brand-600"
-          >
-            +
-          </button>
         </div>
-
-        <div className="flex w-full shrink-0 items-center justify-end gap-1.5 px-2 py-1 sm:ml-auto sm:w-auto">
-          {renaming ? null : (
-            <>
+        <div className="flex shrink-0 items-center gap-2">
+          <button onClick={() => setPickerOpen(true)} className="btn !min-h-8 !py-1 !text-xs">
+            配置指标
+          </button>
+          <details className="relative">
+            <summary
+              aria-label="管理分析模块"
+              className="btn !min-h-8 list-none !px-2.5 !py-1 text-base [&::-webkit-details-marker]:hidden"
+            >
+              ···
+            </summary>
+            <div className="absolute right-0 top-full z-30 mt-2 min-w-36 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
               <button
-                onClick={renameStart}
-                className="rounded border border-slate-200 px-2.5 py-1 text-xs text-slate-600 transition hover:border-brand-400 hover:text-brand-700"
+                onClick={(e) => {
+                  addModule();
+                  e.currentTarget.closest('details')?.removeAttribute('open');
+                }}
+                className="block w-full rounded px-3 py-2 text-left text-xs text-slate-600 hover:bg-slate-50"
               >
-                重命名
+                新增模块
               </button>
-              <button onClick={() => setPickerOpen(true)} className="btn !min-h-9 !py-1 !text-xs">
-                配置指标
+              <button
+                onClick={(e) => {
+                  renameStart();
+                  e.currentTarget.closest('details')?.removeAttribute('open');
+                }}
+                className="block w-full rounded px-3 py-2 text-left text-xs text-slate-600 hover:bg-slate-50"
+              >
+                重命名模块
               </button>
               {modules.length > 1 && (
                 <button
-                  onClick={removeModule}
-                  title="删除当前模块"
-                  className="rounded border border-slate-200 px-2 py-1 text-xs text-slate-400 transition hover:border-red-300 hover:text-red-500"
+                  onClick={(e) => {
+                    removeModule();
+                    e.currentTarget.closest('details')?.removeAttribute('open');
+                  }}
+                  className="block w-full rounded px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50"
                 >
-                  删除
+                  删除当前模块
                 </button>
               )}
-            </>
-          )}
+            </div>
+          </details>
         </div>
       </div>
 
@@ -510,62 +526,49 @@ export default function FinanceExplorer({ code }: { code: string }) {
       {loading && !data && <div className="card-pad text-sm text-slate-400">财报数据加载中…</div>}
 
       {data && (
-        <div className="space-y-5">
-          <div
-            className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6"
-            role="group"
-            aria-label="财务指标"
+        <div className="grid min-w-0 gap-4 lg:grid-cols-[172px_minmax(0,1fr)]">
+          <aside
+            className="min-w-0 lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)] lg:self-start lg:overflow-y-auto"
+            aria-label="指标导航"
           >
-            {entries.map((e) => {
-              const selected =
-                (entries.some((x) => x.key === selectedField) ? selectedField : entries[0]?.key) ===
-                e.key;
-              const v =
-                toSeries(primary ?? null, e.key).values[(primary?.periods.length ?? 0) - 1] ?? null;
-              const display =
-                v === null ? '—' : e.unit === 'wan' ? (v / 1e4).toFixed(2) : v.toFixed(2);
-              return (
-                <button
-                  key={e.key}
-                  draggable
-                  onDragStart={() => setDragIdx(entries.indexOf(e))}
-                  onDragEnter={() => setOverIdx(entries.indexOf(e))}
-                  onDragOver={(ev) => ev.preventDefault()}
-                  onDragEnd={() => {
-                    if (dragIdx !== null && overIdx !== null) reorder(dragIdx, overIdx);
-                    setDragIdx(null);
-                    setOverIdx(null);
-                  }}
-                  onClick={() => scrollTo(e.key)}
-                  aria-pressed={selected}
-                  className={`min-w-0 rounded-xl border bg-white p-4 text-left transition ${selected ? 'border-brand-500 ring-1 ring-brand-500' : 'border-slate-200 hover:border-slate-400'}`}
-                >
-                  <div className="truncate text-xs text-slate-500" title={e.label}>
-                    {e.label}
-                  </div>
-                  <div className="mt-3 text-2xl font-semibold tabular-nums text-slate-900">
-                    {display}
-                    <span className="ml-1 text-xs font-normal text-slate-500">
-                      {e.unit === 'pct'
-                        ? '%'
-                        : e.unit === 'yuan'
-                          ? '元'
-                          : e.unit === 'wan'
-                            ? '亿'
-                            : e.unit === 'ratio'
-                              ? '倍'
-                              : ''}
-                    </span>
-                  </div>
-                  <div className="mt-2 text-[11px] text-slate-400">
-                    {primary?.periods.at(-1) ?? '—'}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+            <div className="hidden px-3 pb-3 text-xs text-slate-400 lg:block">
+              {active.name} · {entries.length} 项指标
+            </div>
+            <div className="flex gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
+              {entries.map((e, index) => {
+                const selected =
+                  (entries.some((x) => x.key === selectedField)
+                    ? selectedField
+                    : entries[0]?.key) === e.key;
+                return (
+                  <button
+                    key={e.key}
+                    draggable
+                    onDragStart={() => setDragIdx(index)}
+                    onDragEnter={() => setOverIdx(index)}
+                    onDragOver={(ev) => ev.preventDefault()}
+                    onDragEnd={() => {
+                      if (dragIdx !== null && overIdx !== null) reorder(dragIdx, overIdx);
+                      setDragIdx(null);
+                      setOverIdx(null);
+                    }}
+                    onClick={() => scrollTo(e.key)}
+                    aria-current={selected ? 'location' : undefined}
+                    title={e.hover}
+                    className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2.5 text-left text-xs transition lg:w-full ${selected ? 'bg-brand-50 font-medium text-brand-700' : 'text-slate-500 hover:bg-slate-100'} ${dragIdx === index ? 'opacity-40' : ''} ${overIdx === index && dragIdx !== null && dragIdx !== index ? 'ring-1 ring-brand-300' : ''}`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`h-1 w-1 shrink-0 rounded-full ${selected ? 'bg-brand-600' : 'bg-slate-300'}`}
+                    />
+                    <span className="whitespace-nowrap lg:whitespace-normal">{e.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
 
-          {/* 当前所选指标的趋势与区间统计 */}
+          {/* 模块内指标按导航顺序纵向展示 */}
           <div className="min-w-0 space-y-3">
             {!primary || primary.periods.length === 0 ? (
               <div className="card-pad text-sm text-slate-500">
@@ -576,46 +579,39 @@ export default function FinanceExplorer({ code }: { code: string }) {
                 当前模块未配置任何指标。点击右上角「配置指标」开始勾选。
               </div>
             ) : (
-              entries
-                .filter(
-                  (e) =>
-                    e.key ===
-                    (entries.some((x) => x.key === selectedField) ? selectedField : entries[0]?.key)
-                )
-                .map((e) => {
-                  const pS = toSeries(primary, e.key);
-                  const cS = compare ? toSeries(compare, e.key) : null;
-                  const hasData = pS.values.some((v) => v !== null);
-                  const hasCompare = cS !== null && cS.values.some((v) => v !== null);
-                  return (
-                    <div
-                      key={e.key}
-                      ref={(el) => {
-                        sectionRefs.current[e.key] = el;
-                      }}
-                      className="card scroll-mt-40 p-4 sm:p-6"
-                    >
-                      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-1">
-                        <h3 className="text-base font-semibold text-slate-900">{e.label}</h3>
-                        <span className="text-[11px] text-slate-400">
-                          {unitText(e.unit)} · 新浪财经（披露口径）
-                        </span>
-                      </div>
-                      {hasData ? (
-                        <FinanceCompareChart
-                          indicator={{ unit: e.unit }}
-                          primary={pS}
-                          compare={hasCompare ? cS : null}
-                          height={360}
-                        />
-                      ) : (
-                        <div className="py-10 text-center text-sm text-slate-400">
-                          该科目暂未披露
-                        </div>
-                      )}
+              entries.map((e) => {
+                const pS = toSeries(primary, e.key);
+                const cS = compare ? toSeries(compare, e.key) : null;
+                const hasData = pS.values.some((v) => v !== null);
+                const hasCompare = cS !== null && cS.values.some((v) => v !== null);
+                return (
+                  <div
+                    key={e.key}
+                    ref={(el) => {
+                      sectionRefs.current[e.key] = el;
+                    }}
+                    className="card scroll-mt-24 p-3 sm:p-4"
+                  >
+                    <div className="mb-2 flex flex-wrap items-baseline justify-between gap-1">
+                      <h3 className="text-sm font-semibold text-slate-900">{e.label}</h3>
+                      <span className="text-[11px] text-slate-400">
+                        {unitText(e.unit)} · 新浪财经（披露口径）
+                      </span>
                     </div>
-                  );
-                })
+                    {hasData ? (
+                      <FinanceCompareChart
+                        indicator={{ unit: e.unit }}
+                        reportLabel={primary.periods.at(-1)}
+                        primary={pS}
+                        compare={hasCompare ? cS : null}
+                        height={220}
+                      />
+                    ) : (
+                      <div className="py-10 text-center text-sm text-slate-400">该科目暂未披露</div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>

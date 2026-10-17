@@ -110,6 +110,28 @@ export default function FinanceTable({ code }: { code: string }) {
   const [onlyHasData, setOnlyHasData] = useState(true);
   const bootedRef = useRef(false);
   const tableRef = useRef<HTMLDivElement>(null);
+  const [tableHeight, setTableHeight] = useState<number>();
+
+  useEffect(() => {
+    const table = tableRef.current;
+    if (!table) return;
+    const updateHeight = () => {
+      const documentTop = table.getBoundingClientRect().top + window.scrollY;
+      setTableHeight(Math.max(320, Math.floor(window.innerHeight - documentTop - 16)));
+    };
+    const observer = new ResizeObserver(updateHeight);
+    const toolbar = table.parentElement?.previousElementSibling;
+    const pageHeading = table.parentElement?.parentElement?.previousElementSibling;
+    [toolbar, pageHeading, document.querySelector('header')].forEach((element) => {
+      if (element) observer.observe(element);
+    });
+    updateHeight();
+    window.addEventListener('resize', updateHeight);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateHeight);
+    };
+  }, []);
 
   useEffect(() => {
     setFields(loadFields());
@@ -339,7 +361,7 @@ export default function FinanceTable({ code }: { code: string }) {
   return (
     <div className="space-y-3">
       <div className="card overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-1.5">
           <div className="flex max-w-full gap-1 overflow-x-auto" role="group" aria-label="报表视图">
             {(
               [
@@ -353,15 +375,17 @@ export default function FinanceTable({ code }: { code: string }) {
                 key={key}
                 onClick={() => setView(key)}
                 aria-pressed={view === key}
-                className={`min-h-10 shrink-0 rounded-lg px-3 text-sm font-medium transition ${view === key ? 'bg-brand-50 text-brand-700' : 'text-slate-500 hover:bg-slate-50'}`}
+                className={`min-h-8 shrink-0 rounded-md px-2.5 text-xs font-medium transition ${view === key ? 'bg-brand-50 text-brand-700' : 'text-slate-500 hover:bg-slate-50'}`}
               >
                 {label}
               </button>
             ))}
           </div>
-          <span className="text-sm font-medium text-slate-700">{primary?.name ?? code}</span>
+          <span className="hidden text-xs font-medium text-slate-500 sm:block">
+            {primary?.name ?? code}
+          </span>
         </div>
-        <div className="flex flex-wrap items-center gap-3 px-4 py-4 sm:px-5">
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2">
           <div className="segmented" role="group" aria-label="报告类型">
             {GRAN.map((g) => (
               <button
@@ -440,7 +464,11 @@ export default function FinanceTable({ code }: { code: string }) {
 
       {/* 表格 */}
       <div className="card overflow-hidden px-0 py-0">
-        <div ref={tableRef} className="max-h-[720px] overflow-auto">
+        <div
+          ref={tableRef}
+          style={{ height: tableHeight }}
+          className="h-[calc(100dvh-21rem)] min-h-[320px] overflow-auto sm:h-[calc(100dvh-16rem)]"
+        >
           <table className="w-full border-collapse text-xs">
             <thead>
               <tr className="sticky top-0 z-20 bg-slate-50">

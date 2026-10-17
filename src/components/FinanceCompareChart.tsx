@@ -19,6 +19,7 @@ export interface FinanceCompareChartProps {
   /** 对比公司（橙色），可缺省 */
   compare?: CompanySeries | null;
   height?: number;
+  reportLabel?: string;
 }
 
 const C_PRIMARY = '#3b82f6';
@@ -70,7 +71,8 @@ export default function FinanceCompareChart({
   indicator,
   primary,
   compare,
-  height = 300,
+  height = 220,
+  reportLabel,
 }: FinanceCompareChartProps) {
   const option = useMemo(() => {
     const labels = primary.periodLabels;
@@ -81,7 +83,7 @@ export default function FinanceCompareChart({
       type: 'line',
       data: s.values,
       symbol: 'circle',
-      symbolSize: 6,
+      symbolSize: 4,
       lineStyle: { width: 2, color },
       itemStyle: { color },
       label: {
@@ -106,7 +108,7 @@ export default function FinanceCompareChart({
               lineStyle: { color: C_MEAN, type: 'dashed', width: 1 },
               label: {
                 show: true,
-                position: 'insideStartTop',
+                position: 'insideEndTop',
                 fontSize: 10,
                 color: '#64748b',
                 backgroundColor: '#f8fafc',
@@ -143,7 +145,7 @@ export default function FinanceCompareChart({
         itemHeight: 8,
         textStyle: { fontSize: 11, color: '#64748b' },
       },
-      grid: { left: 56, right: 20, top: 30, bottom: 26 },
+      grid: { left: 44, right: 16, top: 25, bottom: 26 },
       xAxis: {
         type: 'category',
         data: labels,
@@ -171,17 +173,17 @@ export default function FinanceCompareChart({
   const unitStr = String(indicator.unit);
 
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[180px_minmax(0,1fr)]">
+    <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-[148px_minmax(0,1fr)]">
       {/* 统计卡（主公司口径，对齐参考图左栏） */}
-      <div className="space-y-3">
+      <div className="space-y-2 sm:border-r sm:border-slate-100 sm:pr-4">
         <div>
-          <div className="text-xs text-slate-500">最新所列报告期</div>
-          <div className="text-2xl font-semibold tabular" style={{ color: C_PRIMARY }}>
+          <div className="text-[11px] text-slate-400">最新所列报告期</div>
+          <div className="text-2xl font-semibold tabular text-slate-900">
             {stA?.current != null ? fmtVal(stA.current, unitStr) : '--'}
           </div>
         </div>
         <div className="space-y-2 text-xs">
-          <div className="mb-1 font-medium text-slate-700">统计数据（{primary.name}）</div>
+          {reportLabel && <div className="mb-2 text-[11px] text-slate-400">{reportLabel}</div>}
           {stA ? (
             <StatRows st={stA} unit={unitStr} />
           ) : (

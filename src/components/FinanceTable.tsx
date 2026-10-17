@@ -527,6 +527,12 @@ export default function FinanceTable({ code }: { code: string }) {
                   <tbody key={r.key} className="border-b-2 border-slate-200">
                     {companies.map((c, ci) => {
                       const showYoY = companies.length === 1;
+                      // 「单季」只对流量类科目有意义（利润表/现金流量表、每股指标等）。
+                      // 资产负债表科目（bs_）是时点数，比率类指标（%、如 ROE/资产负债率）无单季概念，
+                      // 对它们套用“当期−上期再同比”会得出荒谬数值，一律不显示。
+                      const isStock = r.key.startsWith('bs_');
+                      const isRatio = unit === 'pct';
+                      const hasSingle = showYoY && !isStock && !isRatio && !r.key.startsWith('fx_');
                       return (
                         <Fragment key={c.code}>
                           {/* 数值行 */}
@@ -578,22 +584,24 @@ export default function FinanceTable({ code }: { code: string }) {
                                   );
                                 })}
                               </tr>
-                              <tr className="text-[11px] hover:bg-slate-50/60">
-                                <td className="sticky left-0 z-10 bg-white px-3 pb-2 pt-0.5 text-[10px] text-slate-400">
-                                  单季
-                                </td>
-                                {colsDesc.map((col) => {
-                                  const v = sqYoy(c, r.key, col.i);
-                                  return (
-                                    <td
-                                      key={col.p}
-                                      className={`border-l border-slate-100 px-2.5 py-0.5 text-center tabular-nums ${pctCls(v)}`}
-                                    >
-                                      {v === null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(1)}%`}
-                                    </td>
-                                  );
-                                })}
-                              </tr>
+                              {hasSingle && (
+                                <tr className="text-[11px] hover:bg-slate-50/60">
+                                  <td className="sticky left-0 z-10 bg-white px-3 pb-2 pt-0.5 text-[10px] text-slate-400">
+                                    单季
+                                  </td>
+                                  {colsDesc.map((col) => {
+                                    const v = sqYoy(c, r.key, col.i);
+                                    return (
+                                      <td
+                                        key={col.p}
+                                        className={`border-l border-slate-100 px-2.5 py-0.5 text-center tabular-nums ${pctCls(v)}`}
+                                      >
+                                        {v === null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(1)}%`}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              )}
                             </>
                           )}
                         </Fragment>
@@ -610,6 +618,7 @@ export default function FinanceTable({ code }: { code: string }) {
             口径：三大报表科目为新浪披露的累计值（单位：万元，统一折算为亿元展示）；财务指标（ROE
             等）来自新浪财务指标页。 累积 = 与上一年同期累计值相比；单季 = 单季值（当期累计 −
             同年上一报告期累计）与上年同期单季相比，仅季报视图提供；null 表示当期未披露。
+            资产负债表科目为时点数、比率类指标（ROE、资产负债率等）为比率，均无“单季”概念，故不显示单季行。
             {showAll &&
               ' 当前为「全部数据项」模式（178 个科目 + 21 项指标），科目为累计值口径，行较多可搜索定位。'}
             {view === 'indicators' && !showAll && ` 当前显示 ${rows.length} 项指标。`}

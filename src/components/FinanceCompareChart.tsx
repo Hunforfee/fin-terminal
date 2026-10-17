@@ -182,7 +182,7 @@ export default function FinanceCompareChart({
             {stA?.current != null ? fmtVal(stA.current, unitStr) : '--'}
           </div>
         </div>
-        <div className="space-y-2 text-xs">
+        <div className="space-y-2 text-[13px]">
           {reportLabel && <div className="mb-2 text-[11px] text-slate-400">{reportLabel}</div>}
           {stA ? (
             <StatRows st={stA} unit={unitStr} />
@@ -223,7 +223,7 @@ function StatRows({
       {rows.map(([k, v]) => (
         <div key={k} className="flex justify-between">
           <span className="text-slate-500">{k}</span>
-          <span className="tabular font-medium" style={{ color: color ?? '#334155' }}>
+          <span className="tabular font-semibold" style={{ color: color ?? '#334155' }}>
             {fmtVal(v, unit)}
           </span>
         </div>

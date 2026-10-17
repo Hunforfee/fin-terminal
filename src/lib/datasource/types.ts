@@ -139,6 +139,9 @@ export interface Valuation {
   history: ValuationPoint[];
   /** 历史序列口径：real = 由真实定期报告还原；estimate = 兜底估算 */
   basis?: 'real' | 'estimate';
+  priceAdjust?: 'qfq';
+  warnings?: string[];
+  marketComparison?: { pe: number | null; pb: number | null; ts: string | null };
   /** 序列区间年数 */
   years?: number;
   /** 序列统计（分位值 / 极值 / 均值） */
@@ -207,7 +210,9 @@ export interface ValuationPoint {
   pe: number | null;
   pb: number | null;
   close: number;
-  /** 股息率 %（TTM 每股现金分红 ÷ 不复权收盘价）；无分红记录时为 null */
+  rawClose?: number;
+  adjustmentFactor?: number;
+  /** 股息率 %；无十二个月内分红为 0，分红数据源不可用为 null。 */
   dy: number | null;
 }
 
@@ -283,3 +288,4 @@ export interface ProviderStatus {
   /** 是否为预留未启用的 Provider */
   reserved?: boolean;
 }
+

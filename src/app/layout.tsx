@@ -66,7 +66,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               数据来源于公开行情接口（腾讯财经 / 新浪财经 / 东方财富），仅供参考，不构成任何投资建议。
             </p>
             <p className="mt-1">
-              估值分位基于历史价格与当前盈利水平估算，与交易所披露口径可能存在差异；接入同花顺 iFinD 后可切换为真实财报口径。
+              个股估值使用已披露财报、真实股本与前复权价格计算；具体数据覆盖、口径及缺失情况见估值分析说明。
             </p>
           </footer>
         </WatchlistProvider>
@@ -74,3 +74,4 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   );
 }
+

@@ -1,3 +1,4 @@
+import { isShanghaiTradingTime } from './tradingTime';
 import type { AssetKind, Market } from './types';
 
 /**
@@ -56,7 +57,8 @@ export function normalizeCode(input: string): NormalizedCode | null {
   if (!input) return null;
   let raw = String(input).trim().toLowerCase();
   // 去掉 .SH / .SZ 之类的后缀
-  raw = raw.replace(/\.(sh|sz|bj|ss)$/, '');
+  const suffix = raw.match(/^(\d{6})\.(sh|sz|bj|ss)$/);
+  if (suffix) return build(suffix[1], (suffix[2] === 'ss' ? 'SH' : suffix[2].toUpperCase()) as Market);
   // 去掉已有的市场前缀
   const prefixed = raw.match(/^(sh|sz|bj)(\d{6})$/);
   if (prefixed) {
@@ -112,6 +114,15 @@ function build(code: string, market: Market): NormalizedCode {
   return { code, symbol, market, kind, board, secid };
 }
 
+/** Use the stock context to disambiguate bare codes shared with indices. */
+export function normalizeStockCode(input: string): NormalizedCode | null {
+  const raw = input.trim();
+  const symbol = /^\d{6}$/.test(raw)
+    ? `${/^[03]/.test(raw) ? 'sz' : /^(4|8|92)/.test(raw) ? 'bj' : 'sh'}${raw}` : raw;
+  const n = normalizeCode(symbol);
+  return n?.kind === 'stock' ? n : null;
+}
+
 /** 批量标准化（行情接口一次可查多个代码，提高吞吐） */
 export function toSymbols(inputs: string[]): string[] {
   const out: string[] = [];
@@ -124,12 +135,7 @@ export function toSymbols(inputs: string[]): string[] {
 
 /** 是否为交易时段（粗略，用于决定是否强缓存） */
 export function isTradingNow(d = new Date()): boolean {
-  const day = d.getDay();
-  if (day === 0 || day === 6) return false;
-  const h = d.getHours();
-  const m = d.getMinutes();
-  const t = h * 60 + m;
-  return (t >= 9 * 60 + 15 && t <= 11 * 60 + 30) || (t >= 13 * 60 && t <= 15 * 60 + 5);
+  return isShanghaiTradingTime(d);
 }
 
 /** 数字格式化：亿元为单位时保留 2 位 */
@@ -146,3 +152,4 @@ export function fmtCompact(v: number | null): string {
   if (abs >= 1e4) return `${(v / 1e4).toFixed(2)}万`;
   return v.toFixed(2);
 }
+

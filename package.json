@@ -4,17 +4,18 @@
   "private": true,
   "description": "类理杏仁的金融数据查询与分析终端 - 股票/指数/基金行情、估值、财务与筛选",
   "scripts": {
-    "dev": "next dev -p ${PORT:-3000} -H 0.0.0.0",
+    "dev": "next dev -H 0.0.0.0",
     "build": "next build",
-    "start": "next start -p ${PORT:-3000} -H 0.0.0.0",
+    "start": "next start -H 0.0.0.0",
     "typecheck": "tsc --noEmit",
-    "seed": "node scripts/fetch-snapshots.mjs"
+    "seed": "node scripts/fetch-snapshots.mjs",
+    "test": "node --test scripts/tests/*.test.mjs"
   },
   "dependencies": {
     "echarts": "^5.5.1",
     "next": "15.5.28",
-    "react": "19.0.0",
-    "react-dom": "19.0.0"
+    "react": "19.2.5",
+    "react-dom": "19.2.5"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",

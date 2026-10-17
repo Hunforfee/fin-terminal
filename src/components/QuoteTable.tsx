@@ -150,3 +150,4 @@ export default function QuoteTable({ codes, removable = false, emptyText = 'æš‚æ
     </div>
   );
 }
+

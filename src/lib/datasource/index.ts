@@ -1,3 +1,4 @@
+import { fetchDisclosureDates } from './disclosures';
 /**
  * 数据源编排层 —— 全站唯一的数据入口。
  *
@@ -16,7 +17,7 @@ import * as eastmoney from './eastmoney';
 import * as ifind from './ifind';
 import * as snapshot from './snapshot';
 import { cached, defaultTtl, putCache } from './cache';
-import { normalizeCode } from './codes';
+import { normalizeCode, normalizeStockCode } from './codes';
 import { computeValuation, buildFinancialSummary } from '../analytics';
 import * as sinaBonus from './sinaBonus';
 import type { DividendEvent } from './sinaBonus';
@@ -24,6 +25,7 @@ import * as sinaFinance from './sinaFinance';
 import type { PeriodFinancial, ShareChange } from './sinaFinance';
 import {
   buildDisclosureTimeline,
+  effectiveDate,
   buildFinancialTimeline,
   buildRealValuationSeries,
   buildTimelineFromStatements,
@@ -51,9 +53,10 @@ const CHUNK = 50;
 
 /** N 年前的 YYYY-MM-DD（用于 K 线起始日期 / 区间截取） */
 function ymdYearsAgo(years: number): string {
-  const d = new Date();
-  const days = Math.round(years * 365.25);
-  d.setTime(d.getTime() - days * 864e5);
+  const d = new Date(Date.now() + 8 * 3600_000);
+  const whole = Math.floor(years);
+  d.setUTCFullYear(d.getUTCFullYear() - whole);
+  d.setTime(d.getTime() - Math.round((years - whole) * 365.25) * 864e5);
   return d.toISOString().slice(0, 10);
 }
 
@@ -96,7 +99,7 @@ function localSearch(kw: string): SearchHit[] {
   const out: SearchHit[] = [];
   const tryPush = (code: string, name: string, kind: SearchHit['kind'], board: string) => {
     if (!code.includes(lower) && !name.toLowerCase().includes(lower)) return;
-    const n = normalizeCode(code);
+    const n = kind === 'stock' ? normalizeStockCode(code) : normalizeCode(code);
     if (!n) return;
     out.push({
       code,
@@ -133,7 +136,7 @@ export async function getQuote(input: string): Promise<Quote | null> {
     } catch {
       /* 落到下一级 */
     }
-    const snap = await snapshot.snapshotQuote(n.code);
+    const snap = await snapshot.snapshotQuote(n.symbol);
     if (snap) return snap;
     throw new Error(`无法获取 ${n.symbol} 行情：所有数据源均不可用`);
   });
@@ -184,7 +187,7 @@ async function fetchQuotesChunk(symbols: string[]): Promise<Quote[]> {
   } catch {
     /* 落到下一级 */
   }
-  return snapshot.snapshotQuotes(symbols.map((s) => s.slice(2)));
+  return snapshot.snapshotQuotes(symbols);
 }
 
 /* ------------------------------------------------------------------ K 线 */
@@ -206,13 +209,14 @@ export async function getKLine(
       /* 落到下一级 */
     }
     try {
+      if (adjust !== 'none') throw new Error('新浪仅提供不复权价格');
       return await sina.fetchKLine(n.symbol, period, count);
     } catch {
       /* 落到下一级 */
     }
     const snap = await snapshot.snapshotKLine(n.symbol, period);
-    if (snap) return snap;
-    throw new Error(`无法获取 ${n.symbol} 的 ${period} 线数据`);
+    if (snap && snap.adjust === adjust) return snap;
+    throw new Error(`无法获取 ${n.symbol} 的 ${period} 线数据（${adjust}）`);
   });
 }
 
@@ -236,139 +240,79 @@ export async function getMinute(input: string): Promise<MinutePoint[]> {
  * 历史序列用**已披露定期报告**还原当期 TTM EPS 与 BPS（见 `lib/valuation.ts`），
  * 价格为不复权收盘价 —— 与前复权价倒推的旧口径相比，不会因除权而低估历史 PE。
  */
-/** 估值的两种 TTM 生效口径 */
-function timelineFor(method: ValuationMethod, pts: sinaFinStmt.FinStatementPoint[]) {
-  return method === 'cutoff' ? buildTimelineFromStatements(pts) : buildDisclosureTimeline(pts);
-}
-
-function statsOf(history: ValuationPoint[], q: Quote): ValuationStats {
-  const s = summarizeReal(history, q, { years: 0 }).stats;
-  return (
-    s ?? {
-      pe: emptyStats(),
-      pb: emptyStats(),
-      dy: emptyStats(),
-      from: history[0]?.date ?? '',
-      to: history[history.length - 1]?.date ?? '',
-    }
-  );
-}
-
-function emptyStats(): SeriesStats {
-  return { current: null, percentile: null, p80: null, p50: null, p20: null, max: null, avg: null, min: null, count: 0 };
-}
-
-export async function getValuation(input: string, years = 10, method: ValuationMethod = 'disclosure') {
-  const n = normalizeCode(input);
-  if (!n) throw new Error(`无法解析代码 ${input}`);
+export async function getValuation(input: string, years = 10, method: ValuationMethod = 'disclosure'): Promise<Valuation> {
+  const n = normalizeStockCode(input);
+  if (!n || n.kind !== 'stock') throw new Error('真实财报估值仅支持 A 股股票');
   const span = Math.min(Math.max(years, 1), 10);
-  const altMethod: ValuationMethod = method === 'cutoff' ? 'disclosure' : 'cutoff';
-  return cached(`val6:${n.symbol}:${span}:${method}`, defaultTtl() * 6, async () => {
-    const [q, finPoints, dividends, rawSeries] = await Promise.all([
+  return cached(`val-qfq-v1:${n.symbol}:${span}:${method}`, defaultTtl(), async () => {
+    const start = ymdYearsAgo(span + 1);
+    const [q, points, shares, dates, dividends, raw, adjusted] = await Promise.all([
       getQuote(n.symbol),
-      cached(`finstmt:${n.code}`, 3 * 864e5, () => sinaFinStmt.fetchStatementHistory(n.code, 13)).catch(
-        () => [] as sinaFinStmt.FinStatementPoint[],
-      ),
-      cached(`bonus:${n.code}`, 7 * 864e5, () => sinaBonus.fetchDividends(n.code)).catch(
-        () => [] as DividendEvent[],
-      ),
-      getKLine(n.symbol, 'day', 'none', 3200, ymdYearsAgo(10.6)).catch(() => null),
+      cached(`statements-v2:${n.code}`, 864e5, () => sinaFinStmt.fetchStatementHistory(n.code, span + 2)),
+      cached(`shares-v2:${n.code}`, 864e5, () => sinaFinance.fetchShareHistory(n.code)),
+      cached(`disclosures:${n.code}`, 864e5, () => fetchDisclosureDates(n.code, new Date().getUTCFullYear() - span - 2)),
+      cached(`dividends-v2:${n.code}`, 864e5, () => sinaBonus.fetchDividends(n.code)).catch(() => null),
+      getKLine(n.symbol, 'day', 'none', 3200, start),
+      getKLine(n.symbol, 'day', 'qfq', 3200, start),
     ]);
     if (!q) throw new Error('行情获取失败');
-
-    let candles: Candle[] = rawSeries?.candles ?? [];
-    if (candles.length === 0) {
-      candles = (await getKLine(n.symbol, 'day', 'qfq', 3200, ymdYearsAgo(10.6))).candles;
-    }
-
+    if (!points.length) throw new Error('财报数据不可用，已停止估值计算，请稍后重试');
+    if (!shares.length) throw new Error('真实股本变动史不可用，已停止估值计算');
+    if (raw.adjust !== 'none' || adjusted.adjust !== 'qfq') throw new Error('价格复权口径不匹配，已停止估值计算');
     const cutoff = ymdYearsAgo(span);
-    const windowCandles = candles.filter((c) => c.date >= cutoff);
-    const dyByDate = buildDividendYieldByDate(dividends, windowCandles);
-
-    const build = (m: ValuationMethod) =>
-      buildRealValuationSeries(windowCandles, timelineFor(m, finPoints), { dyByDate });
-
-    let history = build(method);
-    let altHistory = build(altMethod);
-
-    if (history.length === 0) {
-      // 三表抓取失败：退回财务指标页口径（旧路径），再不行用估算
-      const [periods, shareHist, profits] = await Promise.all([
-        cached(`finperiods:${n.code}`, 3 * 864e5, () => sinaFinance.fetchFinancialPeriods(n.code, 12)).catch(
-          () => [] as PeriodFinancial[],
-        ),
-        cached(`shares:${n.code}`, 7 * 864e5, () => sinaFinance.fetchShareHistory(n.code)).catch(
-          () => [] as ShareChange[],
-        ),
-        cached(`profit:${n.code}`, 3 * 864e5, () => sinaFinance.fetchProfitPeriods(n.code, 12)).catch(
-          () => [] as { date: string; netProfit: number }[],
-        ),
-      ]);
-      const legacy = buildFinancialTimeline(periods, profits, shareHist);
-      history = buildRealValuationSeries(windowCandles, legacy, { dyByDate });
-      if (history.length === 0) {
-        return computeValuation(q, windowCandles, { dividends, rawCandles: candles, years: span });
-      }
-      altHistory = [];
+    const candles = raw.candles.filter(c => c.date >= cutoff);
+    const adjustedByDate = new Map(adjusted.candles.map(c => [c.date, c]));
+    const dyByDate = dividends ? buildDividendYieldByDate(dividends, candles) : new Map<string, number>();
+    const completePoints = [...points];
+    const firstReport = points[0].date;
+    for (const report of dates.keys()) {
+      if (report < firstReport || points.some(p => p.date === report)) continue;
+      const actual = sinaFinance.sharesAt(shares, report);
+      completePoints.push({ date: report, npParent: null, npTotal: null,
+        equityParent: null, equityTotal: null, sharesYi: actual !== null ? actual / 1e4 : null });
     }
-
-    // 末尾对齐行情口径，保证「当前值」与行情页 / 理杏仁一致
-    history = alignLatest(history, q, candles);
-    altHistory = alignLatest(altHistory, q, candles);
-
-    const timeline = timelineFor(method, finPoints);
-    const lastFin = timeline[timeline.length - 1];
-    const { gaps } = adjustCandlesForChart(candles, dividends);
-
+    const disclosure = buildDisclosureTimeline(completePoints, { reportDates: dates });
+    if (!points.some(p => dates.has(p.date))) throw new Error('真实财报公告日期不可用，无法还原历史估值');
+    // Even cutoff mode cannot use a report before its actual publication.
+    const cutoffTimeline = buildTimelineFromStatements(completePoints).flatMap(p => {
+      const known = disclosure.find(d => d.report === p.report);
+      return known ? [{ ...p, eff: p.eff > known.eff ? p.eff : known.eff }] : [];
+    });
+    const timeline = method === 'cutoff' ? cutoffTimeline : disclosure;
+    const alternate = method === 'cutoff' ? disclosure : cutoffTimeline;
+    const options = { dyByDate, adjustedByDate, shareHistory: shares };
+    const history = buildRealValuationSeries(candles, timeline, options);
+    if (!history.length) throw new Error('财报、股本与前复权价格没有可对齐的日期');
+    const last = history[history.length - 1];
+    const lastFin = timeline.filter(p => p.eff <= last.date).sort((a,b) => a.report.localeCompare(b.report)).at(-1);
     const main = summarizeReal(history, q, { years: span });
-    const alt = altHistory.length > 1 ? summarizeReal(altHistory, q, { years: span }) : null;
-
-    return {
-      ...main,
-      method,
-      fin: {
-        report: lastFin?.report ?? null,
-        npTTM: lastFin?.npTTM ?? null,
-        shares: lastFin?.shares ?? null,
-        bps: lastFin?.bps ?? null,
-        points: finPoints.length,
-        realDates: false,
-        adjustGaps: gaps,
-      },
-      ...(alt
-        ? {
-            alt: {
-              method: altMethod,
-              history: alt.history,
-              stats: alt.stats ?? statsOf(altHistory, q),
-              current: { pe: alt.pe, pb: alt.pb, dy: alt.dividendYield },
-            },
-          }
-        : {}),
-      source: q.source,
-      stale: q.stale,
+    const altHistory = buildRealValuationSeries(candles, alternate, options);
+    const alt = altHistory.length ? summarizeReal(altHistory, q, { years: span }) : null;
+    const warnings: string[] = [];
+    const missingDates = points.filter(p => !dates.has(p.date) && effectiveDate(p.date) >= cutoff && p.date <= last.date).length;
+    if (missingDates) warnings.push(`${missingDates} 个报告期未取得原始公告日期，不用于建立新估值点。`);
+    if (completePoints.some(p => !points.includes(p) && p.date >= cutoff)) warnings.push('部分已公告报告缺少财务金额，相应区间不计算估值。');
+    if (history.length < candles.length) warnings.push('部分交易日缺少可对齐的前复权价格或已披露财报，已排除。');
+    if (history[0].date > cutoff && history[0].date > candles[0]?.date) warnings.push('数据覆盖不足所选区间，请以实际起止日期和样本数为准。');
+    if (dividends === null) warnings.push('分红数据源不可用，股息率暂不计算。');
+    if (raw.stale || adjusted.stale || q.stale) warnings.push('部分行情来自历史快照，请留意数据日期。');
+    warnings.push('财务金额为数据源当前披露版本，可能包含后续重述；历史序列不能替代严格的时点回测数据。');
+    return { ...main, code: n.code, method, priceAdjust: 'qfq', warnings,
+      netProfit: lastFin?.npTTM ?? null,
+      marketComparison: { pe: q.pe, pb: q.pb, ts: q.ts },
+      fin: { report: lastFin?.report ?? null, npTTM: lastFin?.npTTM ?? null,
+        shares: lastFin?.shares ?? null, bps: lastFin?.bps ?? null, points: points.length,
+        realDates: true, adjustGaps: 0 },
+      ...(alt && alt.stats ? { alt: { method: method === 'cutoff' ? 'disclosure' as const : 'cutoff' as const,
+        history: alt.history, stats: alt.stats, current: { pe: alt.pe, pb: alt.pb, dy: alt.dividendYield } } } : {}),
+      source: 'sina-statements + sina-disclosures + tencent-qfq',
+      stale: q.stale || raw.stale || adjusted.stale,
     };
   });
 }
 
-/** 用行情提供的 PE/PB 校正序列最后一个交易日（对齐口径差异，避免「当前值」与行情页不一致） */
-function alignLatest(history: ValuationPoint[], q: Quote, candles: Candle[]): ValuationPoint[] {
-  if (history.length === 0) return history;
-  const lastBar = candles[candles.length - 1];
-  const last = history[history.length - 1];
-  if (!lastBar || last.date !== lastBar.date) return history;
-  const out = history.slice();
-  out[out.length - 1] = {
-    ...last,
-    pe: q.pe !== null && q.pe > 0 ? q.pe : last.pe,
-    pb: q.pb !== null && q.pb > 0 ? q.pb : last.pb,
-    close: lastBar.close,
-  };
-  return out;
-}
-
 export async function getFinancial(input: string): Promise<FinancialSummary> {
-  const n = normalizeCode(input);
+  const n = normalizeStockCode(input);
   if (!n) throw new Error(`无法解析代码 ${input}`);
   return cached(`fin:${n.code}`, 30 * 60 * 1000, async () => {
     const q = await getQuote(n.symbol);
@@ -387,7 +331,7 @@ export async function getFinancial(input: string): Promise<FinancialSummary> {
 
 /** 行业对比：同行业标的的实时行情 + 派生 ROE */
 export async function getPeers(input: string): Promise<{ industry: string | null; rows: PeerRow[] }> {
-  const n = normalizeCode(input);
+  const n = normalizeStockCode(input);
   if (!n) return { industry: null, rows: [] };
   const industry = industryOf(n.code);
   const peers = peersOf(n.code, 15);
@@ -496,7 +440,7 @@ export async function getMarketOverview(): Promise<MarketOverview> {
 import * as sinaFinancial from './sinaFinancial';
 
 /**
- * 财务对比数据：最多两家公司（主 + 对比），近 N 年真实财报指标。
+ * 财务对比数据：最多四家公司（主 + 三家对比），近 N 年真实财报指标。
  * 财务数据更新频率低（季报），缓存 1 小时。
  */
 export async function getFinancialCompare(
@@ -504,11 +448,11 @@ export async function getFinancialCompare(
   years = 6,
   granularity: sinaFinancial.Granularity = 'semi',
 ) {
-  const list = codes.slice(0, 2);
+  const list = codes.slice(0, 4);
   return cached(`fincomp:${list.join(',')}:${years}:${granularity}`, 60 * 60 * 1000, async () => {
     const results = await Promise.all(
       list.map(async (c) => {
-        const n = normalizeCode(c);
+        const n = normalizeStockCode(c);
         if (!n) throw new Error(`无法解析代码 ${c}`);
         const q = await getQuote(n.symbol).catch(() => null);
         let f: sinaFinancial.CompanyFinancials;
@@ -542,7 +486,7 @@ import * as sinaStatements from './sinaStatements';
 
 /** 三大报表字段目录（含全部披露科目），缓存 24h。 */
 export async function getFinanceFieldsCatalog(code: string) {
-  const n = normalizeCode(code);
+  const n = normalizeStockCode(code);
   if (!n) throw new Error(`无法解析代码 ${code}`);
   const q = await getQuote(n.symbol).catch(() => null);
   const catalog = await cached(`fincatalog:${n.code}`, 24 * 60 * 60 * 1000, () =>
@@ -572,7 +516,7 @@ export async function getCustomFinancialCompare(
   return cached(`finfield:${list.join(',')}:${fieldKey}:${years}:${granularity}`, 60 * 60 * 1000, async () => {
     const results = await Promise.all(
       list.map(async (c) => {
-        const n = normalizeCode(c);
+        const n = normalizeStockCode(c);
         if (!n) throw new Error(`无法解析代码 ${c}`);
         const q = await getQuote(n.symbol).catch(() => null);
         let f: sinaStatements.CustomFinancials;
@@ -760,3 +704,4 @@ export async function getIndustryBoard() {
     return { updatedAt: new Date().toISOString(), industries: rows.length, rows };
   });
 }
+

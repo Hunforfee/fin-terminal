@@ -132,6 +132,8 @@ export function computeValuation(
 
   return {
     code: q.code,
+    basis: 'estimate',
+    years: opts?.years ?? 5,
     pe: q.pe,
     pb: q.pb,
     pePercentile,
@@ -247,32 +249,17 @@ export function buildDividendYieldByDate(
   rawCandles: Candle[],
 ): Map<string, number> {
   const out = new Map<string, number>();
-  if (rawCandles.length === 0) return out;
-  const events = dividends
-    .filter((e) => e.perShare > 0)
-    .map((e) => ({ t: new Date(e.exDate).getTime(), per: e.perShare }))
-    .sort((a, b) => a.t - b.t);
-  if (events.length === 0) return out;
-  const YEAR = 365.25 * 864e5;
-  let lo = 0;
-  let ttm = 0;
+  const events = [...dividends].sort((a,b) => a.exDate.localeCompare(b.exDate));
   for (const c of rawCandles) {
-    const t = new Date(c.date).getTime();
-    // 窗口右移：纳入新落入 (t-365d, t] 的分红
-    let hi = lo;
-    while (hi < events.length && events[hi].t <= t) {
-      ttm += events[hi].per;
-      hi++;
-    }
-    // 窗口左移：剔除滑出窗口的分红
-    while (lo < events.length && events[lo].t <= t - YEAR) {
-      ttm -= events[lo].per;
-      lo++;
-    }
-    // 修正：lo 推进后区间 [lo, hi) 为窗口内事件
-    let acc = 0;
-    for (let k = lo; k < hi; k++) acc += events[k].per;
-    if (acc > 0 && c.close > 0) out.set(c.date, (acc / c.close) * 100);
+    if (!(c.close > 0)) continue;
+    const time = Date.parse(c.date);
+    const perShare = events.filter(e => e.perShare > 0 && e.exDate <= c.date && Date.parse(e.exDate) > time - 365.25 * 864e5)
+      .reduce((sum,e) => {
+        const split = events.filter(x => x.exDate >= e.exDate && x.exDate <= c.date)
+          .reduce((factor,x) => factor * (1 + (x.perShareStock ?? 0)), 1);
+        return sum + e.perShare / split;
+      }, 0);
+    out.set(c.date, perShare / c.close * 100);
   }
   return out;
 }
@@ -334,3 +321,4 @@ export function adjustCandlesForChart(
 function r2(v: number): number {
   return Math.round(v * 100) / 100;
 }
+

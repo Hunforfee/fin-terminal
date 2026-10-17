@@ -44,8 +44,9 @@ export function parseBonusPage(html: string): DividendEvent[] {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(announce)) continue;
     if (!/实施/.test(tds[4])) continue;
     const per10 = Number(tds[3]);
-    if (!Number.isFinite(per10) || per10 <= 0) continue;
-    const exDate = /^\d{4}-\d{2}-\d{2}$/.test(tds[5]) ? tds[5] : announce;
+    if (!Number.isFinite(per10) || per10 < 0) continue;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(tds[5])) continue;
+    const exDate = tds[5];
     const song = Number(tds[1]);
     const zhuan = Number(tds[2]);
     const perShareStock =
@@ -64,3 +65,4 @@ export function parseBonusPage(html: string): DividendEvent[] {
   }
   return [...byDate.values()].sort((a, b) => a.exDate.localeCompare(b.exDate));
 }
+

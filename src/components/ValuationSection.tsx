@@ -3,57 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import EChart from './EChart';
 
-interface ValuationPoint {
-  date: string;
-  pe: number | null;
-  pb: number | null;
-  close: number;
-  dy: number | null;
-}
-interface SeriesStats {
-  current: number | null;
-  percentile: number | null;
-  p80: number | null;
-  p50: number | null;
-  p20: number | null;
-  max: number | null;
-  avg: number | null;
-  min: number | null;
-  count: number;
-}
-interface ValuationResp {
-  code: string;
-  pe: number | null;
-  pb: number | null;
-  pePercentile: number | null;
-  pbPercentile: number | null;
-  dividendYield: number | null;
-  dyPercentile?: number | null;
-  netProfit: number | null;
-  netAssets: number | null;
-  history: ValuationPoint[];
-  basis?: 'real' | 'estimate';
-  years?: number;
-  method?: 'disclosure' | 'cutoff';
-  alt?: {
-    method: 'disclosure' | 'cutoff';
-    history: ValuationPoint[];
-    stats: { pe: SeriesStats; pb: SeriesStats; dy: SeriesStats; from: string; to: string };
-    current: { pe: number | null; pb: number | null; dy: number | null };
-  };
-  fin?: {
-    report: string | null;
-    npTTM: number | null;
-    shares: number | null;
-    bps: number | null;
-    points: number;
-    realDates: boolean;
-    adjustGaps: number;
-  };
-  stats?: { pe: SeriesStats; pb: SeriesStats; dy: SeriesStats; from: string; to: string };
-  source: string;
-  stale: boolean;
-}
+import type { Valuation as ValuationResp, ValuationPoint } from '@/lib/datasource/types';
 
 type Metric = 'pe' | 'pb' | 'dy';
 
@@ -84,7 +34,7 @@ function computeStats(vals: (number | null)[], cur: number | null): Stats | null
   let pct: number | null = null;
   if (cur !== null && Number.isFinite(cur)) {
     const below = sorted.filter((v) => v < cur).length;
-    pct = (below / (sorted.length - 1)) * 100;
+    pct = (below / sorted.length) * 100;
   }
   return { cur, pct, p80: q(0.8), p50: q(0.5), p20: q(0.2), max: sorted[sorted.length - 1], mean, min: sorted[0] };
 }
@@ -216,7 +166,7 @@ function MetricChart({
     }
 
     series.push({
-      name: '收盘价(右轴)',
+      name: '前复权收盘价(右轴)',
       type: 'line',
       data: closes,
       yAxisIndex: 1,
@@ -239,7 +189,7 @@ function MetricChart({
         itemWidth: 14,
         itemHeight: 8,
         textStyle: { fontSize: 11, color: '#64748b' },
-        data: [name, ...(overlay ? [overlay.label] : []), '收盘价(右轴)'],
+        data: [name, ...(overlay ? [overlay.label] : []), '前复权收盘价(右轴)'],
       },
       grid: { left: 56, right: 60, top: 28, bottom: 44 },
       xAxis: {
@@ -293,6 +243,7 @@ export default function ValuationSection({ code }: { code: string }) {
   useEffect(() => {
     let alive = true;
     setLoading(true);
+    setData(null);
     setErr(null);
     fetch(`/api/valuation?code=${encodeURIComponent(code)}&years=${years}`)
       .then((r) => r.json())
@@ -365,8 +316,13 @@ export default function ValuationSection({ code }: { code: string }) {
       )}
       {err && <div className="card-pad text-sm text-red-600">{err}</div>}
 
-      {!loading && data && (
+      {!loading && !err && data && (
         <div className="space-y-4">
+          <div className="rounded bg-slate-50 px-3 py-2 text-xs text-slate-500">
+            截至 {data.stats?.to ?? '--'} · 价格采用前复权 · 估值由财报复算
+            {data.marketComparison && <span className="ml-3">行情参考：PE {data.marketComparison.pe?.toFixed(2) ?? '--'} / PB {data.marketComparison.pb?.toFixed(2) ?? '--'}</span>}
+          </div>
+          {data.warnings?.length ? <ul className="rounded bg-amber-50 px-4 py-2 text-xs text-amber-800">{data.warnings.map(w => <li key={w}>{w}</li>)}</ul> : null}
           {panels.map((p) => (
             <div key={p.key} className="card-pad">
               <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -387,7 +343,7 @@ export default function ValuationSection({ code }: { code: string }) {
                       {chip('20%分位点', '#10b981')}
                       {chip('50%分位点', '#64748b')}
                       {chip('80%分位点', '#ef4444')}
-                      {chip('收盘价(右轴)', '#f59e0b')}
+                      {chip('前复权收盘价(右轴)', '#f59e0b')}
                     </>
                   );
                 })()}
@@ -409,10 +365,10 @@ export default function ValuationSection({ code }: { code: string }) {
                       })()}
                       onPick={(x) => setPins((prev) => ({ ...prev, [p.key]: prev[p.key] === x.date ? null : x.date }))}
                       overlay={
-                        overlayOn && data.alt && data.alt.history.length === data.history.length
+                        overlayOn && data.alt && data.alt.history.length > 0
                           ? {
                               label: data.alt.method === 'cutoff' ? '截止日切换口径' : '当日披露口径',
-                              values: data.alt.history.map((h) => (p.key === 'pe' ? h.pe : p.key === 'pb' ? h.pb : h.dy)),
+                              values: data.history.map(h => { const alt = data.alt!.history.find(a => a.date === h.date); return alt ? (p.key === 'pe' ? alt.pe : p.key === 'pb' ? alt.pb : alt.dy) : null; }),
                             }
                           : null
                       }
@@ -432,38 +388,13 @@ export default function ValuationSection({ code }: { code: string }) {
           <div className="rounded bg-slate-50 p-2.5 text-[11px] leading-relaxed text-slate-500">
             <b className="text-slate-600">口径说明</b>
             <ul className="mt-1 list-disc space-y-0.5 pl-4">
-              <li>
-                <b>PE-TTM</b> = 不复权收盘价 ÷ EPS(TTM)；EPS(TTM) = 归母净利润(TTM) ÷ <b>该报告期期末总股本</b>
-                （由资产负债表「实收资本（或股本）」÷ 面值还原，因此送转/增发不会把历史 PE 放大）。
-              </li>
-              <li>
-                <b>归母净利润</b>取利润表「归属于母公司所有者的净利润」；TTM = 最近<b>四个单季</b>滚动（Q1 = 今年Q1 + 上年年报 − 上年Q3，中报/三季报同理），不做累计×4 年化。
-              </li>
-              <li>
-                <b>生效口径</b>：
-                {data.method === 'cutoff'
-                  ? '法定披露截止日次日统一切换（一季报 5/1、中报 9/1、三季报 11/1、年报次年 5/1，中证/国证指数口径）。'
-                  : '报告披露后即纳入（近似取「报告期 + 典型披露滞后」，理杏仁公司估值口径），因此财报季曲线逐期跳变。'}
-                {data.alt && ' 点「口径对比」可叠加另一种口径查看差异。'}
-              </li>
-              <li>
-                <b>PB</b> = 不复权收盘价 ÷ 归母净资产每股值；<b>股息率</b> = 近 12 个月每股税前现金分红（按除权除息日）÷ 不复权收盘价。
-              </li>
-              <li>
-                分位点、分位值、最大/最小/平均值均在所选 {data.years ?? years} 年区间内按<b>全部交易日</b>计算（样本 {data.stats?.pe.count ?? data.history.length} 个交易日，{data.stats?.from} ~ {data.stats?.to}）。
-                若你用周频/月频或不同区间复算，分位会有差异（样本数越少，极值越容易被低估）。
-              </li>
-              {data.fin && (
-                <li>
-                  <b>数据溯源</b>：最近一期报告期 {data.fin.report ?? '--'}，归母净利润 TTM{' '}
-                  {data.fin.npTTM !== null ? `${data.fin.npTTM.toFixed(2)} 亿元` : '--'}，总股本{' '}
-                  {data.fin.shares !== null ? `${data.fin.shares.toFixed(2)} 亿股` : '--'}，每股净资产{' '}
-                  {data.fin.bps !== null ? `${data.fin.bps.toFixed(2)} 元` : '--'}，报表覆盖 {data.fin.points} 个报告期。
-                  {data.fin.realDates ? '披露日取自真实公告日。' : '披露日按报告期 + 典型滞后估算（未取到真实公告日）。'}
-                  {data.fin.adjustGaps > 0 &&
-                    `图上的收盘价为后复权序列（共回填 ${data.fin.adjustGaps} 次除权除息），估值本身仍用不复权价，不受影响。`}
-                </li>
-              )}
+              <li>价格曲线使用<b>前复权收盘价</b>。EPS、每股净资产按同一复权因子换算后计算 PE、PB，复权前后的估值比率保持一致。</li>
+              <li><b>PE-TTM</b> 使用归母净利润最近四个单季之和及交易日实际总股数。Q1 TTM = 今年Q1 + 上年年报 − 上年Q1。亏损或缺失利润时不显示 PE。</li>
+              <li><b>PB</b> 使用归母净资产扣除其他权益工具后的普通股净资产；与 PE 分别计算。<b>股息率</b>使用已实施且除息日落在过去十二个月内的税前现金分红，无分红为 0，数据缺失显示空值。</li>
+              <li><b>财报生效</b>：{data.method === 'cutoff' ? '法定截止日与实际公告次日取较晚者。' : '真实公告次日起，使用最新已披露报告。'}未取得原始公告日期的报告不建立新估值点，且缺失期间停止沿用该报告前的数据。</li>
+              <li>统计区间 {data.stats?.from ?? '--'} ~ {data.stats?.to ?? '--'}；PE / PB / 股息率有效样本分别为 {data.stats?.pe.count ?? 0} / {data.stats?.pb.count ?? 0} / {data.stats?.dy.count ?? 0}。分位 = 严格低于当前值的有效交易日数 ÷ 有效样本数。</li>
+              <li>当前值与整条曲线采用相同财报口径；行情参考值单独列示，可能因股本、权益工具或取数时间不同而有差异。</li>
+              {data.fin && <li>最新采用报告期 {data.fin.report ?? '--'}；归母利润 TTM {data.fin.npTTM?.toFixed(2) ?? '--'} 亿元，报告期总股数 {data.fin.shares?.toFixed(2) ?? '--'} 亿股，报告期普通股每股净资产 {data.fin.bps?.toFixed(2) ?? '--'} 元。覆盖 {data.fin.points} 个报告期。</li>}
             </ul>
             {data.basis === 'estimate' && <div className="mt-1 text-amber-600">财报抓取失败，已降级为估算口径，仅供参考。</div>}
           </div>
@@ -472,3 +403,4 @@ export default function ValuationSection({ code }: { code: string }) {
     </section>
   );
 }
+

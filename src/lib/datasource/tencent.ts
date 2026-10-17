@@ -50,7 +50,7 @@ function parseQuoteLine(symbol: string, body: string): Quote | null {
     symbol,
     name: cleanName(f[1] || code),
     market: norm?.market ?? (symbol.startsWith('sh') ? 'SH' : 'SZ'),
-    kind: idx ? 'index' : (norm?.kind ?? 'stock'),
+    kind: norm?.kind ?? 'stock',
     price,
     prevClose,
     open: numOrNull(f[5]),
@@ -131,6 +131,23 @@ export async function fetchKLine(
   startDate?: string,
   endDate?: string,
 ): Promise<KLineSeries> {
+  if (count > 640) {
+    const byDate = new Map<string, Candle>();
+    let end = endDate;
+    for (let page = 0; page < Math.ceil(count / 640) + 1; page++) {
+      const part = await fetchKLine(symbol, period, adjust, 640, undefined, end);
+      const rows = part.candles;
+      if (!rows.length) break;
+      const oldest = rows[0].date;
+      const before = byDate.size;
+      for (const c of rows) byDate.set(c.date, c);
+      if (byDate.size === before || (startDate && oldest <= startDate) || byDate.size >= count) break;
+      end = new Date(Date.parse(oldest + 'T00:00:00Z') - 864e5).toISOString().slice(0, 10);
+    }
+    return { symbol, code: symbol.slice(2), period, adjust,
+      candles: [...byDate.values()].sort((a,b) => a.date.localeCompare(b.date))
+        .filter(c => !startDate || c.date >= startDate).slice(-count), source: PROVIDER_NAME, stale: false };
+  }
   const p = period === 'minute' ? 'day' : period;
   const param = [symbol, p, startDate ?? '', endDate ?? '', String(count), adjust === 'none' ? '' : adjust].join(',');
   const url = `${KLINE_URL}?param=${encodeURIComponent(param)}`;
@@ -141,7 +158,7 @@ export async function fetchKLine(
   if (!node) throw new Error(`tencent kline: no data node for ${symbol}`);
 
   const key = adjust === 'qfq' ? `qfq${p}` : adjust === 'hfq' ? `hfq${p}` : p;
-  const raw = (node[key] ?? node[p]) as unknown[] | undefined;
+  const raw = (adjust === 'none' ? node[p] : node[key]) as unknown[] | undefined;
   if (!raw || raw.length === 0) throw new Error(`tencent kline: empty series (${key})`);
 
   // 腾讯行序： [date, open, close, high, low, volume]
@@ -208,18 +225,19 @@ export async function fetchSearch(keyword: string): Promise<SearchHit[]> {
     if (p.length < 3) continue;
     const market = p[0].toUpperCase() as 'SH' | 'SZ' | 'BJ';
     const code = p[1];
-    const norm = normalizeCode(code);
+    const norm = normalizeCode(`${market.toLowerCase()}${code}`);
     const idx = INDEX_WHITELIST[code];
     hits.push({
       code,
       symbol: `${market.toLowerCase()}${code}`,
       name: unescapeUnicode(p[2]),
       market,
-      kind: idx ? 'index' : (norm?.kind ?? 'stock'),
+      kind: norm?.kind ?? 'stock',
       pinyin: p[3],
-      board: idx ? '指数' : (norm?.board ?? 'A股'),
+      board: norm?.board ?? 'A股',
       secid: norm?.secid,
     });
   }
   return hits;
 }
+

@@ -14,10 +14,10 @@ const KIND_LABEL: Record<string, string> = {
   unknown: '其他',
 };
 
-function pathOf(hit: { kind: string; code: string }): string {
+function pathOf(hit: { kind: string; code: string; market?: string }): string {
   if (hit.kind === 'index') return `/index/${hit.code}`;
   if (hit.kind === 'fund' || hit.kind === 'etf') return `/fund/${hit.code}`;
-  return `/stock/${hit.code}`;
+  return `/stock/${hit.market ? hit.market.toLowerCase() : ''}${hit.code}`;
 }
 
 /**
@@ -244,3 +244,4 @@ export default function SearchBox({ placeholder = '搜索股票 / 指数 / 基�
     </div>
   );
 }
+

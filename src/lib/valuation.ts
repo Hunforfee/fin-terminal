@@ -1,26 +1,3 @@
-/**
- * 历史估值序列（真实财报口径）。
- *
- * 与「用当前 EPS 按增速倒推」的估算做法不同，这里用**已披露的定期报告**
- * 还原每个交易日当时真正可得的 TTM 净利润与每股净资产：
- *
- *   净利润 TTM 拼接（按法定披露截止日次日生效）：
- *     05-01 ~ 08-31：一季报累计 × 4
- *     09-01 ~ 10-31：中报累计 × 2
- *     11-01 ~ 次年 04-30：三季报 + 上年年报 − 上年三季度
- *     次年 05-01 起：年报
- *   净资产 / BPS：直接用当期披露的每股净资产（送转、增发已体现在披露值中）
- *
- * PE 需要「当时股价 ÷ 当时 EPS」，因此：
- *   股本(t) = 净资产(t) ÷ BPS(t)        （同一报告期两个披露值，口径自洽）
- *   EPS(t)  = 净利润TTM(t) ÷ 股本(t)
- *   市值(t) = 不复权收盘价(t) × 股本(t)
- *
- * 关键：价格必须用**不复权**收盘价。用前复权价会因历史除权除息而系统性
- * 低估历史股价，从而把历史 PE 画低、把当前分位画高——这正是与理杏仁
- * 走势不一致的根因。
- */
-
 import type { Candle, SeriesStats, Valuation, ValuationPoint } from './datasource/types';
 import type { PeriodFinancial, ShareChange } from './datasource/sinaFinance';
 import type { FinStatementPoint } from './datasource/sinaFinStatements';
@@ -51,12 +28,11 @@ export function effectiveDate(reportDate: string, o: CalendarOpts = {}): string 
 }
 
 /**
- * 新版时间轴：直接用**三大报表**的归母净利润 + 期末总股本（实收资本反推）。
+ * 三大报表归母净利润 + 真实股数，保留亏损和缺失区间。
  *
  * 与旧版（buildFinancialTimeline）的区别：
  *   1. 分子用「归属于母公司所有者的净利润」（理杏仁/同花顺 PE 口径），不是含少数股东损益的净利润；
- *   2. 分母股本取**该报告期期末股本**（资产负债表实收资本 ÷ 面值），不用当前股本，
- *      送转股的历史 PE 因此不会被放大；
+ *   2. 报告期股数由股本变动史取得，构建交易日序列时再应用当天的股数；
  *   3. 支持自定义「生效日历」，用于复现不同数据商的 TTM 拼接口径。
  */
 export function buildTimelineFromStatements(
@@ -67,34 +43,34 @@ export function buildTimelineFromStatements(
   const shByDate = new Map<string, number>();
   const eqByDate = new Map<string, number>();
   for (const p of points) {
-    const np = p.npParent ?? p.npTotal;
+    const np = p.npParent;
     if (np !== null) npByDate.set(p.date, np);
     if (p.sharesYi !== null) shByDate.set(p.date, p.sharesYi);
-    const eq = p.equityParent ?? p.equityTotal;
+    const eq = p.equityCommon ?? p.equityParent;
     if (eq !== null) eqByDate.set(p.date, eq);
   }
-  const dates = Array.from(npByDate.keys()).sort();
+  const dates = [...new Set(points.map(p => p.date))].sort();
   const out: FinPoint[] = [];
   for (const d of dates) {
     const y = Number(d.slice(0, 4));
     const md = d.slice(5);
-    const np = npByDate.get(d) as number;
+    const np = npByDate.get(d) ?? null;
     const prev = npByDate.get(`${y - 1}-12-31`);
     let npTTM: number | null = null;
     if (md === '03-31') {
       // TTM(Q1) = 今年Q1 + 上年年报 − 上年Q1（四个单季 = 上年Q2~Q4 + 今年Q1）
       const q1 = npByDate.get(`${y - 1}-03-31`);
-      npTTM = prev !== undefined && q1 !== undefined ? np + prev - q1 : null;
+      npTTM = np !== null && prev !== undefined && q1 !== undefined ? np + prev - q1 : null;
     } else if (md === '06-30') {
       const h1 = npByDate.get(`${y - 1}-06-30`);
-      npTTM = prev !== undefined && h1 !== undefined ? np + prev - h1 : null;
+      npTTM = np !== null && prev !== undefined && h1 !== undefined ? np + prev - h1 : null;
     } else if (md === '09-30') {
       const q3 = npByDate.get(`${y - 1}-09-30`);
-      npTTM = prev !== undefined && q3 !== undefined ? np + prev - q3 : null;
+      npTTM = np !== null && prev !== undefined && q3 !== undefined ? np + prev - q3 : null;
     } else {
       npTTM = np;
     }
-    if (npTTM === null || npTTM <= 0) continue;
+    // Keep loss/missing TTM periods so old profitable earnings cannot leak forward.
 
     let sharesYi = shByDate.get(d) ?? null;
     if (sharesYi === null) {
@@ -107,11 +83,11 @@ export function buildTimelineFromStatements(
     out.push({
       eff: effectiveDate(d, opts.calendar),
       report: d,
-      eps: np / (sharesYi * 1e8),
-      epsTTM: npTTM / (sharesYi * 1e8),
+      eps: np !== null ? np / (sharesYi * 1e8) : null,
+      epsTTM: npTTM !== null ? npTTM / (sharesYi * 1e8) : null,
       bps: equity !== null ? equity / (sharesYi * 1e8) : null,
       shares: sharesYi,
-      npTTM: npTTM / 1e8,
+      npTTM: npTTM !== null ? npTTM / 1e8 : null,
     });
   }
   // 注意：不能用「生效日去重」——年报与次年一季报的生效日都是 5/1，
@@ -146,7 +122,7 @@ export interface ProfitPoint {
  * 把「利润表净利润 + 总股本变动史」转成「生效日 → TTM EPS / BPS / 股本」。
  *
  * TTM 一律按**最近四个单季**滚动（与主流数据商 PE-TTM 口径一致）：
- *   Q1     ：今年Q1 + 上年年报 − 上年Q3
+ *   Q1     ：今年Q1 + 上年年报 − 上年Q1
  *   中报   ：今年中报 + 上年年报 − 上年中报
  *   三季报 ：今年三季报 + 上年年报 − 上年三季报
  *   年报   ：今年年报
@@ -190,7 +166,7 @@ export function buildFinancialTimeline(
     } else if (md === '12-31') {
       npTTM = np;
     }
-    if (npTTM === null || npTTM <= 0) continue; // 亏损期不给 PE（保持 PE > 0 的常规定义）
+    // Retain periods with missing or nonpositive TTM.
 
     const sh = sharesByReport.get(p.date) ?? null;
     // 该报告期股本；缺失时用最近的已知股本
@@ -201,7 +177,7 @@ export function buildFinancialTimeline(
     }
     if (sharesYi === null || sharesYi <= 0) continue;
 
-    const epsTTM = npTTM / (sharesYi * 1e8); // 元/股
+    const epsTTM = npTTM !== null ? npTTM / (sharesYi * 1e8) : null; // 元/股
 
     out.push({
       eff: effectiveDate(p.date),
@@ -210,7 +186,7 @@ export function buildFinancialTimeline(
       epsTTM,
       bps: bpsByDate.get(p.date) ?? null,
       shares: sharesYi,
-      npTTM: npTTM / 1e8,
+      npTTM: npTTM !== null ? npTTM / 1e8 : null,
     });
   }
 
@@ -235,31 +211,29 @@ export function buildFinancialTimeline(
 export function buildRealValuationSeries(
   candles: Candle[],
   timeline: FinPoint[],
-  opts?: { dyByDate?: Map<string, number> },
+  opts?: { dyByDate?: Map<string, number>; adjustedByDate?: Map<string, Candle>; shareHistory?: ShareChange[] },
 ): ValuationPoint[] {
-  if (candles.length === 0 || timeline.length === 0) return [];
+  if (!candles.length || !timeline.length) return [];
   const out: ValuationPoint[] = [];
-  let ti = -1;
   for (const c of candles) {
-    while (ti + 1 < timeline.length && timeline[ti + 1].eff <= c.date) ti++;
-    if (ti < 0) continue; // 财报覆盖之前不画，避免无分母的长尾
-    const f = timeline[ti];
-
-    let pe: number | null = null;
-    if (f.epsTTM !== null && f.epsTTM > 0) {
-      const v = c.close / f.epsTTM;
-      // 过滤极端值：亏损转盈、重组导致的分母异常
-      if (Number.isFinite(v) && v > 0 && v < 2000) pe = round2(v);
-    }
-    const pb = f.bps !== null && f.bps > 0 ? round2(c.close / f.bps) : null;
-
-    out.push({
-      date: c.date,
-      pe,
-      pb: pb !== null && Number.isFinite(pb) && pb > 0 && pb < 500 ? pb : null,
-      close: c.close,
-      dy: opts?.dyByDate?.get(c.date) ?? null,
-    });
+    // Select the latest report that was available, even when announcement dates cross.
+    const f = timeline.filter(p => p.eff <= c.date).sort((a,b) => a.report.localeCompare(b.report)).at(-1);
+    if (!f) continue;
+    const adjusted = opts?.adjustedByDate?.get(c.date);
+    if (opts?.adjustedByDate && !adjusted) continue;
+    const close = adjusted?.close ?? c.close;
+    const factor = close / c.close;
+    if (!(factor > 0) || !Number.isFinite(factor)) continue;
+    const dailyShares = opts?.shareHistory ? sharesAt(opts.shareHistory, c.date) : null;
+    const shareRatio = dailyShares !== null && f.shares ? f.shares / (dailyShares / 1e4) : 1;
+    const eps = f.epsTTM !== null ? f.epsTTM * shareRatio * factor : null;
+    const bps = f.bps !== null ? f.bps * shareRatio * factor : null;
+    const pe = eps !== null && eps > 0 ? close / eps : null;
+    const pb = bps !== null && bps > 0 ? close / bps : null;
+    out.push({ date: c.date, close, rawClose: c.close, adjustmentFactor: factor,
+      pe: pe !== null && Number.isFinite(pe) ? round2(pe) : null,
+      pb: pb !== null && Number.isFinite(pb) ? round2(pb) : null,
+      dy: opts?.dyByDate?.get(c.date) ?? null });
   }
   return out;
 }
@@ -299,7 +273,7 @@ function seriesStats(values: (number | null)[], current: number | null): SeriesS
   return {
     current: r(current),
     percentile:
-      current !== null && s.length > 5 && current > 0 ? Math.round(percentileOf(s, current) * 10) / 10 : null,
+      current !== null && s.length > 5 && current >= 0 ? Math.round(percentileOf(s, current) * 10) / 10 : null,
     p80: r(quantile(s, 0.8)),
     p50: r(quantile(s, 0.5)),
     p20: r(quantile(s, 0.2)),
@@ -324,10 +298,10 @@ export function summarizeReal(
   const pbSeries = history.map((h) => h.pb);
   const dySeries = history.map((h) => h.dy);
 
-  // 当前值优先用行情（与收盘价同步、口径实时），缺失时退回序列末值
-  const pe = q.pe ?? last?.pe ?? null;
-  const pb = q.pb ?? last?.pb ?? null;
-  const dyLast = [...dySeries].reverse().find((v) => v !== null) ?? null;
+  // Current and history use one financial basis; market quotes stay separate.
+  const pe = last?.pe ?? null;
+  const pb = last?.pb ?? null;
+  const dyLast = last?.dy ?? null;
 
   const peStats = seriesStats(peSeries, pe);
   const pbStats = seriesStats(pbSeries, pb);
@@ -378,9 +352,7 @@ function pickValuation(v: {
  *
  * 与 buildTimelineFromStatements 的差别只在**生效时机**：
  * 每个报告期从「数据披露之后」才开始使用，而不是等到法定截止日的次日。
- * 披露日采用可获得的近似值：
- *   - 若能取到真实公告日（reportDates 命中）→ 公告日 + 1 天生效；
- *   - 否则按报告期的典型披露滞后（lagDays）估算（一季报 ~28 天、中报 ~58 天、三季报 ~28 天、年报 ~95 天）。
+ * 只使用真实公告日；未知公告日的报告在法定截止后形成缺失区间。
  *
  * 另外每个交易日优先使用「最近一个已披露报告期」的 TTM 净利润，
  * 这正是理杏仁文档中「出了即纳入」的做法，因此曲线在财报季逐家跳变，
@@ -390,17 +362,12 @@ export function buildDisclosureTimeline(
   points: FinStatementPoint[],
   opts: { lagDays?: Partial<Record<'03-31' | '06-30' | '09-30' | '12-31', number>>; reportDates?: Map<string, string> } = {},
 ): (FinPoint & { eff: string })[] {
-  const base = buildTimelineFromStatements(points);
-  const lag = { '03-31': 28, '06-30': 58, '09-30': 28, '12-31': 95, ...opts.lagDays };
-  const shift = (d: string, days: number) => {
-    const t = new Date(`${d}T00:00:00Z`);
-    t.setUTCDate(t.getUTCDate() + days);
-    return t.toISOString().slice(0, 10);
-  };
-  return base.map((p) => {
-    const md = p.report.slice(5) as '03-31' | '06-30' | '09-30' | '12-31';
-    const real = opts.reportDates?.get(p.report);
-    const eff = real ? shift(real, 1) : shift(p.report, lag[md] ?? 60);
-    return { ...p, eff };
-  });
+  return buildTimelineFromStatements(points).flatMap(p => {
+    const date = opts.reportDates?.get(p.report);
+    // An unknown announcement must not keep an older report alive indefinitely.
+    // At the statutory cutoff, introduce an explicit missing-data interval.
+    if (!date) return [{ ...p, eff: effectiveDate(p.report), eps: null, epsTTM: null, bps: null, npTTM: null }];
+    const eff = new Date(Date.parse(date + 'T00:00:00Z') + 864e5).toISOString().slice(0, 10);
+    return [{ ...p, eff }];
+  }).sort((a,b) => a.report.localeCompare(b.report));
 }

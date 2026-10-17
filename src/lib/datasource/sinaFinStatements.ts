@@ -1,3 +1,4 @@
+import { fetchShareHistory, sharesAt, type ShareChange } from './sinaFinance';
 /**
  * 新浪三大报表「全历史」解析（估值分母专用，单位：万元）。
  *
@@ -29,6 +30,8 @@ export interface FinStatementPoint {
   equityParent: number | null;
   /** 所有者权益合计（元，兜底用） */
   equityTotal: number | null;
+  /** Ordinary shareholders equity, excluding other equity instruments. */
+  equityCommon?: number | null;
 }
 
 const BS_PAGE = (code: string, year: number) =>
@@ -104,7 +107,7 @@ const BS_EQ_TOTAL = [
  * 抓取单年利润表 + 资产负债表的关键科目并合并。
  * 金额单位统一换算为「元」（页面为万元）。
  */
-export async function fetchYearStatement(code: string, year: number): Promise<FinStatementPoint[]> {
+export async function fetchYearStatement(code: string, year: number, shareHistory: ShareChange[] = []): Promise<FinStatementPoint[]> {
   const [plHtml, bsHtml] = await Promise.all([
     fetchText(PL_PAGE(code, year), { encoding: 'gbk', timeoutMs: 12000 }).catch(() => ''),
     fetchText(BS_PAGE(code, year), { encoding: 'gbk', timeoutMs: 12000 }).catch(() => ''),
@@ -128,6 +131,7 @@ export async function fetchYearStatement(code: string, year: number): Promise<Fi
 
   // 面值：优先「每股面值」，否则按 1 元
   const parRow = bsOrder.length ? pickRow(bs.rows, ['每股面值']) : null;
+  const otherEquity = pickRow(bs.rows, ['其他权益工具']);
 
   const out: FinStatementPoint[] = [];
   for (const d of dates) {
@@ -140,10 +144,12 @@ export async function fetchYearStatement(code: string, year: number): Promise<Fi
     const shareWan = bi >= 0 ? toNum(shareRows?.[bi]) : null;
     const eqWan = bi >= 0 ? toNum(eqRows?.[bi]) : null;
     const eqTotalWan = bi >= 0 ? toNum(eqTotalRows?.[bi]) : null;
-    const par = (bi >= 0 ? toNum(parRow?.[bi]) : null) ?? 1;
+    const par = bi >= 0 ? toNum(parRow?.[bi]) : null;
 
     // 实收资本单位=万元，面值=元/股 → 亿股 = 万元 / 面值 / 1e4 * 1e4 = 万元/面值/1e4（万股→亿股）
-    const sharesYi = shareWan !== null && shareWan > 0 && par > 0 ? shareWan / par / 1e4 : null;
+    const actualWan = sharesAt(shareHistory, d);
+    const sharesYi = actualWan !== null ? actualWan / 1e4
+      : shareWan !== null && shareWan > 0 && par !== null && par > 0 ? shareWan / par / 1e4 : null;
 
     out.push({
       date: d,
@@ -151,6 +157,7 @@ export async function fetchYearStatement(code: string, year: number): Promise<Fi
       npTotal: wanToYuan(npTotalWan),
       sharesYi,
       equityParent: wanToYuan(eqWan),
+      equityCommon: eqWan !== null ? wanToYuan(eqWan - (bi >= 0 ? toNum(otherEquity?.[bi]) ?? 0 : 0)) : null,
       equityTotal: wanToYuan(eqTotalWan),
     });
   }
@@ -163,7 +170,8 @@ export async function fetchStatementHistory(code: string, years = 12): Promise<F
   const yearList: number[] = [];
   for (let y = thisYear; yearList.length < years + 1 && y >= 1998; y--) yearList.push(y);
 
-  const pages = await Promise.all(yearList.map((y) => fetchYearStatement(code, y).catch(() => [] as FinStatementPoint[])));
+  const shareHistory = await fetchShareHistory(code);
+  const pages = await Promise.all(yearList.map((y) => fetchYearStatement(code, y, shareHistory).catch(() => [] as FinStatementPoint[])));
 
   const byDate = new Map<string, FinStatementPoint>();
   for (const p of pages) {
@@ -182,8 +190,10 @@ export async function fetchStatementHistory(code: string, years = 12): Promise<F
         sharesYi: pt.sharesYi ?? prev.sharesYi,
         equityParent: pt.equityParent ?? prev.equityParent,
         equityTotal: pt.equityTotal ?? prev.equityTotal,
+        equityCommon: pt.equityCommon ?? prev.equityCommon,
       });
     }
   }
   return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
 }
+

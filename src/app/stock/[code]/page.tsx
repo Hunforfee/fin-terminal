@@ -9,7 +9,10 @@ export const dynamic = 'force-dynamic';
 export default async function StockPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
 
-  const quote = await getQuote(code).catch(() => null);
+  const symbol = /^\d{6}$/.test(code)
+    ? `${/^[03]/.test(code) ? 'sz' : /^[48]/.test(code) ? 'bj' : 'sh'}${code}`
+    : code;
+  const quote = await getQuote(symbol).catch(() => null);
   if (!quote) notFound();
 
   return (
@@ -17,13 +20,14 @@ export default async function StockPage({ params }: { params: Promise<{ code: st
       <QuoteHeader
         quote={quote}
         extra={
-          <Link href={`/stock/${code}/finance`} className="btn border-brand-300 text-brand-700">
+          <Link href={`/stock/${quote.code}/finance`} className="btn border-brand-300 text-brand-700">
             财务体检 →
           </Link>
         }
       />
 
-      <ValuationSection code={code} />
+      <ValuationSection code={symbol} />
     </div>
   );
 }
+

@@ -215,8 +215,56 @@ export default function FinanceTable({ code }: { code: string }) {
     const prev = p.replace(/^(\d{4})/, (y) => String(Number(y) - 1));
     return periodsAsc.indexOf(prev);
   };
-  /** 环比：数组前一个报告期 */
-  const qoqIndex = (i: number): number => (i > 0 ? i - 1 : -1);
+  /**
+   * 单季同比（理杏仁口径）：
+   *   单季值 = 当期累计 − 同年上一报告期累计（Q1 单季 = Q1 本身）
+   *   单季同比 = 当期单季 vs 上年同期单季
+   * 仅在季度粒度、且序列覆盖所需报告期时可算，否则返回 null（显示 —）。
+   */
+  const sqYoy = (c: CompanyFinancials, key: string, i: number): number | null => {
+    if (granularity !== 'quarter') return null;
+    const s = c.series?.[key];
+    if (!s) return null;
+    const v = s[i];
+    if (v === null || v === undefined || !Number.isFinite(v)) return null;
+    const qOfMonth = (p: string): number => {
+      const md = p.slice(5, 10);
+      if (md === '03-31') return 1;
+      if (md === '06-30') return 2;
+      if (md === '09-30') return 3;
+      if (md === '12-31') return 4;
+      return 0;
+    };
+    const p = periodsAsc[i];
+    if (!p || qOfMonth(p) === 0) return null;
+    // 当期单季 = 当期累计 − 同年上一季度累计
+    let curQ: number | null = v;
+    if (qOfMonth(p) > 1) {
+      const y = p.slice(0, 4);
+      const prevQDate = ['03-31', '06-30', '09-30', '12-31'][qOfMonth(p) - 2];
+      const pi = periodsAsc.indexOf(`${y}-${prevQDate}`);
+      const pv = pi >= 0 ? s[pi] : null;
+      if (pv === null || pv === undefined || !Number.isFinite(pv)) return null;
+      curQ = v - pv;
+    }
+    // 上年同期单季
+    const prevYearDate = ['03-31', '06-30', '09-30', '12-31'][qOfMonth(p) - 1];
+    const yi = periodsAsc.indexOf(`${Number(p.slice(0, 4)) - 1}-${prevYearDate}`);
+    if (yi < 0) return null;
+    const yv = s[yi];
+    if (yv === null || yv === undefined || !Number.isFinite(yv)) return null;
+    let prevQ: number | null = yv;
+    if (qOfMonth(p) > 1) {
+      const py = String(Number(p.slice(0, 4)) - 1);
+      const prevQDate = ['03-31', '06-30', '09-30', '12-31'][qOfMonth(p) - 2];
+      const pi2 = periodsAsc.indexOf(`${py}-${prevQDate}`);
+      const pv2 = pi2 >= 0 ? s[pi2] : null;
+      if (pv2 === null || pv2 === undefined || !Number.isFinite(pv2)) return null;
+      prevQ = yv - pv2;
+    }
+    if (prevQ === null || prevQ === 0 || curQ === null) return null;
+    return ((curQ - prevQ) / Math.abs(prevQ)) * 100;
+  };
 
   const peers = useMemo(() => {
     const self = STOCKS.find((s) => s.code === code);
@@ -441,7 +489,7 @@ export default function FinanceTable({ code }: { code: string }) {
                   const isPct = unit === 'pct';
                   const unitText = isPct ? '%' : unit === 'wan' ? '亿' : '';
                   return (
-                    <tbody key={r.key} className="border-b border-slate-100">
+                    <tbody key={r.key} className="border-b-2 border-slate-200">
                       {companies.map((c, ci) => {
                         const showYoY = companies.length === 1;
                         return (
@@ -449,7 +497,7 @@ export default function FinanceTable({ code }: { code: string }) {
                             {/* 数值行 */}
                             <tr key={`${r.key}-${c.code}-v`} className="hover:bg-slate-50">
                               <td
-                                className={`sticky left-0 z-10 bg-white px-3 py-1.5 ${ci === 0 ? '' : 'pl-6'}`}
+                                className={`sticky left-0 z-10 bg-white px-3 pb-1 ${ci === 0 ? 'pt-2.5' : 'pl-6 pt-2.5'}`}
                               >
                                 {ci === 0 && (
                                   <div className="flex items-baseline gap-1.5">
@@ -462,7 +510,7 @@ export default function FinanceTable({ code }: { code: string }) {
                               {colsDesc.map((col) => (
                                 <td
                                   key={col.p}
-                                  className="border-l border-slate-100 px-2.5 py-1.5 text-center tabular-nums text-slate-800"
+                                  className="border-l border-slate-100 px-2.5 pb-1 pt-2.5 text-center tabular-nums text-slate-800"
                                 >
                                   {fmtVal(valOf(c, r.key, col.i), unit)}
                                 </td>
@@ -486,12 +534,11 @@ export default function FinanceTable({ code }: { code: string }) {
                                   })}
                                 </tr>
                                 <tr className="text-[11px] hover:bg-slate-50/60">
-                                  <td className="sticky left-0 z-10 bg-white px-3 py-0.5 text-[10px] text-slate-400">
-                                    环比
+                                  <td className="sticky left-0 z-10 bg-white px-3 pb-2 pt-0.5 text-[10px] text-slate-400">
+                                    单季同比
                                   </td>
                                   {colsDesc.map((col) => {
-                                    const qi = qoqIndex(col.i);
-                                    const v = qi >= 0 ? pctChange(valOf(c, r.key, col.i), valOf(c, r.key, qi)) : null;
+                                    const v = sqYoy(c, r.key, col.i);
                                     return (
                                       <td key={col.p} className={`border-l border-slate-100 px-2.5 py-0.5 text-center tabular-nums ${pctCls(v)}`}>
                                         {v === null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(1)}%`}
@@ -511,7 +558,7 @@ export default function FinanceTable({ code }: { code: string }) {
         </div>
         <div className="border-t border-slate-100 px-3 py-2 text-[11px] leading-relaxed text-slate-400">
           口径：三大报表科目为新浪披露的累计值（单位：万元，超 1 亿自动折算为亿）；财务指标（ROE 等）来自新浪财务指标页。
-          同比 = 与上一年同期相比；环比 = 与上一报告期相比；null 表示当期未披露。
+          同比 = 与上一年同期累计值相比；单季同比 = 单季值（当期累计 − 同年上一报告期累计）与上年同期单季相比，仅季报视图提供；null 表示当期未披露。
           {showAll && ' 当前为「全部数据项」模式（178 个科目 + 21 项指标），科目为累计值口径，行较多可搜索定位。'}
           {!showAll && ` 当前显示 ${rows.length} 项指标，可通过「数据显示设置」增减或搜索。`}
         </div>

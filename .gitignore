@@ -12,3 +12,10 @@ coverage
 .turbo
 next-env.d.ts
 .vercel
+
+# 本地调试截图
+finance-*.png
+*.snap.png
+
+# TS 增量构建缓存
+*.tsbuildinfo

@@ -70,13 +70,11 @@ function loadShowAll(): boolean {
   }
 }
 
-/** 万元 → 亿自动折算（对齐理杏仁「默认单位: 亿元」观感） */
+/** 万元 → 亿（统一折算，与行头「亿」标签保持一致） */
 function fmtWan(v: number | null): string {
   if (v === null || !Number.isFinite(v)) return '--';
-  const a = Math.abs(v);
-  if (a >= 1e4) return (v / 1e4).toLocaleString('zh-CN', { maximumFractionDigits: 2 });
-  if (a === 0) return '0';
-  return v.toLocaleString('zh-CN', { maximumFractionDigits: 2 });
+  if (v === 0) return '0';
+  return (v / 1e4).toLocaleString('zh-CN', { maximumFractionDigits: 2 });
 }
 
 function fmtVal(v: number | null, unit: string): string {
@@ -525,7 +523,7 @@ export default function FinanceTable({ code }: { code: string }) {
                               <>
                                 <tr className="text-[11px] hover:bg-slate-50/60">
                                   <td className="sticky left-0 z-10 bg-white px-3 py-0.5 text-[10px] text-slate-400">
-                                    同比
+                                    累积
                                   </td>
                                   {colsDesc.map((col) => {
                                     const yi = yoyIndex(col.i);
@@ -539,7 +537,7 @@ export default function FinanceTable({ code }: { code: string }) {
                                 </tr>
                                 <tr className="text-[11px] hover:bg-slate-50/60">
                                   <td className="sticky left-0 z-10 bg-white px-3 pb-2 pt-0.5 text-[10px] text-slate-400">
-                                    单季同比
+                                    单季
                                   </td>
                                   {colsDesc.map((col) => {
                                     const v = sqYoy(c, r.key, col.i);
@@ -561,8 +559,8 @@ export default function FinanceTable({ code }: { code: string }) {
           </table>
         </div>
         <div className="border-t border-slate-100 px-3 py-2 text-[11px] leading-relaxed text-slate-400">
-          口径：三大报表科目为新浪披露的累计值（单位：万元，超 1 亿自动折算为亿）；财务指标（ROE 等）来自新浪财务指标页。
-          同比 = 与上一年同期累计值相比；单季同比 = 单季值（当期累计 − 同年上一报告期累计）与上年同期单季相比，仅季报视图提供；null 表示当期未披露。
+          口径：三大报表科目为新浪披露的累计值（单位：万元，统一折算为亿元展示）；财务指标（ROE 等）来自新浪财务指标页。
+          累积 = 与上一年同期累计值相比；单季 = 单季值（当期累计 − 同年上一报告期累计）与上年同期单季相比，仅季报视图提供；null 表示当期未披露。
           {showAll && ' 当前为「全部数据项」模式（178 个科目 + 21 项指标），科目为累计值口径，行较多可搜索定位。'}
           {!showAll && ` 当前显示 ${rows.length} 项指标，可通过「数据显示设置」增减或搜索。`}
         </div>

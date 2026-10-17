@@ -46,7 +46,7 @@ button {
     @apply rounded-xl border border-slate-200/80 bg-white;
   }
   .card-pad {
-    @apply card p-4 sm:p-6;
+    @apply card p-3 sm:p-4;
   }
   .label {
     @apply text-xs text-slate-500;
@@ -67,10 +67,10 @@ button {
     @apply min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-100;
   }
   .th {
-    @apply whitespace-nowrap bg-slate-50/80 px-4 py-3 text-left text-xs font-medium text-slate-500;
+    @apply whitespace-nowrap bg-slate-50/80 px-3 py-2.5 text-left text-xs font-medium text-slate-500;
   }
   .td {
-    @apply whitespace-nowrap px-4 py-3 text-sm tabular-nums text-slate-800;
+    @apply whitespace-nowrap px-3 py-2.5 text-sm tabular-nums text-slate-800;
   }
   .page-title {
     @apply text-2xl font-semibold tracking-tight text-slate-900;

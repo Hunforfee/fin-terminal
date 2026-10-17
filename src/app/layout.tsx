@@ -20,34 +20,33 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             跳到主要内容
           </a>
           <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 backdrop-blur-xl">
-            <div className="mx-auto max-w-[1480px] px-4 sm:px-8">
-              <div className="flex min-h-20 items-center justify-between gap-4">
+            <div className="w-full px-3 sm:px-4">
+              <div className="flex min-h-12 items-center justify-between gap-3">
                 <Link
                   href="/"
                   className="flex shrink-0 items-center gap-2.5"
                   aria-label="FinTerminal 首页"
                 >
-                  <span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-900 text-lg font-semibold text-white">
+                  <span className="grid h-7 w-7 place-items-center rounded-xl bg-slate-900 text-lg font-semibold text-white">
                     F
                   </span>
                   <span className="hidden text-lg font-semibold tracking-tight sm:inline">
                     FinTerminal
-                    <span className="ml-3 hidden text-xs font-normal text-slate-400 lg:inline">
-                      金融数据终端
-                    </span>
                   </span>
                 </Link>
-                <div className="w-full max-w-[420px]">
+                <div className="hidden xl:block">
+                  <AppNav />
+                </div>
+                <div className="ml-auto w-full max-w-[420px]">
                   <SearchBox placeholder="搜索股票、指数或基金" />
                 </div>
               </div>
-              <AppNav />
+              <div className="xl:hidden">
+                <AppNav />
+              </div>
             </div>
           </header>
-          <main
-            id="main-content"
-            className="mx-auto min-h-[65vh] max-w-[1480px] px-4 py-6 sm:px-8 sm:py-8"
-          >
+          <main id="main-content" className="min-h-[65vh] w-full px-3 py-3 sm:px-4 sm:py-4">
             {children}
           </main>
         </WatchlistProvider>

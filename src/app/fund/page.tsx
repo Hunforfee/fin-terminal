@@ -13,10 +13,7 @@ export default async function FundListPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-lg font-semibold text-slate-900">基金 / ETF</h1>
-        <p className="mt-1 text-xs text-slate-500">
-          场内基金二级市场行情，按代码排序。点击可查看历史走势与区间表现。
-        </p>
+        <h1 className="page-title">基金 / ETF</h1>
       </div>
 
       <div className="card overflow-x-auto">
@@ -48,7 +45,9 @@ export default async function FundListPage() {
                     <div className="font-mono text-xs text-slate-400">{q.code}</div>
                   </Link>
                 </td>
-                <td className="td text-xs text-slate-500">{metaMap.get(q.code)?.industry ?? '--'}</td>
+                <td className="td text-xs text-slate-500">
+                  {metaMap.get(q.code)?.industry ?? '--'}
+                </td>
                 <td className={`td font-medium ${toneClass(q.change)}`}>{price(q.price)}</td>
                 <td className={`td ${toneClass(q.changePct)}`}>{signedPct(q.changePct)}</td>
                 <td className="td text-slate-500">{price(q.open)}</td>

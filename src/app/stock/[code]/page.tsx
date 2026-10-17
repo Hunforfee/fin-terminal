@@ -16,11 +16,21 @@ export default async function StockPage({ params }: { params: Promise<{ code: st
   if (!quote) notFound();
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-xs text-slate-500">
+        <Link href="/" className="hover:text-brand-600">
+          研究工作台
+        </Link>
+        <span>/</span>
+        <span>{quote.name}</span>
+      </div>
       <QuoteHeader
         quote={quote}
         extra={
-          <Link href={`/stock/${quote.code}/finance`} className="btn border-brand-300 text-brand-700">
+          <Link
+            href={`/stock/${quote.code}/finance`}
+            className="btn border-brand-300 text-brand-700"
+          >
             财务体检 →
           </Link>
         }
@@ -30,4 +40,3 @@ export default async function StockPage({ params }: { params: Promise<{ code: st
     </div>
   );
 }
-

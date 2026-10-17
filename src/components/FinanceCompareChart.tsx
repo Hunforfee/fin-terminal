@@ -23,7 +23,7 @@ export interface FinanceCompareChartProps {
 
 const C_PRIMARY = '#3b82f6';
 const C_COMPARE = '#f97316';
-const C_MEAN = '#ef4444';
+const C_MEAN = '#94a3b8';
 
 function stats(values: (number | null)[]) {
   const v = values.filter((x): x is number => x !== null && Number.isFinite(x));
@@ -35,13 +35,14 @@ function stats(values: (number | null)[]) {
     min: sorted[0],
     median: sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2,
     mean: v.reduce((a, b) => a + b, 0) / v.length,
-    current: v[v.length - 1],
+    current: values.at(-1) ?? null,
   };
 }
 
 /** 万元 → 亿 的展示口径：≥1 亿显示「x.x亿」，否则显示原万元值 */
 function fmtWan(v: number): string {
-  if (Math.abs(v) >= 1e4) return `${(v / 1e4).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}亿`;
+  if (Math.abs(v) >= 1e4)
+    return `${(v / 1e4).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}亿`;
   return `${v.toLocaleString('zh-CN', { maximumFractionDigits: 1 })}万`;
 }
 
@@ -53,7 +54,11 @@ function fmtVal(v: number, unit: string): string {
 
 function yFmt(unit: string) {
   if (unit === 'pct') return (v: number) => `${v}%`;
-  if (unit === 'wan') return (v: number) => (Math.abs(v) >= 1e4 ? `${(v / 1e4).toLocaleString('zh-CN', { maximumFractionDigits: 1 })}亿` : `${v}`);
+  if (unit === 'wan')
+    return (v: number) =>
+      Math.abs(v) >= 1e4
+        ? `${(v / 1e4).toLocaleString('zh-CN', { maximumFractionDigits: 1 })}亿`
+        : `${v}`;
   return (v: number) => `${v}`;
 }
 
@@ -80,7 +85,7 @@ export default function FinanceCompareChart({
       lineStyle: { width: 2, color },
       itemStyle: { color },
       label: {
-        show: true,
+        show: false,
         position: isPrimary ? 'top' : 'bottom',
         fontSize: 10,
         color,
@@ -103,8 +108,8 @@ export default function FinanceCompareChart({
                 show: true,
                 position: 'insideStartTop',
                 fontSize: 10,
-                color: '#fff',
-                backgroundColor: C_MEAN,
+                color: '#64748b',
+                backgroundColor: '#f8fafc',
                 padding: [2, 4],
                 borderRadius: 2,
                 formatter: `${s.name}均值 ${indicator.unit === 'pct' ? `${st.mean.toFixed(1)}%` : indicator.unit === 'wan' ? fmtWan(st.mean) : st.mean.toFixed(1)}`,
@@ -128,7 +133,8 @@ export default function FinanceCompareChart({
         backgroundColor: 'rgba(255,255,255,0.97)',
         borderColor: '#e2e8f0',
         textStyle: { color: '#0f172a', fontSize: 12 },
-        valueFormatter: (v: number | null) => (v === null || v === undefined ? '--' : fmtVal(v, indicator.unit)),
+        valueFormatter: (v: number | null) =>
+          v === null || v === undefined ? '--' : fmtVal(v, indicator.unit),
       },
       legend: {
         top: 0,
@@ -149,7 +155,11 @@ export default function FinanceCompareChart({
       yAxis: {
         scale: true,
         axisLine: { show: false },
-        axisLabel: { color: '#94a3b8', fontSize: 10, formatter: yFmt(indicator.unit) },
+        axisLabel: {
+          color: '#94a3b8',
+          fontSize: 10,
+          formatter: yFmt(indicator.unit),
+        },
         splitLine: { lineStyle: { color: '#f1f5f9' } },
       },
       series,
@@ -158,20 +168,19 @@ export default function FinanceCompareChart({
 
   const stA = stats(primary.values);
   const stB = compare ? stats(compare.values) : null;
-  const unitSuffix = indicator.unit === 'pct' ? '%' : '';
   const unitStr = String(indicator.unit);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
+    <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[180px_minmax(0,1fr)]">
       {/* 统计卡（主公司口径，对齐参考图左栏） */}
       <div className="space-y-3">
         <div>
-          <div className="text-xs text-slate-500">当前值</div>
+          <div className="text-xs text-slate-500">最新所列报告期</div>
           <div className="text-2xl font-semibold tabular" style={{ color: C_PRIMARY }}>
-            {stA ? fmtVal(stA.current, unitStr) : '--'}
+            {stA?.current != null ? fmtVal(stA.current, unitStr) : '--'}
           </div>
         </div>
-        <div className="space-y-1 text-xs">
+        <div className="space-y-2 text-xs">
           <div className="mb-1 font-medium text-slate-700">统计数据（{primary.name}）</div>
           {stA ? (
             <StatRows st={stA} unit={unitStr} />

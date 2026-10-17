@@ -19,10 +19,10 @@ export default function QuoteHeader({ quote, extra }: { quote: Quote; extra?: Re
   const inList = wl.has(quote.code);
 
   return (
-    <div className="card-pad flex flex-wrap items-end justify-between gap-4">
+    <div className="card-pad flex flex-wrap items-center justify-between gap-6">
       <div>
         <div className="flex items-center gap-2">
-          <h1 className="text-xl font-semibold text-slate-900">{quote.name}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{quote.name}</h1>
           <span className="font-mono text-sm text-slate-500">{quote.code}</span>
           <span className="chip bg-slate-100 text-slate-500">{KIND_TEXT[quote.kind] ?? '—'}</span>
           {quote.stale && (
@@ -35,8 +35,10 @@ export default function QuoteHeader({ quote, extra }: { quote: Quote; extra?: Re
           )}
         </div>
 
-        <div className="mt-2 flex flex-wrap items-baseline gap-3">
-          <span className={`text-3xl font-semibold tabular ${toneClass(quote.change)}`}>
+        <div className="mt-5 flex flex-wrap items-baseline gap-3">
+          <span
+            className={`text-4xl font-semibold tracking-tight tabular ${toneClass(quote.change)}`}
+          >
             {price(quote.price)}
           </span>
           <span className={`text-base tabular ${toneClass(quote.change)}`}>
@@ -44,7 +46,7 @@ export default function QuoteHeader({ quote, extra }: { quote: Quote; extra?: Re
           </span>
         </div>
 
-        <div className="mt-1 text-xs text-slate-400">
+        <div className="mt-3 text-xs text-slate-500">
           {fmtTime(quote.ts)} · 数据源 {quote.source}
           {quote.market ? ` · ${quote.market}` : ''}
         </div>
@@ -55,6 +57,7 @@ export default function QuoteHeader({ quote, extra }: { quote: Quote; extra?: Re
         <button
           onClick={() => wl.toggle(quote.code)}
           className={inList ? 'btn border-brand-300 text-brand-700' : 'btn-primary'}
+          aria-pressed={inList}
           title={inList ? '从自选移除' : '加入自选'}
         >
           {inList ? '★ 已自选' : '☆ 加自选'}

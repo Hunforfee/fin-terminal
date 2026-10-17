@@ -47,11 +47,9 @@ interface MembersResp {
 type SortKey = 'totalMarketCap' | 'changePct' | 'pe' | 'pb' | 'roe' | 'turnoverRate';
 
 const COLUMNS: { key: SortKey; label: string }[] = [
-  { key: 'changePct', label: '涨跌幅' },
   { key: 'pe', label: 'PE-TTM' },
   { key: 'pb', label: 'PB' },
-  { key: 'roe', label: 'ROE' },
-  { key: 'turnoverRate', label: '换手率' },
+  { key: 'roe', label: 'ROE（估算）' },
   { key: 'totalMarketCap', label: '总市值' },
 ];
 
@@ -189,18 +187,19 @@ export default function IndustryPage() {
   const breadcrumb = [l1, l2, l3].filter(Boolean) as string[];
 
   return (
-    <main className="w-full px-3 py-4 md:px-5">
+    <div className="w-full space-y-5">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h1 className="flex items-center gap-2 text-lg font-bold text-slate-900 md:text-xl">
-            行业板块
-            <span className="rounded bg-brand-50 px-1.5 py-0.5 text-xs font-medium text-brand-700">申万 2021</span>
+          <h1 className="page-title flex items-center gap-3">
+            行业研究
+            <span className="rounded bg-brand-50 px-1.5 py-0.5 text-xs font-medium text-brand-700">
+              申万 2021
+            </span>
           </h1>
           <p className="mt-1 text-xs text-slate-500">
             {tree
               ? `${tree.stats.l1} 个一级 · ${tree.stats.l2} 个二级 · ${tree.stats.l3} 个三级行业，覆盖 ${tree.stats.stocks.toLocaleString()} 只 A 股`
               : '正在加载分类树…'}
-            ，逐级点击查看该分类下全部成分股
           </p>
         </div>
         <input
@@ -211,19 +210,38 @@ export default function IndustryPage() {
         />
       </div>
 
-      {treeErr && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{treeErr}</div>}
+      {treeErr && (
+        <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {treeErr}
+        </div>
+      )}
 
       {/* 三级联动选择器 */}
-      <div className="mb-3 space-y-1.5 rounded-lg border border-slate-200 bg-white p-2.5">
-        {(
-          [
-            { label: '一级', items: tree?.industries ?? [], active: l1, key: 'l1' as const },
-            { label: '二级', items: curL1?.children ?? [], active: l2, key: 'l2' as const },
-            { label: '三级', items: curL2?.children ?? [], active: l3, key: 'l3' as const },
-          ]
-        ).map((group) => (
+      <div className="card-pad mb-3 space-y-4">
+        {[
+          {
+            label: '一级',
+            items: tree?.industries ?? [],
+            active: l1,
+            key: 'l1' as const,
+          },
+          {
+            label: '二级',
+            items: curL1?.children ?? [],
+            active: l2,
+            key: 'l2' as const,
+          },
+          {
+            label: '三级',
+            items: curL2?.children ?? [],
+            active: l3,
+            key: 'l3' as const,
+          },
+        ].map((group) => (
           <div key={group.key} className="flex items-start gap-2">
-            <span className="mt-1 w-8 shrink-0 text-[11px] font-medium text-slate-400">{group.label}</span>
+            <span className="mt-1 w-8 shrink-0 text-[11px] font-medium text-slate-400">
+              {group.label}
+            </span>
             <div className="flex flex-wrap gap-1">
               {group.key !== 'l1' && (
                 <button
@@ -233,8 +251,10 @@ export default function IndustryPage() {
                       setL3(null);
                     } else setL3(null);
                   }}
-                  className={`rounded px-2 py-0.5 text-xs transition ${
-                    group.active === null ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  className={`min-h-9 rounded-md px-2.5 py-1.5 text-xs transition ${
+                    group.active === null
+                      ? 'bg-brand-600 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
                   全部
@@ -245,7 +265,13 @@ export default function IndustryPage() {
                 return (
                   <button
                     key={it.name}
-                    onClick={() => (group.key === 'l1' ? pickL1(it.name) : group.key === 'l2' ? pickL2(it.name) : pickL3(it.name))}
+                    onClick={() =>
+                      group.key === 'l1'
+                        ? pickL1(it.name)
+                        : group.key === 'l2'
+                          ? pickL2(it.name)
+                          : pickL3(it.name)
+                    }
                     title={`${it.name}（${it.count} 只）`}
                     className={`rounded px-2 py-0.5 text-xs transition ${
                       active
@@ -254,7 +280,9 @@ export default function IndustryPage() {
                     }`}
                   >
                     {it.name}
-                    <span className={`ml-1 ${active ? 'text-white/70' : 'text-slate-400'}`}>{it.count}</span>
+                    <span className={`ml-1 ${active ? 'text-white/70' : 'text-slate-400'}`}>
+                      {it.count}
+                    </span>
                   </button>
                 );
               })}
@@ -274,7 +302,9 @@ export default function IndustryPage() {
           {breadcrumb.map((b, i) => (
             <span key={b} className="flex items-center gap-1">
               {i > 0 && <span className="text-slate-300">/</span>}
-              <span className={i === breadcrumb.length - 1 ? 'text-brand-700' : 'text-slate-500'}>{b}</span>
+              <span className={i === breadcrumb.length - 1 ? 'text-brand-700' : 'text-slate-500'}>
+                {b}
+              </span>
             </span>
           ))}
         </div>
@@ -284,18 +314,22 @@ export default function IndustryPage() {
               成分股 <b className="text-slate-800">{data?.count}</b> 只
               {data?.declared !== undefined && data.declared !== data.count && (
                 <span className="ml-1 text-amber-600">
-                  （分类收录 {data.declared} 只，{data.declared - (data.count ?? 0)} 只暂无行情）
+                  （分类收录 {data.declared} 只，
+                  {data.declared - (data.count ?? 0)} 只暂无行情）
                 </span>
               )}
             </span>
             <span>
-              涨 <span className="c-up">{summary.up}</span> / 跌 <span className="c-down">{summary.down}</span>
+              PE 中位{' '}
+              <b className="text-slate-800">
+                {summary.peMed === null ? '--' : summary.peMed.toFixed(1)}
+              </b>
             </span>
             <span>
-              PE 中位 <b className="text-slate-800">{summary.peMed === null ? '--' : summary.peMed.toFixed(1)}</b>
-            </span>
-            <span>
-              PB 中位 <b className="text-slate-800">{summary.pbMed === null ? '--' : summary.pbMed.toFixed(2)}</b>
+              PB 中位{' '}
+              <b className="text-slate-800">
+                {summary.pbMed === null ? '--' : summary.pbMed.toFixed(2)}
+              </b>
             </span>
             <span>
               合计市值 <b className="text-slate-800">{yi(summary.cap)}</b>
@@ -305,19 +339,27 @@ export default function IndustryPage() {
                 含亏损股 {summary.loss} 只（PE 为负，不剔除）
               </span>
             )}
-            {updatedAt && <span className="text-[11px] text-slate-400">行情 {fmtTime(updatedAt)}</span>}
+            {updatedAt && (
+              <span className="text-[11px] text-slate-400">行情 {fmtTime(updatedAt)}</span>
+            )}
           </div>
         )}
       </div>
 
       {data?.note && (
-        <div className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{data.note}</div>
+        <div className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          {data.note}
+        </div>
       )}
-      {err && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{err}</div>}
+      {err && (
+        <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {err}
+        </div>
+      )}
 
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table className="w-full min-w-[880px] text-sm">
-          <thead>
+      <div className="max-h-[680px] overflow-auto rounded-xl border border-slate-200 bg-white">
+        <table className="w-full min-w-[740px] text-sm">
+          <thead className="sticky top-0 z-10">
             <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
               <th className="w-12 px-3 py-2 font-medium">#</th>
               <th className="px-3 py-2 font-medium">股票</th>
@@ -329,7 +371,9 @@ export default function IndustryPage() {
                   className="cursor-pointer select-none whitespace-nowrap px-3 py-2 font-medium hover:text-slate-900"
                 >
                   {c.label}
-                  <span className="ml-1 text-slate-400">{sortKey === c.key ? (asc ? '↑' : '↓') : ''}</span>
+                  <span className="ml-1 text-slate-400">
+                    {sortKey === c.key ? (asc ? '↑' : '↓') : ''}
+                  </span>
                 </th>
               ))}
             </tr>
@@ -337,7 +381,7 @@ export default function IndustryPage() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={9} className="px-3 py-12 text-center text-sm text-slate-500">
+                <td colSpan={7} className="px-3 py-12 text-center text-sm text-slate-500">
                   正在拉取「{target?.name}」成分股行情…
                 </td>
               </tr>
@@ -353,19 +397,19 @@ export default function IndustryPage() {
                     </Link>
                   </td>
                   <td className="px-3 py-2 tabular-nums text-slate-700">{num(r.price)}</td>
-                  <td className={`px-3 py-2 tabular-nums ${toneClass(r.changePct)}`}>{signedPct(r.changePct)}</td>
-                  <td className={`px-3 py-2 tabular-nums ${r.pe !== null && r.pe < 0 ? 'text-amber-600' : 'text-slate-700'}`}>
+                  <td
+                    className={`px-3 py-2 tabular-nums ${r.pe !== null && r.pe < 0 ? 'text-amber-600' : 'text-slate-700'}`}
+                  >
                     {num(r.pe, 1)}
                   </td>
                   <td className="px-3 py-2 tabular-nums text-slate-700">{num(r.pb)}</td>
                   <td className="px-3 py-2 tabular-nums text-slate-700">{pct(r.roe, 1)}</td>
-                  <td className="px-3 py-2 tabular-nums text-slate-600">{pct(r.turnoverRate, 2)}</td>
                   <td className="px-3 py-2 tabular-nums text-slate-700">{yi(r.totalMarketCap)}</td>
                 </tr>
               ))}
             {!loading && rows.length === 0 && !err && (
               <tr>
-                <td colSpan={9} className="px-3 py-12 text-center text-sm text-slate-400">
+                <td colSpan={7} className="px-3 py-12 text-center text-sm text-slate-400">
                   {data?.note ? '该分类暂无成分股' : '没有匹配的股票'}
                 </td>
               </tr>
@@ -374,11 +418,14 @@ export default function IndustryPage() {
         </table>
       </div>
 
-      <p className="mt-3 text-xs leading-5 text-slate-400">
-        分类标准：<b>申万行业分类 2021 版</b>（一级 31 / 二级 131 / 三级 335）。成分股按东方财富 F10 行业板块映射到申万三档，
-        <b>不剔除亏损股</b>，PE 为负以橙色标注。ROE 由 PB/PE 恒等式派生，亏损股该式不成立故显示 “--”。
-        申万二级「国有大型银行Ⅱ / 股份制银行Ⅱ / 城商行Ⅱ / 农商行Ⅱ」在数据源侧与「银行Ⅱ」合并，暂无独立成分股。
-      </p>
-    </main>
+      <details className="mt-3 text-xs leading-6 text-slate-500">
+        <summary>分类与数据口径</summary>
+        分类标准：<b>申万行业分类 2021 版</b>（一级 31 / 二级 131 / 三级 335）。成分股按东方财富 F10
+        行业板块映射到申万三档，
+        <b>不剔除亏损股</b>，PE 为负以橙色标注。ROE 由 PB/PE 恒等式派生，亏损股该式不成立故显示
+        “--”。 申万二级「国有大型银行Ⅱ / 股份制银行Ⅱ / 城商行Ⅱ /
+        农商行Ⅱ」在数据源侧与「银行Ⅱ」合并，暂无独立成分股。
+      </details>
+    </div>
   );
 }

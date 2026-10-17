@@ -42,17 +42,20 @@ fi
 LOCK_BEFORE="$(md5sum package-lock.json 2>/dev/null | awk '{print $1}')"
 
 echo "==> 拉取 $BRANCH"
-# 网络偶发 TLS 中断（GnuTLS -110），重试 3 次
+# 网络偶发 TLS 中断（GnuTLS -110）/ 低速超时，重试 3 次
 n=0
-until git -c credential.helper= -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 \
-      fetch "$FETCH_URL" "$BRANCH"; do
+while true; do
+  if git -c credential.helper= -c http.lowSpeedLimit=10 -c http.lowSpeedTime=60 \
+       fetch "$FETCH_URL" "$BRANCH" && git rev-parse --verify -q FETCH_HEAD >/dev/null; then
+    break
+  fi
   n=$((n + 1))
   if (( n >= 3 )); then
     echo "!! 拉取失败（已重试 $n 次），请检查网络后重跑" >&2
     exit 3
   fi
-  echo "==> 第 $n 次失败，2 秒后重试"
-  sleep 2
+  echo "==> 第 $n 次失败，3 秒后重试"
+  sleep 3
 done
 git reset --hard FETCH_HEAD
 

@@ -119,6 +119,7 @@ export default function QuoteTable({ codes, removable = false, emptyText = 'æš‚æ
                 <td className="td">
                   <Link
                     href={q.kind === 'index' ? `/index/${q.code}` : `/stock/${q.code}`}
+                    prefetch={false}
                     className="hover:text-brand-600"
                   >
                     <div className="font-medium text-slate-900">{q.name}</div>

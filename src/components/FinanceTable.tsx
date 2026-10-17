@@ -12,7 +12,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import FieldPicker, { allFieldMetas, type PickerCatalog } from '@/components/FieldPicker';
 import { INDICATORS } from '@/lib/datasource/sinaFinancial';
-import { STOCKS } from '@/lib/universe';
 
 interface CompanyFinancials {
   code: string;
@@ -102,7 +101,7 @@ function pctCls(v: number | null): string {
 export default function FinanceTable({ code }: { code: string }) {
   const [granularity, setGranularity] = useState<'annual' | 'semi' | 'quarter'>('quarter');
   const [years, setYears] = useState<number>(5);
-  const [extraCodes, setExtraCodes] = useState<string[]>([]);
+  const [view, setView] = useState<'indicators' | 'pl' | 'bs' | 'cf'>('indicators');
   const [fields, setFields] = useState<string[]>(DEFAULT_FIELDS);
   const [showAll, setShowAll] = useState(false);
   const [kw, setKw] = useState('');
@@ -152,17 +151,23 @@ export default function FinanceTable({ code }: { code: string }) {
     return map;
   }, [catalog]);
 
-  /** 实际请求的字段：显示全部 = 目录内全部；否则用户所选 */
+  /** 实际请求的字段：按视图切换——指标=用户所选/全部；三表=该表全部科目 */
   const fetchFields = useMemo(() => {
-    if (showAll) {
-      const all = Array.from(fieldMetas.keys()).filter((k) => !k.startsWith('fx_'));
-      return all.length > 0 ? all : fields;
+    if (view === 'indicators') {
+      if (showAll) {
+        const all = Array.from(fieldMetas.keys()).filter((k) => !k.startsWith('fx_'));
+        return all.length > 0 ? all : fields;
+      }
+      return fields;
     }
-    return fields;
-  }, [showAll, fieldMetas, fields]);
+    const stId = view === 'bs' ? 'balance' : view === 'pl' ? 'profit' : 'cashflow';
+    return Array.from(fieldMetas.entries())
+      .filter(([, m]) => m.statement === stId)
+      .map(([k]) => k);
+  }, [view, showAll, fieldMetas, fields]);
 
   const fieldsSig = useMemo(() => [...fetchFields].sort().join(','), [fetchFields]);
-  const codesSig = [code, ...extraCodes].join(',');
+  const codesSig = code;
 
   useEffect(() => {
     if (fetchFields.length === 0) return;
@@ -268,13 +273,6 @@ export default function FinanceTable({ code }: { code: string }) {
     return ((curQ - prevQ) / Math.abs(prevQ)) * 100;
   };
 
-  const peers = useMemo(() => {
-    const self = STOCKS.find((s) => s.code === code);
-    const pool = self ? STOCKS.filter((s) => s.industry === self.industry && s.code !== code) : [];
-    const rest = STOCKS.filter((s) => s.code !== code && !pool.includes(s));
-    return [...pool, ...rest];
-  }, [code]);
-
   /** 行渲染列表：搜索过滤 + 「仅显示有数据」过滤 */
   const rows = useMemo(() => {
     let list = fetchFields.map((key) => ({ key, meta: fieldMetas.get(key) }));
@@ -314,14 +312,32 @@ export default function FinanceTable({ code }: { code: string }) {
     URL.revokeObjectURL(a.href);
   };
 
-  const toggleExtra = (c: string) => {
-    setExtraCodes((xs) => (xs.includes(c) ? xs.filter((x) => x !== c) : xs.length < 3 ? [...xs, c] : xs));
-  };
-
   return (
     <div className="space-y-3">
       {/* 工具栏 */}
       <div className="card flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
+        {/* 报表切换：指标 / 三大报表 */}
+        <div className="flex items-center gap-1">
+          {([
+            ['indicators', '指标'],
+            ['pl', '利润表'],
+            ['bs', '资产负债表'],
+            ['cf', '现金流量表'],
+          ] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setView(key)}
+              className={`rounded px-2.5 py-1 text-xs transition ${
+                view === key ? 'bg-brand-600 font-medium text-white' : 'text-slate-500 hover:bg-slate-100'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="h-4 w-px bg-slate-200" />
+
         <div className="flex items-center gap-1">
           {GRAN.map((g) => (
             <button
@@ -352,39 +368,8 @@ export default function FinanceTable({ code }: { code: string }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="hidden text-xs text-slate-500 sm:inline">对比公司：</span>
           <div className="flex items-center gap-1">
             <span className="chip bg-blue-100 text-blue-700">{primary?.name ?? code}</span>
-            {extraCodes.map((c) => {
-              const name = STOCKS.find((s) => s.code === c)?.name ?? c;
-              return (
-                <button
-                  key={c}
-                  onClick={() => toggleExtra(c)}
-                  className="chip bg-orange-100 text-orange-700 hover:bg-orange-200"
-                  title="点击移除"
-                >
-                  {name} ✕
-                </button>
-              );
-            })}
-            {extraCodes.length < 3 && (
-              <select
-                className="input w-32 py-1 text-xs md:w-40"
-                value=""
-                onChange={(e) => e.target.value && toggleExtra(e.target.value)}
-                aria-label="添加对比公司"
-              >
-                <option value="">+ 添加公司</option>
-                {peers
-                  .filter((p) => !extraCodes.includes(p.code))
-                  .map((p) => (
-                    <option key={p.code} value={p.code}>
-                      {p.name}（{p.code}）
-                    </option>
-                  ))}
-              </select>
-            )}
           </div>
         </div>
 
@@ -407,15 +392,17 @@ export default function FinanceTable({ code }: { code: string }) {
               </button>
             )}
           </div>
-          <button
-            onClick={() => setShowAll((v) => !v)}
-            className={`rounded px-2 py-1 text-xs transition ${
-              showAll ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-            title="展示三大报表全部科目 + 21 项指标"
-          >
-            全部数据项
-          </button>
+          {view === 'indicators' && (
+            <button
+              onClick={() => setShowAll((v) => !v)}
+              className={`rounded px-2 py-1 text-xs transition ${
+                showAll ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+              title="展示三大报表全部科目 + 21 项指标"
+            >
+              全部数据项
+            </button>
+          )}
           <button
             onClick={() => setOnlyHasData((v) => !v)}
             className={`rounded px-2 py-1 text-xs transition ${
@@ -425,12 +412,14 @@ export default function FinanceTable({ code }: { code: string }) {
           >
             {onlyHasData ? '隐藏空行' : '含空行'}
           </button>
-          <button
-            onClick={() => setPickerOpen(true)}
-            className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600 transition hover:bg-slate-200"
-          >
-            数据显示设置
-          </button>
+          {view === 'indicators' && (
+            <button
+              onClick={() => setPickerOpen(true)}
+              className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600 transition hover:bg-slate-200"
+            >
+              数据显示设置
+            </button>
+          )}
           <button
             onClick={exportCsv}
             className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600 transition hover:bg-slate-200"
@@ -567,7 +556,7 @@ export default function FinanceTable({ code }: { code: string }) {
       </div>
 
       <FieldPicker
-        open={pickerOpen}
+        open={pickerOpen && view === 'indicators'}
         catalog={catalog}
         selected={fields}
         defaultSelected={DEFAULT_FIELDS}

@@ -176,6 +176,16 @@ export default function FinanceTable({ code }: { code: string }) {
     return map;
   }, [catalog]);
 
+  /** 港股等非 A 股目录：用户本地保存的 A 股科目 key 全部失配时，改用服务端推荐的默认字段 */
+  useEffect(() => {
+    if (!catalog) return;
+    const dft = (catalog as { defaultFields?: string[] }).defaultFields;
+    if (!dft || dft.length === 0) return;
+    const hasStatementField = fields.some((k) => /^(bs|pl|cf)_/.test(k) && fieldMetas.has(k));
+    if (!hasStatementField) setFields(dft);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalog]);
+
   /** 实际请求的字段：按视图切换——指标=用户所选/全部；三表=该表全部科目 */
   const fetchFields = useMemo(() => {
     if (view === 'indicators') {

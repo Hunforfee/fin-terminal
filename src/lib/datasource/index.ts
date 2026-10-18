@@ -16,6 +16,7 @@ import * as sina from './sina';
 import * as eastmoney from './eastmoney';
 import * as ifind from './ifind';
 import * as snapshot from './snapshot';
+import * as hkFinance from './hkFinance';
 import { cached, defaultTtl, putCache } from './cache';
 import { normalizeCode, normalizeStockCode } from './codes';
 import { computeValuation, buildFinancialSummary } from '../analytics';
@@ -241,8 +242,19 @@ export async function getMinute(input: string): Promise<MinutePoint[]> {
  * 价格为不复权收盘价 —— 与前复权价倒推的旧口径相比，不会因除权而低估历史 PE。
  */
 export async function getValuation(input: string, years = 10, method: ValuationMethod = 'disclosure'): Promise<Valuation> {
-  const n = normalizeStockCode(input);
-  if (!n || n.kind !== 'stock') throw new Error('真实财报估值仅支持 A 股股票');
+  const n = normalizeCode(input);
+  if (!n || n.kind !== 'stock') throw new Error('真实财报估值仅支持 A 股 / 港股股票');
+  if (n.market === 'HK') {
+    const span = Math.min(Math.max(years, 1), 10);
+    return cached(`val-hk-v1:${n.symbol}:${span}`, 60 * 60 * 1000, async () => {
+      const [q, raw] = await Promise.all([
+        getQuote(n.symbol),
+        getKLine(n.symbol, 'day', 'none', 3200, ymdYearsAgo(span + 1)),
+      ]);
+      if (!q) throw new Error('行情获取失败');
+      return hkFinance.buildHkValuation(`${n.code}.HK`, n.code, raw.candles, q, span);
+    });
+  }
   const span = Math.min(Math.max(years, 1), 10);
   return cached(`val-qfq-v1:${n.symbol}:${span}:${method}`, defaultTtl(), async () => {
     const start = ymdYearsAgo(span + 1);
@@ -452,22 +464,37 @@ export async function getFinancialCompare(
   return cached(`fincomp:${list.join(',')}:${years}:${granularity}`, 60 * 60 * 1000, async () => {
     const results = await Promise.all(
       list.map(async (c) => {
-        const n = normalizeStockCode(c);
+        const n = normalizeCode(c);
         if (!n) throw new Error(`无法解析代码 ${c}`);
         const q = await getQuote(n.symbol).catch(() => null);
         let f: sinaFinancial.CompanyFinancials;
-        try {
-          f = await sinaFinancial.fetchSinaFinancial(n.code, years, q?.name);
-        } catch {
-          // 财务页抓取失败时返回空骨架，前端提示而非白屏
-          f = {
-            code: n.code,
-            name: q?.name ?? n.code,
-            periods: [],
-            periodLabels: [],
-            series: {},
-            source: sinaFinancial.PROVIDER_NAME,
-          };
+        if (n.market === 'HK') {
+          f = await hkFinance
+            .fetchHkFinancials(`${n.code}.HK`, n.code, years, q?.name)
+            .catch(() => {
+              return {
+                code: n.code,
+                name: q?.name ?? n.code,
+                periods: [],
+                periodLabels: [],
+                series: {},
+                source: hkFinance.PROVIDER_NAME,
+              } as sinaFinancial.CompanyFinancials;
+            });
+        } else {
+          try {
+            f = await sinaFinancial.fetchSinaFinancial(n.code, years, q?.name);
+          } catch {
+            // 财务页抓取失败时返回空骨架，前端提示而非白屏
+            f = {
+              code: n.code,
+              name: q?.name ?? n.code,
+              periods: [],
+              periodLabels: [],
+              series: {},
+              source: sinaFinancial.PROVIDER_NAME,
+            };
+          }
         }
         return sinaFinancial.filterByGranularity(f, granularity);
       }),
@@ -486,9 +513,22 @@ import * as sinaStatements from './sinaStatements';
 
 /** 三大报表字段目录（含全部披露科目），缓存 24h。 */
 export async function getFinanceFieldsCatalog(code: string) {
-  const n = normalizeStockCode(code);
+  const n = normalizeCode(code);
   if (!n) throw new Error(`无法解析代码 ${code}`);
   const q = await getQuote(n.symbol).catch(() => null);
+  if (n.market === 'HK') {
+    const catalog = await cached(`fincatalog-hk:${n.symbol}`, 24 * 60 * 60 * 1000, () =>
+      hkFinance.fetchHkCatalog(`${n.code}.HK`),
+    );
+    return {
+      code: n.code,
+      name: q?.name ?? n.code,
+      statements: catalog,
+      indicators: sinaFinancial.INDICATORS,
+      indicatorGroups: sinaFinancial.GROUP_META,
+      defaultFields: hkDefaultFields(catalog),
+    };
+  }
   const catalog = await cached(`fincatalog:${n.code}`, 24 * 60 * 60 * 1000, () =>
     sinaStatements.fetchStatementCatalog(n.code),
   );
@@ -499,6 +539,18 @@ export async function getFinanceFieldsCatalog(code: string) {
     indicators: sinaFinancial.INDICATORS,
     indicatorGroups: sinaFinancial.GROUP_META,
   };
+}
+
+/** 港股合并报表默认展示字段：指标 + 各表前几个科目（按东财披露顺序） */
+function hkDefaultFields(catalog: { id: string; groups: { fields: { key: string }[] }[] }[]): string[] {
+  const picks: string[] = ['roe', 'debtRatio', 'eps', 'bps', 'netMargin', 'revenueGrowth', 'profitGrowth'];
+  const want: Record<string, number> = { profit: 4, balance: 4, cashflow: 2 };
+  for (const st of catalog) {
+    const n = want[st.id] ?? 0;
+    const keys = (st.groups[0]?.fields ?? []).slice(0, n).map((f) => f.key);
+    picks.push(...keys);
+  }
+  return picks;
 }
 
 /**
@@ -516,20 +568,43 @@ export async function getCustomFinancialCompare(
   return cached(`finfield:${list.join(',')}:${fieldKey}:${years}:${granularity}`, 60 * 60 * 1000, async () => {
     const results = await Promise.all(
       list.map(async (c) => {
-        const n = normalizeStockCode(c);
+        const n = normalizeCode(c);
         if (!n) throw new Error(`无法解析代码 ${c}`);
         const q = await getQuote(n.symbol).catch(() => null);
+        if (n.market === 'HK') {
+          return filterCustom(
+            await hkFinance.fetchHkCustomFinancials(`${n.code}.HK`, n.code, fields, years, q?.name),
+            granularity,
+          );
+        }
         let f: sinaStatements.CustomFinancials;
         try {
           f = await sinaStatements.fetchCustomFinancials(n.code, fields, years, q?.name);
         } catch {
           throw new Error(`无法获取 ${q?.name ?? n.code} 的财报数据，请稍后重试`);
         }
-        return sinaStatements.filterByGranularityCustom(f, granularity);
+        return filterCustom(f, granularity);
       }),
     );
     return { companies: results };
   });
+}
+
+/** 粒度筛选（A 股 / 港股共用逻辑） */
+function filterCustom(
+  f: sinaStatements.CustomFinancials,
+  g: 'annual' | 'semi' | 'quarter',
+): sinaStatements.CustomFinancials {
+  if (g === 'quarter') return f;
+  const keep = f.periods
+    .map((p, i) => ({ p, i }))
+    .filter(({ p }) => (g === 'annual' ? p.endsWith('-12-31') : p.endsWith('-12-31') || p.endsWith('-06-30')));
+  return {
+    ...f,
+    periods: keep.map((k) => k.p),
+    periodLabels: keep.map((k) => f.periodLabels[k.i]),
+    series: Object.fromEntries(Object.entries(f.series).map(([k, arr]) => [k, keep.map((x) => arr[x.i])])),
+  };
 }
 
 /* ---------------------------------------------------------- 数据源体检 */

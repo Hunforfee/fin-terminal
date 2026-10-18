@@ -99,6 +99,7 @@ export default function ResearchDesk({
   const [noteEditTab, setNoteEditTab] = useState<'edit' | 'preview'>('edit');
   const [navOpen, setNavOpen] = useState(true);
   const [activeNoteId, setActiveNoteId] = useState<string>('new');
+  const [noteMaximized, setNoteMaximized] = useState(false);
   const notesFor = (code: string) => notes.filter((n) => n.code === code);
   const addNoteFor = (
     code: string,
@@ -933,13 +934,25 @@ export default function ResearchDesk({
         open={!!noteView}
         size="full"
         bare
+        maximizable
+        maximized={noteMaximized}
+        onMaximizedChange={setNoteMaximized}
         title={noteView ? `${noteView.name} · 笔记` : '笔记'}
-        onClose={() => setNoteView(null)}
+        onClose={() => {
+          setNoteView(null);
+          setNoteMaximized(false);
+        }}
       >
         {noteView && (
           <div className="flex h-full min-h-0 flex-col">
-            {/* 顶部工具栏 */}
-            <div className="flex shrink-0 items-center gap-3 border-b border-slate-200 px-4 py-3">
+            {/* 顶部工具栏（双击空白处切换最大化） */}
+            <div
+              className="flex shrink-0 items-center gap-3 border-b border-slate-200 px-4 py-3"
+              onDoubleClick={(e) => {
+                if ((e.target as HTMLElement).closest('button')) return;
+                setNoteMaximized((v) => !v);
+              }}
+            >
               <button
                 type="button"
                 aria-label={navOpen ? '收起笔记导航' : '展开笔记导航'}
@@ -973,6 +986,21 @@ export default function ResearchDesk({
                   }}
                 >
                   ＋ 新建笔记
+                </button>
+                <button
+                  type="button"
+                  aria-label={noteMaximized ? '退出最大化' : '最大化笔记弹窗'}
+                  title={noteMaximized ? '退出最大化' : '最大化（双击标题空白也可）'}
+                  onClick={() => setNoteMaximized((v) => !v)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                    {noteMaximized ? (
+                      <path d="M9 3H5a2 2 0 0 0-2 2v4M15 3h4a2 2 0 0 1 2 2v4M9 21H5a2 2 0 0 1-2-2v-4M15 21h4a2 2 0 0 0 2-2v-4" />
+                    ) : (
+                      <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+                    )}
+                  </svg>
                 </button>
                 <button
                   type="button"

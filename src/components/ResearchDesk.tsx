@@ -20,6 +20,7 @@ import {
 } from '@/lib/researchColumns';
 import { UNGROUPED } from '@/lib/watchlist';
 import Modal from './Modal';
+import NoteBody from './NoteBody';
 import { normalizeCode } from '@/lib/datasource/codes';
 import type { Quote } from '@/lib/datasource/types';
 
@@ -77,6 +78,7 @@ export default function ResearchDesk({
     null,
   );
   const [noteDraft, setNoteDraft] = useState('');
+  const [noteEditTab, setNoteEditTab] = useState<'edit' | 'preview'>('edit');
   const notesFor = (code: string) => notes.filter((n) => n.code === code);
   const addNoteFor = (code: string, name: string, text: string) => {
     if (!text.trim()) return false;
@@ -899,26 +901,29 @@ export default function ResearchDesk({
       )}
       <Modal
         open={!!noteView}
+        size="lg"
         title={noteView ? `${noteView.name} · 笔记` : '笔记'}
         onClose={() => setNoteView(null)}
       >
         {noteView && (
           <div className="space-y-4">
-            <div className="max-h-64 space-y-2 overflow-y-auto">
+            <div className="space-y-3">
               {notesFor(noteView.code).length === 0 ? (
-                <p className="text-sm text-slate-400">暂无笔记</p>
+                <p className="rounded-lg border border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
+                  暂无笔记，可在下方输入。支持 Markdown：表格、列表、代码块、引用、链接等。
+                </p>
               ) : (
                 notesFor(noteView.code).map((n) => (
-                  <div
+                  <article
                     key={n.id}
-                    className="rounded-lg border border-slate-100 bg-slate-50 p-3"
+                    className="rounded-lg border border-slate-200 bg-white p-4"
                   >
-                    <div className="mb-1 flex items-center justify-between gap-2">
+                    <div className="mb-2 flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
                       <span className="text-xs text-slate-400">{n.date}</span>
                       <button
                         type="button"
                         aria-label="删除笔记"
-                        className="text-xs text-slate-400 hover:text-red-600"
+                        className="rounded px-1.5 py-0.5 text-xs text-slate-400 hover:bg-red-50 hover:text-red-600"
                         onClick={() =>
                           saveNotes(notes.filter((x) => x.id !== n.id))
                         }
@@ -926,35 +931,85 @@ export default function ResearchDesk({
                         删除
                       </button>
                     </div>
-                    <p className="whitespace-pre-wrap text-sm text-slate-700">
-                      {n.text}
-                    </p>
-                  </div>
+                    <NoteBody text={n.text} />
+                  </article>
                 ))
               )}
             </div>
-            <textarea
-              aria-label="新增笔记"
-              className="input min-h-24 w-full resize-y"
-              placeholder="记录研究观点、买卖逻辑…"
-              value={noteDraft}
-              onChange={(e) => setNoteDraft(e.target.value)}
-            />
-            <div className="flex justify-end gap-2">
-              <button type="button" className="btn" onClick={() => setNoteView(null)}>
-                关闭
-              </button>
-              <button
-                type="button"
-                className="btn bg-brand-600 text-white hover:bg-brand-700"
-                disabled={!noteDraft.trim()}
-                onClick={() => {
-                  if (addNoteFor(noteView.code, noteView.name, noteDraft))
-                    setNoteDraft('');
-                }}
-              >
-                保存笔记
-              </button>
+            <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-medium text-slate-500">
+                  新增笔记
+                </span>
+                <div className="flex items-center gap-1 rounded-md bg-white p-0.5 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => setNoteEditTab('edit')}
+                    className={`rounded px-2 py-1 text-xs ${
+                      noteEditTab === 'edit'
+                        ? 'bg-brand-600 text-white'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    编辑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNoteEditTab('preview')}
+                    className={`rounded px-2 py-1 text-xs ${
+                      noteEditTab === 'preview'
+                        ? 'bg-brand-600 text-white'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    预览
+                  </button>
+                </div>
+              </div>
+              {noteEditTab === 'edit' ? (
+                <textarea
+                  aria-label="新增笔记"
+                  className="input min-h-40 w-full resize-y font-mono text-[13px] leading-6"
+                  placeholder={'记录研究观点、买卖逻辑…\n\n支持 Markdown，例如：\n| 指标 | 2024 | 2025 |\n| --- | --- | --- |\n| 营收 | 100 | 120 |'}
+                  value={noteDraft}
+                  onChange={(e) => setNoteDraft(e.target.value)}
+                />
+              ) : (
+                <div className="min-h-40 rounded-md border border-slate-200 bg-white p-3">
+                  {noteDraft.trim() ? (
+                    <NoteBody text={noteDraft} />
+                  ) : (
+                    <p className="text-sm text-slate-400">暂无可预览内容</p>
+                  )}
+                </div>
+              )}
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[11px] text-slate-400">
+                  支持 表格 / 列表 / 代码块 / 引用 / 加粗 / 链接
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => setNoteView(null)}
+                  >
+                    关闭
+                  </button>
+                  <button
+                    type="button"
+                    className="btn bg-brand-600 text-white hover:bg-brand-700"
+                    disabled={!noteDraft.trim()}
+                    onClick={() => {
+                      if (addNoteFor(noteView.code, noteView.name, noteDraft)) {
+                        setNoteDraft('');
+                        setNoteEditTab('edit');
+                      }
+                    }}
+                  >
+                    保存笔记
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

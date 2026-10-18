@@ -6,11 +6,14 @@ export default function Modal({
   title,
   onClose,
   children,
+  size = 'md',
 }: {
   open: boolean;
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  /** md 默认窄弹窗；lg 适合长文/表格阅读 */
+  size?: 'md' | 'lg';
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const id = useId();
@@ -48,7 +51,11 @@ export default function Modal({
         )
           onClose();
       }}
-      className="m-auto max-h-[85dvh] w-[calc(100%-1.5rem)] max-w-lg overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-0 text-slate-800 shadow-2xl backdrop:bg-slate-900/30"
+      className={`m-auto overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-0 text-slate-800 shadow-2xl backdrop:bg-slate-900/30 ${
+        size === 'lg'
+          ? 'max-h-[92dvh] w-[calc(100%-1.5rem)] max-w-5xl'
+          : 'max-h-[85dvh] w-[calc(100%-1.5rem)] max-w-lg'
+      }`}
     >
       <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
         <h2 id={id} className="min-w-0 break-words font-semibold">

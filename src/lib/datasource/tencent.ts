@@ -190,7 +190,18 @@ export async function fetchKLine(
     const byDate = new Map<string, Candle>();
     let end = endDate;
     for (let page = 0; page < Math.ceil(count / 640) + 1; page++) {
-      const part = await fetchKLine(symbol, period, adjust, 640, undefined, end);
+      // 单页失败重试一次（并行调用多页时易触发上游限频）
+      let part;
+      try {
+        part = await fetchKLine(symbol, period, adjust, 640, undefined, end);
+      } catch {
+        await new Promise((r) => setTimeout(r, 600));
+        try {
+          part = await fetchKLine(symbol, period, adjust, 640, undefined, end);
+        } catch {
+          break; // 已取得的页保留，优雅截断而非整体报错
+        }
+      }
       const rows = part.candles;
       if (!rows.length) break;
       const oldest = rows[0].date;
@@ -199,6 +210,7 @@ export async function fetchKLine(
       if (byDate.size === before || (startDate && oldest <= startDate) || byDate.size >= count) break;
       end = new Date(Date.parse(oldest + 'T00:00:00Z') - 864e5).toISOString().slice(0, 10);
     }
+    if (byDate.size === 0) throw new Error(`tencent kline: empty series (${adjust})`);
     return { symbol, code: symbol.slice(2), period, adjust,
       candles: [...byDate.values()].sort((a,b) => a.date.localeCompare(b.date))
         .filter(c => !startDate || c.date >= startDate).slice(-count), source: PROVIDER_NAME, stale: false };

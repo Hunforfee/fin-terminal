@@ -259,16 +259,18 @@ export async function getValuation(input: string, years = 10, method: ValuationM
   const span = Math.min(Math.max(years, 1), 10);
   return cached(`val-qfq-forward-dy-v2:${n.symbol}:${span}:${method}`, defaultTtl(), async () => {
     const start = ymdYearsAgo(span + 1);
-    const [q, points, shares, dates, dividends, raw, adjusted, plans] = await Promise.all([
+    // 行情两条 3200 根分页链（raw/qfq）并行会触发上游限频，改为串行；
+    // qfq 失败时用 raw 兜底占位（下方会因口径不匹配报错，但至少给出明确信息）
+    const [q, points, shares, dates, dividends, plans] = await Promise.all([
       getQuote(n.symbol),
       cached(`statements-v2:${n.code}`, 864e5, () => sinaFinStmt.fetchStatementHistory(n.code, span + 2)),
       cached(`shares-v2:${n.code}`, 864e5, () => sinaFinance.fetchShareHistory(n.code)),
       cached(`disclosures:${n.code}`, 864e5, () => fetchDisclosureDates(n.code, new Date().getUTCFullYear() - span - 2)),
       cached(`dividends-v2:${n.code}`, 864e5, () => sinaBonus.fetchDividends(n.code)).catch(() => null),
-      getKLine(n.symbol, 'day', 'none', 3200, start),
-      getKLine(n.symbol, 'day', 'qfq', 3200, start),
       cached(`dividend-plans-v1:${n.code}`, 3600e3, () => fetchDividendPlans(n.code)).catch(() => null),
     ]);
+    const raw = await getKLine(n.symbol, 'day', 'none', 3200, start);
+    const adjusted = await getKLine(n.symbol, 'day', 'qfq', 3200, start);
     if (!q) throw new Error('行情获取失败');
     if (!points.length) throw new Error('财报数据不可用，已停止估值计算，请稍后重试');
     if (!shares.length) throw new Error('真实股本变动史不可用，已停止估值计算');

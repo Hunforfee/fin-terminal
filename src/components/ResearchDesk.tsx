@@ -868,7 +868,7 @@ export default function ResearchDesk({
                         href={`/stock/${q.symbol}`}
                       />
                       {xueqiuUrl(q.symbol, q.market, q.kind) && (
-                        <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover/stock:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+                        <span className="flex shrink-0 items-center">
                           <XueqiuLink
                             url={xueqiuUrl(q.symbol, q.market, q.kind)!}
                             name={q.name}
@@ -892,7 +892,7 @@ export default function ResearchDesk({
                           });
                           setNotesOpen(true);
                         }}
-                        className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-opacity hover:bg-amber-50 focus-visible:text-amber-600 [@media(hover:none)]:opacity-100 ${noteCounts.get(q.symbol) ? 'text-amber-500' : 'text-slate-400 hover:text-amber-600 opacity-0 group-hover/stock:opacity-100 focus-visible:opacity-100'}`}
+                        className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-amber-50 focus-visible:text-amber-600 ${noteCounts.get(q.symbol) ? 'text-amber-500' : 'text-slate-400 hover:text-amber-600'}`}
                       >
                         <svg
                           aria-hidden="true"
@@ -906,7 +906,7 @@ export default function ResearchDesk({
                           <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
                         </svg>
                       </button>
-                      <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover/stock:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+                      <span className="flex shrink-0 items-center">
                         <button
                           type="button"
                           aria-label={

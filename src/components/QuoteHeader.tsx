@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import AiAnalysisDialog from '@/components/AiAnalysisDialog';
+import YuanbaoAnalysis from '@/components/YuanbaoAnalysis';
 import WatchlistButton from '@/components/WatchlistButton';
 import XueqiuLink from '@/components/XueqiuLink';
 import { fmtTime, price, signed, signedPct, toneClass } from '@/lib/format';
@@ -113,10 +113,14 @@ export default function QuoteHeader({ quote }: { quote: Quote }) {
               {xueqiu && (
                 <XueqiuLink key={quote.symbol} url={xueqiu} name={quote.name} />
               )}
-              <AiAnalysisDialog
+              <YuanbaoAnalysis
                 key={quote.symbol}
-                code={quote.code}
-                name={quote.name}
+                quote={{
+                  name: quote.name,
+                  code: quote.code,
+                  price: quote.price,
+                  changePct: quote.changePct,
+                }}
               />
               <Link
                 href={`/stock/${quote.market === 'HK' ? quote.symbol : quote.code}/finance`}

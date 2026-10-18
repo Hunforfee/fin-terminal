@@ -7,6 +7,8 @@ export interface SearchHit {
   title: string;
   url: string;
   snippet: string;
+  /** 网页正文全文（可选，抓取成功时填充） */
+  content?: string;
 }
 
 const UA =
@@ -95,10 +97,54 @@ export async function searchStockContext(
   return { hits: hits.slice(0, max), ok: anyOk };
 }
 
-/** 把检索结果拼成注入 prompt 的文本块 */
+/** 把检索结果拼成注入 prompt 的文本块（有全文的附全文节选） */
 export function formatHits(hits: SearchHit[]): string {
   if (hits.length === 0) return '';
   return hits
-    .map((h, i) => `[${i + 1}] ${h.title}\n    链接: ${h.url}\n    摘要: ${h.snippet || '（无摘要）'}`)
+    .map((h, i) => {
+      const head = `[${i + 1}] ${h.title}\n    链接: ${h.url}\n    摘要: ${h.snippet || '（无摘要）'}`;
+      return h.content ? `${head}\n    正文节选: ${h.content}` : head;
+    })
     .join('\n\n');
+}
+
+/** 抓取网页正文纯文本（供模型精读，截断 maxChars） */
+export async function fetchPageText(url: string, maxChars = 3000, timeoutMs = 12000): Promise<string> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, {
+      headers: { 'User-Agent': UA, 'Accept-Language': 'zh-CN,zh;q=0.9' },
+      signal: ctrl.signal,
+    });
+    if (!r.ok) return '';
+    const ct = r.headers.get('content-type') ?? '';
+    if (!/text\/html|text\/plain/.test(ct)) return '';
+    const html = await r.text();
+    // 去掉 script/style 及注释，保留正文
+    const body = html
+      .replace(/<!--[\s\S]*?-->/g, ' ')
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<[^>]*>/g, ' ');
+    const text = decodeEntities(body).replace(/\s+/g, ' ').trim();
+    return text.slice(0, maxChars);
+  } catch {
+    return '';
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** 对检索结果并行抓取正文（只抓前 N 条，失败跳过） */
+export async function enrichHitsWithPages(
+  hits: SearchHit[],
+  topN = 4,
+): Promise<SearchHit[]> {
+  const top = hits.slice(0, topN);
+  const texts = await Promise.all(top.map((h) => fetchPageText(h.url)));
+  return hits.map((h, i) => {
+    const idx = top.indexOf(h);
+    return idx >= 0 && texts[idx] ? { ...h, content: texts[idx] } : h;
+  }) as (SearchHit & { content?: string })[] as SearchHit[];
 }

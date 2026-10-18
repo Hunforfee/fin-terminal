@@ -10,7 +10,7 @@
  * 无独立成分股，故这 4 个二级节点的成分股为空（前端会提示），但一级「银行」完整。
  */
 
-import raw from './sw2021.json';
+import raw from './sw2021.json' with { type: 'json' };
 
 export interface SwNode {
   /** 行业名称，如「白酒Ⅱ」 */

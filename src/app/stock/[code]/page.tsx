@@ -32,17 +32,7 @@ export default async function StockPage({ params }: { params: Promise<{ code: st
         <span>{quote.name}</span>
         {isHkQuote && <span className="chip bg-slate-100 text-slate-500">港股</span>}
       </div>
-      <QuoteHeader
-        quote={quote}
-        extra={
-          <Link
-            href={`/stock/${isHkQuote ? quote.symbol : quote.code}/finance`}
-            className="btn border-brand-300 text-brand-700"
-          >
-            财务体检 →
-          </Link>
-        }
-      />
+      <QuoteHeader quote={quote} />
 
       <AiAnalysis code={quote.code} name={quote.name} />
 

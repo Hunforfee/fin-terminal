@@ -17,6 +17,7 @@ import * as eastmoney from './eastmoney';
 import * as ifind from './ifind';
 import * as snapshot from './snapshot';
 import * as hkFinance from './hkFinance';
+import * as profile from './profile';
 import { cached, defaultTtl, putCache } from './cache';
 import { normalizeCode, normalizeStockCode } from './codes';
 import { computeValuation, buildFinancialSummary } from '../analytics';
@@ -773,3 +774,12 @@ export async function getIndustryBoard() {
   });
 }
 
+
+/** 公司资料：控股股东 / 实控人 / 所属行业（A 股申万三级，港股东财行业） */
+export async function getCompanyProfile(input: string) {
+  const n = normalizeCode(input);
+  if (!n || n.kind === 'unknown') throw new Error(`无法解析代码 ${input}`);
+  return cached(`profile:${n.symbol}`, 24 * 60 * 60 * 1000, () =>
+    profile.fetchCompanyProfile(n.code, n.market === 'HK' ? 'HK' : 'A'),
+  );
+}

@@ -111,6 +111,64 @@ button {
   background: #f8fafc;
   box-shadow: inset 0 -1px 0 #e2e8f0;
 }
+.finance-data-table {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.finance-data-table thead th {
+  white-space: nowrap;
+}
+.finance-data-table .finance-metric:nth-of-type(even) {
+  --finance-row-bg: #f8fafc;
+}
+.finance-data-table .finance-metric:nth-of-type(odd) {
+  --finance-row-bg: #ffffff;
+}
+.finance-data-table .finance-metric td {
+  background-color: var(--finance-row-bg);
+}
+.finance-data-table .finance-metric:hover td {
+  background-color: #f0f5fc;
+}
+.finance-data-table .finance-main-value {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.finance-data-table .finance-main-value[data-missing] {
+  color: #94a3b8;
+  font-weight: 400;
+}
+.finance-data-table .finance-change-row td {
+  line-height: 16px;
+  white-space: nowrap;
+}
+.finance-data-table [data-year-boundary] {
+  box-shadow: inset 1px 0 0 #cbd5e1;
+}
+.finance-data-table [data-active-report] {
+  background-color: #e5eefb !important;
+}
+.finance-data-table .finance-metric:hover [data-active-report] {
+  background-color: #dbe9fc !important;
+}
+.finance-data-table .finance-metric:hover .finance-main-value[data-active-report] {
+  box-shadow: inset 0 0 0 1px #a8c5ef;
+}
+.finance-data-table [data-matching-report] {
+  background-color: #e1ebfb !important;
+}
+.finance-data-table thead [data-matching-report] {
+  background-color: #ccddf7 !important;
+  color: #1e40af;
+  box-shadow: inset 0 -2px 0 #3b82f6;
+}
+.finance-data-table thead [data-matching-report][data-year-boundary] {
+  box-shadow: inset 1px 0 0 #cbd5e1, inset 0 -2px 0 #3b82f6;
+}
+.finance-data-table .finance-metric:hover [data-matching-report] {
+  background-color: #d5e4fa !important;
+}
 summary {
   cursor: pointer;
 }

@@ -1,0 +1,59 @@
+# 手机号登录与个人数据接入
+
+当前完成手机号登录界面、验证码发送/校验路由、签名 HttpOnly 会话、退出登录、账号独立缓存、个人数据同步、冲突处理与原有访客数据导入。
+
+**短信服务尚未接入。** 未确认 WorkBuddy 为当前部署应用提供的真实接口，因此 `src/lib/auth/phoneProvider.ts` 默认返回未配置；发送和登录按钮禁用，服务端相关请求返回 503。没有固定验证码、测试登录或凭手机号直接建立会话的分支。
+
+## 让 WorkBuddy 接入
+
+请在当前部署应用的云服务中启用手机号验证码登录，并修改 `src/lib/auth/phoneProvider.ts`：
+
+1. `phoneLoginConfigured()`：确认供应商配置完整后返回 `true`。
+2. `sendPhoneCode(phone)`：使用当前应用实际配置的短信服务发送验证码，发送失败必须抛错。手机号为中国大陆 11 位号码，不含 `+86`。
+3. `verifyPhoneCode(phone, code)`：由供应商服务端校验验证码后，返回 `{ id, phone }`。`id` 必须是稳定、不透明的用户 ID；手机号必须与输入号码一致。必须由供应商约束过期、一次性消费、失败次数及多实例防刷，不能把浏览器传入的 ID 当成验证结果。
+
+请使用**部署应用的身份认证服务**，不要复用 WorkBuddy 桌面客户端的登录/令牌接口，不要猜测默认路径。
+
+## 部署环境变量
+
+- `AUTH_SESSION_SECRET`：服务端随机密钥，至少 32 字节。不要使用示例值或提交到 Git。轮换会使现有会话失效。
+- `DATABASE_URL`：当前应用专用 PostgreSQL 连接串。托管数据库应按提供方要求启用 TLS（如连接串中配置 `sslmode=require`）；不要关闭证书验证。
+- `APP_ORIGIN`：公开站点源，例如 `https://a3f223f4c7a12db85.app.workbuddy.host`，用于反向代理后的同源校验。更换域名时同步修改。
+
+`src/lib/auth/accountData.ts` 首次使用会创建 `fin_account_data` 表；若数据库账号无建表权限，请先执行下方 SQL。不要使用临时容器文件作为账号数据存储。未配置数据库时，登录后的数据仍按账号保存在本机，账号菜单显示“本机已保存”；不会假报云端同步成功。
+
+```sql
+CREATE TABLE IF NOT EXISTS fin_account_data (
+  user_id text PRIMARY KEY,
+  revision bigint NOT NULL DEFAULT 0,
+  data jsonb NOT NULL DEFAULT '{}'::jsonb,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+```
+
+## 已实现的接口
+
+| 接口 | 功能 |
+| --- | --- |
+| `GET /api/auth/session` | 会话用户（手机号脱敏）、短信服务是否接入 |
+| `POST /api/auth/send-code` | `{ phone }`，成功返回重发间隔 |
+| `POST /api/auth/verify` | `{ phone, code }`，验证后签发 30 天 HttpOnly Cookie |
+| `POST /api/auth/logout` | 清除会话 Cookie |
+| `GET /api/account/data` | 读取当前会话对应的个人数据与版本 |
+| `PUT /api/account/data` | `{ revision, data }`，乐观并发控制，冲突返回 409 |
+
+所有写操作要求同源 `Origin` 与 `x-fin-csrf: 1`，不开放跨域。用户身份只从签名 Cookie 获取，数据接口不接受客户端指定目标用户。手机号不写入日志，响应只展示脱敏手机号。
+
+同步范围：自选及分组、研究笔记、财务模块/报表/自定义公式配置、AI 提示词和分析历史。单个账号快照最多 300 个键、约 50 万字符。**AI API Key、服务地址、模型选项及搜索历史仅留在该账号的本机缓存，不上传数据库**。
+
+访客原有记录仍保留。登录后可在账号菜单选择“导入本机原有自选和笔记”；已有自选分组及笔记合并去重，账号已有配置优先。不会自动将共享电脑的访客记录归给某个账号。退出登录后回到访客记录，不展示刚退出账号的缓存。
+
+## 上线前联调
+
+1. 在当前部署域名发送真实验证码，验证错误、过期、重复使用及频繁发送均被拒绝。
+2. 验证正确验证码只产生经过供应商验证的身份；更换手机号必须重新校验。
+3. 检查 Cookie 的 Secure、HttpOnly、SameSite 属性；退出、过期和篡改 Cookie 后私有接口应返回 401。
+4. 用两个真实账号检查自选、分组、笔记、指标配置及 AI 历史互不可见；在另一台设备验证实际数据库同步。
+5. 测试同时修改同一项数据的冲突选择，不应静默覆盖另一台设备的更新。
+
+当前本地自动化测试使用签名会话测试数据和模拟供应商/数据库响应验证流程，**不代表已经完成真实短信或生产数据库联调**。

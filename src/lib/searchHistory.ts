@@ -1,3 +1,4 @@
+import { personalStorage } from './personalStorage';
 /**
  * 全局搜索历史（localStorage）。
  *
@@ -32,7 +33,7 @@ function safeParse(raw: string | null): HistoryItem[] {
 export function readHistory(): HistoryItem[] {
   if (typeof window === 'undefined') return [];
   try {
-    return safeParse(window.localStorage.getItem(KEY));
+    return safeParse(personalStorage.getItem(KEY));
   } catch {
     return [];
   }
@@ -40,7 +41,7 @@ export function readHistory(): HistoryItem[] {
 
 function write(list: HistoryItem[]): void {
   try {
-    window.localStorage.setItem(KEY, JSON.stringify(list.slice(0, MAX_HISTORY)));
+    personalStorage.setItem(KEY, JSON.stringify(list.slice(0, MAX_HISTORY)));
   } catch {
     /* 隐私模式/配额满时静默失败，不影响搜索 */
   }
@@ -62,8 +63,9 @@ export function removeHistory(code: string): HistoryItem[] {
 
 export function clearHistory(): void {
   try {
-    window.localStorage.removeItem(KEY);
+    personalStorage.removeItem(KEY);
   } catch {
     /* ignore */
   }
 }
+

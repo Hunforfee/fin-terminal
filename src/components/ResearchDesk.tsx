@@ -1,5 +1,7 @@
 'use client';
 
+import { personalStorage } from '@/lib/personalStorage';
+
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useWatchlist } from './WatchlistProvider';
@@ -62,7 +64,7 @@ export default function ResearchDesk({
 
   useEffect(() => {
     try {
-      const n = JSON.parse(localStorage.getItem(NOTE_KEY) ?? '[]');
+      const n = JSON.parse(personalStorage.getItem(NOTE_KEY) ?? '[]');
       if (Array.isArray(n))
         setNotes(
           n.filter(
@@ -92,14 +94,21 @@ export default function ResearchDesk({
         return;
       }
       try {
-        const q = await fetch(
-          `/api/quote?codes=${encodeURIComponent(signature)}`,
-        ).then((r) => r.json());
-        if (!alive) return;
-        if (!q.ok) throw Error(q.error ?? '行情获取失败');
-        const rows: Quote[] = q.data.filter((x: Quote) => x.kind === 'stock');
-        setOtherAssets(q.data.filter((x: Quote) => x.kind !== 'stock'));
-        setQuotes(rows);
+        const all: Quote[] = [];
+        // Imports can exceed the quote API's 200-symbol request limit.
+        for (let offset = 0; offset < codes.length && alive; offset += 100) {
+          const batch = codes.slice(offset, offset + 100);
+          const q = await fetch(
+            `/api/quote?codes=${encodeURIComponent(batch.join(','))}`,
+          ).then((r) => r.json());
+          if (!alive) return;
+          if (!q.ok || !Array.isArray(q.data))
+            throw Error(q.error ?? '行情获取失败');
+          all.push(...q.data);
+          setQuotes(all.filter((x) => x.kind === 'stock'));
+          setOtherAssets(all.filter((x) => x.kind !== 'stock'));
+        }
+        const rows = all.filter((x) => x.kind === 'stock');
         setLoading(false);
         setFinLoading(rows.length > 0);
         // Sequential batches keep first paint fast without flooding the financial source.
@@ -191,7 +200,7 @@ export default function ResearchDesk({
     .sort((a, b) => b.periods.at(-1)!.localeCompare(a.periods.at(-1)!));
   const saveNotes = (next: Note[]) => {
     try {
-      localStorage.setItem(NOTE_KEY, JSON.stringify(next));
+      personalStorage.setItem(NOTE_KEY, JSON.stringify(next));
       setNotes(next);
       setNoteError('');
       return true;

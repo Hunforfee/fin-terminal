@@ -1,3 +1,4 @@
+import { personalStorage } from './personalStorage';
 /**
  * 自定义指标（公式）：用户用已有字段（bs_/pl_/cf_ 科目与财务指标 key）通过
  * 加减乘除组合出新数据项，如「货币资金 / 流动负债合计」。
@@ -114,7 +115,7 @@ export function formulaKey(id: string): string {
 
 export function loadFormulas(): Formula[] {
   try {
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = personalStorage.getItem(LS_KEY);
     if (raw) {
       const arr = JSON.parse(raw);
       if (Array.isArray(arr)) {
@@ -131,7 +132,7 @@ export function loadFormulas(): Formula[] {
 
 export function saveFormulas(list: Formula[]): void {
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify(list));
+    personalStorage.setItem(LS_KEY, JSON.stringify(list));
   } catch {
     /* ignore */
   }
@@ -143,7 +144,7 @@ const LS_HIDDEN_PRESETS = 'fin.financeFormulas.hiddenPresets';
 export function mergedFormulas(): Formula[] {
   let hidden: string[] = [];
   try {
-    hidden = JSON.parse(localStorage.getItem(LS_HIDDEN_PRESETS) ?? '[]');
+    hidden = JSON.parse(personalStorage.getItem(LS_HIDDEN_PRESETS) ?? '[]');
   } catch {
     /* ignore */
   }
@@ -153,9 +154,9 @@ export function mergedFormulas(): Formula[] {
 
 export function hidePreset(id: string): void {
   try {
-    const hidden: string[] = JSON.parse(localStorage.getItem(LS_HIDDEN_PRESETS) ?? '[]');
+    const hidden: string[] = JSON.parse(personalStorage.getItem(LS_HIDDEN_PRESETS) ?? '[]');
     if (!hidden.includes(id)) hidden.push(id);
-    localStorage.setItem(LS_HIDDEN_PRESETS, JSON.stringify(hidden));
+    personalStorage.setItem(LS_HIDDEN_PRESETS, JSON.stringify(hidden));
   } catch {
     /* ignore */
   }

@@ -1,3 +1,4 @@
+import { personalStorage } from './personalStorage';
 import { normalizeStockCode } from './datasource/codes';
 export function financeStorageKey(base:string,code:string):string {
   return normalizeStockCode(code)?.market==='HK' ? `${base}.hk` : base;
@@ -28,7 +29,7 @@ interface ModuleLike {
  */
 export function takeLegacyHkModules(base: string): ModuleLike[] | null {
   try {
-    const raw = localStorage.getItem(base);
+    const raw = personalStorage.getItem(base);
     if (!raw) return null;
     const arr = JSON.parse(raw) as ModuleLike[];
     if (!Array.isArray(arr)) return null;
@@ -44,7 +45,7 @@ export function takeLegacyHkModules(base: string): ModuleLike[] | null {
 /** 旧全局「合并报表自定义字段」里的港股字段（供港股页搬迁），无则 null */
 export function takeLegacyHkMergeFields(base: string): string[] | null {
   try {
-    const raw = localStorage.getItem(base);
+    const raw = personalStorage.getItem(base);
     if (!raw) return null;
     const arr = JSON.parse(raw) as string[];
     if (!Array.isArray(arr)) return null;

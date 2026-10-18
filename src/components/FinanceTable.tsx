@@ -1,5 +1,7 @@
 'use client';
 
+import { personalStorage } from '@/lib/personalStorage';
+
 /** 单公司财报：自选指标与完整三表，支持报告期切换、搜索和 CSV 导出。 */
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
@@ -52,7 +54,7 @@ const LS_FIELDS = 'fin.mergeTable.fields';
 
 function loadFields(storageKey = LS_FIELDS): string[] {
   try {
-    const raw = localStorage.getItem(storageKey);
+    const raw = personalStorage.getItem(storageKey);
     const arr = raw ? JSON.parse(raw) : null;
     if (Array.isArray(arr) && arr.length > 0) return arr.slice(0, 60);
   } catch {
@@ -63,7 +65,7 @@ function loadFields(storageKey = LS_FIELDS): string[] {
 
 function loadShowAll(): boolean {
   try {
-    return localStorage.getItem('fin.mergeTable.showAll') === '1';
+    return personalStorage.getItem('fin.mergeTable.showAll') === '1';
   } catch {
     return false;
   }
@@ -141,7 +143,7 @@ export default function FinanceTable({ code }: { code: string }) {
   useEffect(() => {
     const isHk = fieldsKey.endsWith('.hk');
     let loaded = loadFields(fieldsKey);
-    if (isHk && !localStorage.getItem(fieldsKey)) {
+    if (isHk && !personalStorage.getItem(fieldsKey)) {
       // 旧全局键里可能存有港股配置，搬迁过来
       const legacy = takeLegacyHkMergeFields(LS_FIELDS);
       if (legacy) loaded = legacy;
@@ -158,8 +160,8 @@ export default function FinanceTable({ code }: { code: string }) {
   useEffect(() => {
     if (!bootedRef.current || loadedFieldsKey !== fieldsKey) return;
     try {
-      localStorage.setItem(fieldsKey, JSON.stringify(fields));
-      localStorage.setItem('fin.mergeTable.showAll', showAll ? '1' : '0');
+      personalStorage.setItem(fieldsKey, JSON.stringify(fields));
+      personalStorage.setItem('fin.mergeTable.showAll', showAll ? '1' : '0');
     } catch {
       /* ignore */
     }

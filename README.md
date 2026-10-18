@@ -46,7 +46,7 @@
 | 语言 | TypeScript strict | 多数据源字段错位是这类项目的头号 bug 来源，类型能挡住大半 |
 | 样式 | Tailwind CSS 3 | 卡片/表格密集的金融界面，原子类迭代最快 |
 | 图表 | ECharts 5（按需注册） | K 线 + 缩放 + markLine 组合能力强，按需引入控制体积 |
-| 存储 | 无数据库 | 行情实时抓取不落库；自选放 localStorage，零运维 |
+| 存储 | 访客本地缓存 / 可选 PostgreSQL | 行情实时抓取不落库；账号个人数据按用户隔离 |
 | 缓存 | 进程内 TTL Map | 单实例足够；换多实例时替换成 Redis 即可（接口不变） |
 
 ---
@@ -103,7 +103,9 @@
 | `/fund`、`/fund/[code]` | Server + Client | 基金/ETF 列表与历史走势。 |
 | `/health` | Server | 数据源可用性、延迟与降级状态。 |
 
-自选、研究笔记和指标配置存储在当前浏览器的 localStorage，沿用原有自选存储键；没有云端同步。全站采用紧凑导航与小边距的全宽布局，宽屏上导航、标志和搜索同排；财务页标题与视图切换同排，报表高度根据实际剩余窗口空间调整。保留灰白底色、蓝色操作按钮，并适配电脑和手机。
+访客自选、研究笔记和指标配置仍保存在当前浏览器。已加入手机号登录界面、签名会话、按账号独立缓存和 PostgreSQL 个人数据同步接口；短信服务默认未启用，需要 WorkBuddy 接入真实供应商并配置会话密钥与数据库，详见 [WORKBUDDY_AUTH.md](WORKBUDDY_AUTH.md)。账号菜单支持主动合并本机原有记录与同步冲突处理，AI API Key 不上传数据库。全站采用紧凑导航与小边距的全宽布局，宽屏上导航、标志和搜索同排；财务页标题与视图切换同排，报表高度根据实际剩余窗口空间调整。保留灰白底色、蓝色操作按钮，并适配电脑和手机。
+
+分组支持批量导入同花顺导出的 TXT / CSV / TSV / XLS / XLSX 和剪贴板代码，兼容 UTF-8、GBK、UTF-16、Excel 前导零格式和多工作表。导入前核对股票身份、显示重复和失败行；已有自选默认跳过，可选择移入目标分组。支持原子新建分组与导入，一次最多 2000 行、每个文件最多 5 MB。文件仅在浏览器解析，行情核对只发送股票代码。大量自选按 100 只分批拉取行情，避免单请求数量上限。
 
 **API**（`src/app/api/`）：`quote` `kline` `minute` `search` `valuation` `financial` `finance-fields` `finance-compare` `peers` `screen` `market` `industry` `sw-industry` `health` `ai-analyze`
 
@@ -203,7 +205,7 @@ docker compose up -d --build      # http://localhost:3000
 - **个股历史估值**：采用上文真实财报与前复权一致口径；完整修复说明及验证见 `VALUATION_FIXES.md`。
 - **选股池为行业龙头样本**（约 125 只），非全市场 5000+ 只——扩展需接入全量股票列表接口（东财 `clist` 在本环境被封，换成自有列表即可）。
 - **东财搜索响应格式不稳定**：已在 `eastmoney.ts` 做容错，失败时由腾讯联想 + 本地池兜底。
-- **自选存 localStorage**：未做账号体系；需要跨设备同步时把 `WatchlistProvider` 的读写换成 `/api/watchlist` 即可。
+- **访客与账号数据**：访客记录保留在本机；账号数据独立缓存，配置 PostgreSQL 后通过 `/api/account/data` 同步。手机号验证码需要 WorkBuddy 接入实际认证服务，未接入时不能建立登录会话，详见 `WORKBUDDY_AUTH.md`。
 
 ---
 

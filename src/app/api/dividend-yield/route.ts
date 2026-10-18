@@ -5,6 +5,7 @@ import { fetchDividendPlans } from '@/lib/datasource/dividendPlans';
 import { fetchDividends } from '@/lib/datasource/sinaBonus';
 import { getKLine } from '@/lib/datasource';
 import { fetchQuote } from '@/lib/datasource/tencent';
+import { fetchHkFundamental, computeHkValuation } from '@/lib/datasource/hkFundamental';
 import { buildExpectedDividendYieldByDate } from '@/lib/dividends';
 import { cached } from '@/lib/datasource/cache';
 
@@ -21,8 +22,10 @@ export const dynamic = 'force-dynamic';
 
 export interface DividendYieldRow {
   symbol: string;
-  /** 预期股息率 %，null 表示数据不可用 */
+  /** 股息率 %，null 表示数据不可用 */
   dy: number | null;
+  /** announced-forward：A股公告方案延续法（预期）；hk-static：港股最近年度静态 */
+  method: 'announced-forward' | 'hk-static';
 }
 
 async function mapLimit<T, R>(
@@ -43,12 +46,21 @@ async function mapLimit<T, R>(
   return out;
 }
 
-/** 港股：腾讯行情自带股息率（%），无分红方案数据可用 */
-async function hkYield(symbol: string): Promise<number | null> {
-  return cached(`expected-dy:${symbol}`, 1800e3, async () => {
-    const q = await fetchQuote(symbol);
-    return q?.dividendYield ?? null;
-  }).catch(() => null);
+/**
+ * 港股股息率 %：最近年度每股派息(DPS) / 现价。
+ * 港股无 A 股口径的分红预案（无「预期股息率」概念），口径为静态股息率。
+ */
+async function hkYield(
+  symbol: string,
+): Promise<{ dy: number | null; method: DividendYieldRow['method'] }> {
+  return cached(`hk-dy:${symbol}`, 1800e3, async () => {
+    const [f, q] = await Promise.all([
+      fetchHkFundamental(symbol.slice(2)).catch(() => null),
+      fetchQuote(symbol).catch(() => null),
+    ]);
+    const v = computeHkValuation(f, q?.price ?? null);
+    return { dy: v.dividendYield, method: 'hk-static' as const };
+  }).catch(() => ({ dy: null, method: 'hk-static' as const }));
 }
 
 /** 单只股票的预期股息率（30 分钟缓存，分红方案按日更新） */
@@ -81,7 +93,9 @@ export async function GET(request: NextRequest) {
   try {
     const data = await mapLimit(symbols, 4, async (symbol) => ({
       symbol,
-      dy: symbol.startsWith('hk') ? await hkYield(symbol) : await expectedYield(symbol),
+      ...(symbol.startsWith('hk')
+        ? await hkYield(symbol)
+        : { dy: await expectedYield(symbol), method: 'announced-forward' as const }),
     }));
     return ok(data satisfies DividendYieldRow[]);
   } catch (e) {

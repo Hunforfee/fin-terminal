@@ -18,6 +18,7 @@ import * as ifind from './ifind';
 import * as snapshot from './snapshot';
 import * as hkFinance from './hkFinance';
 import * as profile from './profile';
+import { fetchHkFundamental, computeHkValuation } from './hkFundamental';
 import { cached, defaultTtl, putCache } from './cache';
 import { normalizeCode, normalizeStockCode } from './codes';
 import { computeValuation, buildFinancialSummary } from '../analytics';
@@ -169,7 +170,49 @@ export async function getQuotes(inputs: string[]): Promise<Quote[]> {
   return results.flat();
 }
 
+/** 受控并发，避免一次打满上游 */
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        out[i] = await fn(items[i]);
+      }
+    }),
+  );
+  return out;
+}
+
 async function fetchQuotesChunk(symbols: string[]): Promise<Quote[]> {
+  const got = await fetchQuotesRaw(symbols);
+  return withHkValuation(got);
+}
+
+/**
+ * 港股行情快照不含 PB：用 F10 主要财务指标的每股净资产（BPS）与现价计算。
+ * 单只失败只留空，不影响整批行情；基本面按 6 小时缓存（报告期变化频率低）。
+ */
+async function withHkValuation(quotes: Quote[]): Promise<Quote[]> {
+  const hk = quotes.filter((q) => q.symbol.startsWith('hk') && q.price !== null);
+  if (hk.length === 0) return quotes;
+  const map = new Map<string, { pb: number | null; dividendYield: number | null }>();
+  await mapLimit(hk, 4, async (q) => {
+    const v = await cached(`hk-fund:${q.symbol}`, 6 * 3600e3, async () => {
+      const f = await fetchHkFundamental(q.symbol.slice(2));
+      return computeHkValuation(f, q.price);
+    }).catch(() => null);
+    if (v) map.set(q.symbol, { pb: v.pb, dividendYield: v.dividendYield });
+  });
+  if (map.size === 0) return quotes;
+  return quotes.map((q) => {
+    const v = map.get(q.symbol);
+    return v ? { ...q, pb: v.pb ?? q.pb, dividendYield: v.dividendYield } : q;
+  });
+}
+
+async function fetchQuotesRaw(symbols: string[]): Promise<Quote[]> {
   try {
     const got = await tencent.fetchQuotes(symbols);
     if (got.length > 0) {

@@ -39,7 +39,7 @@ export const PROVIDER_NAME = 'tencent';
  *  43 振幅 44 流通市值(亿) 45 总市值(亿) 46 PB
  *  47 涨停价 48 跌停价 49 量比 51 均价 52 PE(动) 53 PE(静)
  */
-function parseQuoteLine(symbol: string, body: string): Quote | null {
+export function parseQuoteLine(symbol: string, body: string): Quote | null {
   const f = body.split('~');
   // 港股（v_hk00700=...）字段布局不同，走专用解析
   if (symbol.startsWith('hk')) return parseHkQuoteLine(symbol, body);
@@ -149,10 +149,10 @@ function parseHkQuoteLine(symbol: string, body: string): Quote | null {
     pe: numOrNull(f[39]),
     peForward: null,
     peStatic: null,
-    // 港股字段 72 为市净率（实测腾讯 5.315 / 康师傅 0.922 与真实值吻合）
-    pb: numOrNull(f[72]),
-    // 港股字段 58 为股息率（%）
-    dividendYield: numOrNull(f[58]),
+    // 港股行情不含 PB 与股息率：字段 72 实为 52 周低、字段 58 为年内涨幅%，
+    // 估值指标统一由 hkFundamental.ts 用 BPS / DPS 与现价计算，这里必须留空。
+    pb: null,
+    dividendYield: null,
     totalMarketCap: numOrNull(f[45]),
     floatMarketCap: numOrNull(f[44]),
     high52w: high52w !== null && price !== null && high52w >= price ? high52w : null,

@@ -88,8 +88,9 @@ export function normalizeCode(input: string): NormalizedCode | null {
 
   if (code.startsWith('6')) return build(code, 'SH');
   if (code.startsWith('688') || code.startsWith('689')) return build(code, 'SH');
-  if (code.startsWith('0') || code.startsWith('3')) return build(code, 'SZ');
+  if (/^[023]/.test(code)) return build(code, 'SZ');
   if (code.startsWith('4') || code.startsWith('8')) return build(code, 'BJ');
+  if (code.startsWith('92')) return build(code, 'BJ');
   if (ETF_PREFIX_SH.includes(head2) || FUND_PREFIX_SH.includes(head2)) return build(code, 'SH');
   if (ETF_PREFIX_SZ.includes(head2)) return build(code, 'SZ');
   if (head3 === '110' || head3 === '113' || head3 === '123' || head3 === '127') return build(code, 'SH'); // 可转债
@@ -142,7 +143,7 @@ export function normalizeStockCode(input: string): NormalizedCode | null {
   const hk = raw.match(/^(?:hk)?(\d{1,5})(?:\.hk)?$/i);
   if (hk && !/^\d{6}$/.test(raw)) return buildHk(hk[1]);
   const symbol = /^\d{6}$/.test(raw)
-    ? `${/^[03]/.test(raw) ? 'sz' : /^(4|8|92)/.test(raw) ? 'bj' : 'sh'}${raw}` : raw;
+    ? `${/^[023]/.test(raw) ? 'sz' : /^(4|8|92)/.test(raw) ? 'bj' : 'sh'}${raw}` : raw;
   const n = normalizeCode(symbol);
   return n?.kind === 'stock' ? n : null;
 }

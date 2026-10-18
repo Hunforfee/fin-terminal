@@ -5,8 +5,11 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import FieldPicker, { allFieldMetas, type PickerCatalog } from '@/components/FieldPicker';
 import { INDICATORS } from '@/lib/datasource/sinaFinancial';
+import { financeStorageKey } from '@/lib/financePreferences';
 
 interface CompanyFinancials {
+  periodKinds?: Record<string,string>;
+  currency?: string;
   code: string;
   name: string;
   periods: string[];
@@ -47,9 +50,9 @@ const RANGES = [2, 3, 5, 10] as const;
 
 const LS_FIELDS = 'fin.mergeTable.fields';
 
-function loadFields(): string[] {
+function loadFields(storageKey = LS_FIELDS): string[] {
   try {
-    const raw = localStorage.getItem(LS_FIELDS);
+    const raw = localStorage.getItem(storageKey);
     const arr = raw ? JSON.parse(raw) : null;
     if (Array.isArray(arr) && arr.length > 0) return arr.slice(0, 60);
   } catch {
@@ -96,6 +99,8 @@ function pctCls(v: number | null): string {
 }
 
 export default function FinanceTable({ code }: { code: string }) {
+  const fieldsKey = financeStorageKey(LS_FIELDS, code);
+  const [loadedFieldsKey, setLoadedFieldsKey] = useState('');
   const [granularity, setGranularity] = useState<'annual' | 'semi' | 'quarter'>('quarter');
   const [years, setYears] = useState<number>(5);
   const [view, setView] = useState<'indicators' | 'pl' | 'bs' | 'cf'>('indicators');
@@ -134,23 +139,25 @@ export default function FinanceTable({ code }: { code: string }) {
   }, []);
 
   useEffect(() => {
-    setFields(loadFields());
+    setFields(loadFields(fieldsKey));
     setShowAll(loadShowAll());
     bootedRef.current = true;
-  }, []);
+    setLoadedFieldsKey(fieldsKey);
+  }, [fieldsKey]);
 
   useEffect(() => {
-    if (!bootedRef.current) return;
+    if (!bootedRef.current || loadedFieldsKey !== fieldsKey) return;
     try {
-      localStorage.setItem(LS_FIELDS, JSON.stringify(fields));
+      localStorage.setItem(fieldsKey, JSON.stringify(fields));
       localStorage.setItem('fin.mergeTable.showAll', showAll ? '1' : '0');
     } catch {
       /* ignore */
     }
-  }, [fields, showAll]);
+  }, [fields, showAll, loadedFieldsKey, fieldsKey]);
 
   useEffect(() => {
     let alive = true;
+    setCatalog(null);
     fetch(`/api/finance-fields?code=${code}`)
       .then((r) => r.json())
       .then((j) => alive && j.ok && setCatalog(j.data as PickerCatalog))
@@ -244,6 +251,7 @@ export default function FinanceTable({ code }: { code: string }) {
   const labelsAsc = primary?.periodLabels ?? [];
   /** 列标题按当前粒度口径改写：年报视图的 12-31 显示「年报」，中报视图显示「中报」 */
   const labelOf = (period: string, raw: string): string => {
+    if (primary?.periodKinds) return raw;
     if (granularity === 'annual' || granularity === 'semi') {
       if (period.endsWith('-12-31')) return `${period.slice(2, 4)}年报`;
       if (period.endsWith('-06-30')) return `${period.slice(2, 4)}中报`;
@@ -285,6 +293,8 @@ export default function FinanceTable({ code }: { code: string }) {
     const v = s[i];
     if (v === null || v === undefined || !Number.isFinite(v)) return null;
     const qOfMonth = (p: string): number => {
+      const kind = primary?.periodKinds?.[p];
+      if (kind) return ({q1:1,semi:2,q3:3,annual:4} as Record<string,number>)[kind] ?? 0;
       const md = p.slice(5, 10);
       if (md === '03-31') return 1;
       if (md === '06-30') return 2;
@@ -298,14 +308,14 @@ export default function FinanceTable({ code }: { code: string }) {
     let curQ: number | null = v;
     if (qOfMonth(p) > 1) {
       const y = p.slice(0, 4);
-      const prevQDate = ['03-31', '06-30', '09-30', '12-31'][qOfMonth(p) - 2];
-      const pi = periodsAsc.indexOf(`${y}-${prevQDate}`);
+      const prevQDate = new Date(Date.UTC(Number(y), Number(p.slice(5,7)) - 3, 0)).toISOString().slice(0,10);
+      const pi = periodsAsc.indexOf(prevQDate);
       const pv = pi >= 0 ? s[pi] : null;
       if (pv === null || pv === undefined || !Number.isFinite(pv)) return null;
       curQ = v - pv;
     }
     // 上年同期单季
-    const prevYearDate = ['03-31', '06-30', '09-30', '12-31'][qOfMonth(p) - 1];
+    const prevYearDate = p.slice(5);
     const yi = periodsAsc.indexOf(`${Number(p.slice(0, 4)) - 1}-${prevYearDate}`);
     if (yi < 0) return null;
     const yv = s[yi];
@@ -313,8 +323,8 @@ export default function FinanceTable({ code }: { code: string }) {
     let prevQ: number | null = yv;
     if (qOfMonth(p) > 1) {
       const py = String(Number(p.slice(0, 4)) - 1);
-      const prevQDate = ['03-31', '06-30', '09-30', '12-31'][qOfMonth(p) - 2];
-      const pi2 = periodsAsc.indexOf(`${py}-${prevQDate}`);
+      const prevQDate = new Date(Date.UTC(Number(py), Number(p.slice(5,7)) - 3, 0)).toISOString().slice(0,10);
+      const pi2 = periodsAsc.indexOf(prevQDate);
       const pv2 = pi2 >= 0 ? s[pi2] : null;
       if (pv2 === null || pv2 === undefined || !Number.isFinite(pv2)) return null;
       prevQ = yv - pv2;
@@ -375,7 +385,7 @@ export default function FinanceTable({ code }: { code: string }) {
           <div className="flex max-w-full gap-1 overflow-x-auto" role="group" aria-label="报表视图">
             {(
               [
-                ['indicators', '指标'],
+                ['indicators', '自定义财报'],
                 ['pl', '利润表'],
                 ['bs', '资产负债表'],
                 ['cf', '现金流量表'],
@@ -392,7 +402,7 @@ export default function FinanceTable({ code }: { code: string }) {
             ))}
           </div>
           <span className="hidden text-xs font-medium text-slate-500 sm:block">
-            {primary?.name ?? code}
+            {primary?.name ?? code}{primary?.currency ? ` · ${primary.currency}` : ''}
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2 px-3 py-2">

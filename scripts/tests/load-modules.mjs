@@ -3,7 +3,9 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 const root = process.cwd();
-const out = path.join(root, 'node_modules', '.valuation-tests');
+// Node runs test files in separate processes; isolate transpiled modules so one worker
+// cannot import another worker's file while it is being overwritten.
+const out = path.join(root, 'node_modules', '.valuation-tests', String(process.pid));
 async function compile(dir) {
   for (const entry of await fs.readdir(dir, {withFileTypes:true})) {
     const p = path.join(dir, entry.name);

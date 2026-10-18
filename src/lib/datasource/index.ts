@@ -22,6 +22,8 @@ import { cached, defaultTtl, putCache } from './cache';
 import { normalizeCode, normalizeStockCode } from './codes';
 import { computeValuation, buildFinancialSummary } from '../analytics';
 import * as sinaBonus from './sinaBonus';
+import { fetchDividendPlans } from './dividendPlans';
+import { buildExpectedDividendYieldByDate } from '../dividends';
 import type { DividendEvent } from './sinaBonus';
 import * as sinaFinance from './sinaFinance';
 import type { PeriodFinancial, ShareChange } from './sinaFinance';
@@ -68,7 +70,7 @@ function ymdYearsAgo(years: number): string {
 export async function search(keyword: string): Promise<SearchHit[]> {
   const kw = keyword.trim();
   if (!kw) return [];
-  return cached(`search:${kw}`, 5 * 60 * 1000, async () => {
+  return cached(`search-markets-v2:${kw}`, 5 * 60 * 1000, async () => {
     const out: SearchHit[] = [];
     const seen = new Set<string>();
 
@@ -243,23 +245,21 @@ export async function getMinute(input: string): Promise<MinutePoint[]> {
  * 价格为不复权收盘价 —— 与前复权价倒推的旧口径相比，不会因除权而低估历史 PE。
  */
 export async function getValuation(input: string, years = 10, method: ValuationMethod = 'disclosure'): Promise<Valuation> {
-  const n = normalizeCode(input);
+  const n = normalizeStockCode(input);
   if (!n || n.kind !== 'stock') throw new Error('真实财报估值仅支持 A 股 / 港股股票');
   if (n.market === 'HK') {
     const span = Math.min(Math.max(years, 1), 10);
-    return cached(`val-hk-v1:${n.symbol}:${span}`, 60 * 60 * 1000, async () => {
-      const [q, raw] = await Promise.all([
-        getQuote(n.symbol),
-        getKLine(n.symbol, 'day', 'none', 3200, ymdYearsAgo(span + 1)),
-      ]);
+    return cached(`val-hk-verified-v2:${n.symbol}:${span}`, 60 * 60 * 1000, async () => {
+      const q = await getQuote(n.symbol);
       if (!q) throw new Error('行情获取失败');
-      return hkFinance.buildHkValuation(`${n.code}.HK`, n.code, raw.candles, q, span);
+      const result = await hkFinance.buildHkValuation(`${n.code}.HK`, n.code, [], q, span);
+      return {...result, stale:q.stale};
     });
   }
   const span = Math.min(Math.max(years, 1), 10);
-  return cached(`val-qfq-v1:${n.symbol}:${span}:${method}`, defaultTtl(), async () => {
+  return cached(`val-qfq-forward-dy-v2:${n.symbol}:${span}:${method}`, defaultTtl(), async () => {
     const start = ymdYearsAgo(span + 1);
-    const [q, points, shares, dates, dividends, raw, adjusted] = await Promise.all([
+    const [q, points, shares, dates, dividends, raw, adjusted, plans] = await Promise.all([
       getQuote(n.symbol),
       cached(`statements-v2:${n.code}`, 864e5, () => sinaFinStmt.fetchStatementHistory(n.code, span + 2)),
       cached(`shares-v2:${n.code}`, 864e5, () => sinaFinance.fetchShareHistory(n.code)),
@@ -267,6 +267,7 @@ export async function getValuation(input: string, years = 10, method: ValuationM
       cached(`dividends-v2:${n.code}`, 864e5, () => sinaBonus.fetchDividends(n.code)).catch(() => null),
       getKLine(n.symbol, 'day', 'none', 3200, start),
       getKLine(n.symbol, 'day', 'qfq', 3200, start),
+      cached(`dividend-plans-v1:${n.code}`, 3600e3, () => fetchDividendPlans(n.code)).catch(() => null),
     ]);
     if (!q) throw new Error('行情获取失败');
     if (!points.length) throw new Error('财报数据不可用，已停止估值计算，请稍后重试');
@@ -275,7 +276,8 @@ export async function getValuation(input: string, years = 10, method: ValuationM
     const cutoff = ymdYearsAgo(span);
     const candles = raw.candles.filter(c => c.date >= cutoff);
     const adjustedByDate = new Map(adjusted.candles.map(c => [c.date, c]));
-    const dyByDate = dividends ? buildDividendYieldByDate(dividends, candles) : new Map<string, number>();
+    const staticDyByDate = dividends ? buildDividendYieldByDate(dividends, candles) : new Map<string, number>();
+    const dyByDate = plans && dividends ? buildExpectedDividendYieldByDate(plans, candles, dividends) : new Map<string, number | null>();
     const completePoints = [...points];
     const firstReport = points[0].date;
     for (const report of dates.keys()) {
@@ -293,7 +295,7 @@ export async function getValuation(input: string, years = 10, method: ValuationM
     });
     const timeline = method === 'cutoff' ? cutoffTimeline : disclosure;
     const alternate = method === 'cutoff' ? disclosure : cutoffTimeline;
-    const options = { dyByDate, adjustedByDate, shareHistory: shares };
+    const options = { dyByDate, staticDyByDate, adjustedByDate, shareHistory: shares };
     const history = buildRealValuationSeries(candles, timeline, options);
     if (!history.length) throw new Error('财报、股本与前复权价格没有可对齐的日期');
     const last = history[history.length - 1];
@@ -308,9 +310,14 @@ export async function getValuation(input: string, years = 10, method: ValuationM
     if (history.length < candles.length) warnings.push('部分交易日缺少可对齐的前复权价格或已披露财报，已排除。');
     if (history[0].date > cutoff && history[0].date > candles[0]?.date) warnings.push('数据覆盖不足所选区间，请以实际起止日期和样本数为准。');
     if (dividends === null) warnings.push('分红数据源不可用，股息率暂不计算。');
+    if (plans === null) warnings.push('分红方案数据不可用，预期股息率暂不计算；静态值仍按可取得的已实施分红计算。');
     if (raw.stale || adjusted.stale || q.stale) warnings.push('部分行情来自历史快照，请留意数据日期。');
     warnings.push('财务金额为数据源当前披露版本，可能包含后续重述；历史序列不能替代严格的时点回测数据。');
     return { ...main, code: n.code, method, priceAdjust: 'qfq', warnings,
+      dividendYieldMethod: 'announced-forward',
+      dividendForecast: { asOf: last.date, rawClose: last.rawClose ?? last.close,
+        expectedPerShare: main.dividendYield === null ? null : main.dividendYield * (last.rawClose ?? last.close) / 100,
+        staticPerShare: main.staticDividendYield === null ? null : main.staticDividendYield * (last.rawClose ?? last.close) / 100 },
       netProfit: lastFin?.npTTM ?? null,
       marketComparison: { pe: q.pe, pb: q.pb, ts: q.ts },
       fin: { report: lastFin?.report ?? null, npTTM: lastFin?.npTTM ?? null,
@@ -318,7 +325,7 @@ export async function getValuation(input: string, years = 10, method: ValuationM
         realDates: true, adjustGaps: 0 },
       ...(alt && alt.stats ? { alt: { method: method === 'cutoff' ? 'disclosure' as const : 'cutoff' as const,
         history: alt.history, stats: alt.stats, current: { pe: alt.pe, pb: alt.pb, dy: alt.dividendYield } } } : {}),
-      source: 'sina-statements + sina-disclosures + tencent-qfq',
+      source: 'sina-statements + sina-disclosures + eastmoney-dividend-plans + tencent-qfq',
       stale: q.stale || raw.stale || adjusted.stale,
     };
   });
@@ -465,7 +472,7 @@ export async function getFinancialCompare(
   return cached(`fincomp:${list.join(',')}:${years}:${granularity}`, 60 * 60 * 1000, async () => {
     const results = await Promise.all(
       list.map(async (c) => {
-        const n = normalizeCode(c);
+        const n = normalizeStockCode(c);
         if (!n) throw new Error(`无法解析代码 ${c}`);
         const q = await getQuote(n.symbol).catch(() => null);
         let f: sinaFinancial.CompanyFinancials;
@@ -497,7 +504,7 @@ export async function getFinancialCompare(
             };
           }
         }
-        return sinaFinancial.filterByGranularity(f, granularity);
+        return n.market === 'HK' ? hkFinance.filterHkPeriods(f, granularity) : sinaFinancial.filterByGranularity(f, granularity);
       }),
     );
     return {
@@ -514,7 +521,7 @@ import * as sinaStatements from './sinaStatements';
 
 /** 三大报表字段目录（含全部披露科目），缓存 24h。 */
 export async function getFinanceFieldsCatalog(code: string) {
-  const n = normalizeCode(code);
+  const n = normalizeStockCode(code);
   if (!n) throw new Error(`无法解析代码 ${code}`);
   const q = await getQuote(n.symbol).catch(() => null);
   if (n.market === 'HK') {
@@ -569,11 +576,11 @@ export async function getCustomFinancialCompare(
   return cached(`finfield:${list.join(',')}:${fieldKey}:${years}:${granularity}`, 60 * 60 * 1000, async () => {
     const results = await Promise.all(
       list.map(async (c) => {
-        const n = normalizeCode(c);
+        const n = normalizeStockCode(c);
         if (!n) throw new Error(`无法解析代码 ${c}`);
         const q = await getQuote(n.symbol).catch(() => null);
         if (n.market === 'HK') {
-          return filterCustom(
+          return hkFinance.filterHkPeriods(
             await hkFinance.fetchHkCustomFinancials(`${n.code}.HK`, n.code, fields, years, q?.name),
             granularity,
           );

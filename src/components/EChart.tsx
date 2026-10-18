@@ -16,6 +16,7 @@ import {
   VisualMapComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
+import { LabelLayout } from 'echarts/features';
 
 echarts.use([
   BarChart,
@@ -33,6 +34,7 @@ echarts.use([
   TooltipComponent,
   VisualMapComponent,
   CanvasRenderer,
+  LabelLayout,
 ]);
 
 export interface EChartProps {

@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { SearchHit } from '@/lib/datasource/types';
+import { searchResultPath as pathOf } from '@/lib/searchRouting';
+import { normalizeCode } from '@/lib/datasource/codes';
 import { pushHistory, readHistory, removeHistory, clearHistory, type HistoryItem } from '@/lib/searchHistory';
 
 const KIND_LABEL: Record<string, string> = {
@@ -13,12 +15,6 @@ const KIND_LABEL: Record<string, string> = {
   bond: '债券',
   unknown: '其他',
 };
-
-function pathOf(hit: { kind: string; code: string; market?: string }): string {
-  if (hit.kind === 'index') return `/index/${hit.code}`;
-  if (hit.kind === 'fund' || hit.kind === 'etf') return `/fund/${hit.code}`;
-  return `/stock/${hit.market ? hit.market.toLowerCase() : ''}${hit.code}`;
-}
 
 /**
  * 全局搜索框：输入即联想，支持代码 / 中文名 / 拼音首字母。
@@ -36,6 +32,7 @@ export default function SearchBox({ placeholder = '搜索股票 / 指数 / 基�
   const boxRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const seqRef = useRef(0);
+  const submittingRef = useRef(false);
 
   // 挂载后读取历史（避免 SSR 与首帧不一致）
   useEffect(() => {
@@ -45,12 +42,14 @@ export default function SearchBox({ placeholder = '搜索股票 / 指数 / 基�
   // 输入防抖
   useEffect(() => {
     const q = kw.trim();
+    const mySeq = ++seqRef.current;
     if (!q) {
       setHits([]);
+      setLoading(false);
       return;
     }
+    setHits([]);
     setLoading(true);
-    const mySeq = ++seqRef.current;
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
@@ -59,7 +58,7 @@ export default function SearchBox({ placeholder = '搜索股票 / 指数 / 基�
         const list: SearchHit[] = json.ok ? json.data : [];
         setHits(list);
         setActive(0);
-        setOpen(list.length > 0);
+        setOpen(list.length > 0 && document.activeElement === inputRef.current);
       } catch {
         if (mySeq === seqRef.current) setHits([]);
       } finally {
@@ -89,6 +88,7 @@ export default function SearchBox({ placeholder = '搜索股票 / 指数 / 基�
   }, []);
 
   const go = (hit: { kind: string; code: string; name: string; market?: string; board?: string }) => {
+    ++seqRef.current;
     pushHistory({ code: hit.code, name: hit.name, kind: hit.kind, market: hit.market ?? '', board: hit.board ?? '' });
     setHistory(readHistory());
     setOpen(false);
@@ -123,7 +123,8 @@ export default function SearchBox({ placeholder = '搜索股票 / 指数 / 基�
   const showingHistory = open && kw.trim() === '' && history.length > 0;
   const showingHits = open && hits.length > 0;
 
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const onKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing) return;
     const list: { kind: string; code: string; name: string; market?: string; board?: string }[] = showingHistory
       ? history
       : showingHits
@@ -131,8 +132,24 @@ export default function SearchBox({ placeholder = '搜索股票 / 指数 / 基�
         : [];
     if (list.length === 0) {
       if (e.key === 'Enter' && kw.trim()) {
-        // 没有联想结果时直接按代码跳转
-        router.push(`/stock/${kw.trim()}`);
+        e.preventDefault();
+        if (submittingRef.current) return;
+        submittingRef.current = true;
+        const query = kw.trim();
+        setLoading(true);
+        try {
+          const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+          const json = await res.json();
+          if (inputRef.current?.value.trim() !== query) return;
+          if (json.ok && json.data?.length) go(json.data[0]);
+          else {
+            const n = normalizeCode(query);
+            if (n) router.push(pathOf(n));
+          }
+        } catch {
+          const n = normalizeCode(query);
+          if (inputRef.current?.value.trim() === query && n) router.push(pathOf(n));
+        } finally { submittingRef.current = false; setLoading(false); }
       }
       if (e.key === 'Escape') setOpen(false);
       return;
@@ -165,7 +182,7 @@ export default function SearchBox({ placeholder = '搜索股票 / 指数 / 基�
         <input
           ref={inputRef}
           value={kw}
-          onChange={(e) => setKw(e.target.value)}
+          onChange={(e) => { ++seqRef.current; setHits([]); setKw(e.target.value); }}
           onFocus={onFocus}
           onKeyDown={onKeyDown}
           placeholder={placeholder}

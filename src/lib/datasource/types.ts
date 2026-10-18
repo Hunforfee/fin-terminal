@@ -125,8 +125,12 @@ export interface Valuation {
   /** 市盈率在历史区间中的百分位（0-100，越低越便宜） */
   pePercentile: number | null;
   pbPercentile: number | null;
-  /** 股息率 % */
+  /** 预期股息率 %：已公告方案延续法，未来一年的税前股息收入占买入价的估计。 */
   dividendYield: number | null;
+  /** 静态股息率 %：过去十二个月已实施税前现金分红 / 同日不复权股价。 */
+  staticDividendYield?: number | null;
+  dividendYieldMethod?: 'announced-forward';
+  dividendForecast?: { asOf: string; expectedPerShare: number | null; staticPerShare: number | null; rawClose: number };
   /** 股息率历史分位 % */
   dyPercentile?: number | null;
   /** 净资产收益率 %（由 PB/PE 恒等式派生） */
@@ -141,6 +145,7 @@ export interface Valuation {
   basis?: 'real' | 'estimate';
   priceAdjust?: 'qfq';
   warnings?: string[];
+  historyUnavailableReason?: string;
   marketComparison?: { pe: number | null; pb: number | null; ts: string | null };
   /** 序列区间年数 */
   years?: number;
@@ -212,8 +217,10 @@ export interface ValuationPoint {
   close: number;
   rawClose?: number;
   adjustmentFactor?: number;
-  /** 股息率 %；无十二个月内分红为 0，分红数据源不可用为 null。 */
+  /** 预期股息率 %；未知数据为 null，明确零分红为 0。 */
   dy: number | null;
+  /** 过去十二个月已实施分红的静态股息率 %。 */
+  dyStatic?: number | null;
 }
 
 /** 财务摘要 */

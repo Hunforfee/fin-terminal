@@ -43,9 +43,10 @@ export default function QuoteHeader({ quote }: { quote: Quote }) {
 
   const isStock = quote.kind === 'stock';
   useEffect(() => {
+    setProfile(null);
     if (!isStock) return;
     let alive = true;
-    fetch(`/api/company-profile?code=${encodeURIComponent(quote.code)}`)
+    fetch(`/api/company-profile?code=${encodeURIComponent(quote.symbol)}`)
       .then((r) => r.json())
       .then((j) => {
         if (alive && j?.data) setProfile(j.data as Profile);
@@ -54,7 +55,7 @@ export default function QuoteHeader({ quote }: { quote: Quote }) {
     return () => {
       alive = false;
     };
-  }, [isStock, quote.code]);
+  }, [isStock, quote.symbol]);
 
   const cap = quote.totalMarketCap;
   const capText =
@@ -126,7 +127,7 @@ export default function QuoteHeader({ quote }: { quote: Quote }) {
           />
           <ProfileItem label="实控人" value={profile?.controller ?? '--'} title={profile?.controller ?? undefined} />
           <ProfileItem
-            label="所属三级行业"
+            label={quote.market === 'HK' ? '所属行业' : '所属三级行业'}
             value={profile?.industry ?? '--'}
             title={profile?.industryPath ?? undefined}
           />

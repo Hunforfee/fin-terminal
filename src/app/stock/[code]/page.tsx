@@ -4,19 +4,14 @@ import QuoteHeader from '@/components/QuoteHeader';
 import ValuationSection from '@/components/ValuationSection';
 import AiAnalysis from '@/components/AiAnalysis';
 import { getQuote } from '@/lib/datasource';
+import { normalizeStockCode } from '@/lib/datasource/codes';
 
 export const dynamic = 'force-dynamic';
 
 export default async function StockPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
 
-  // 港股：hk00700 / 00700 / 0700.hk；A 股：6 位数字
-  const isHk = /^(hk)?\d{1,5}(\.hk)?$/i.test(code) && !/^\d{6}$/.test(code);
-  const symbol = isHk
-    ? `hk${(/(\d{1,5})(?:\.hk)?$/i.exec(code)?.[1] ?? code).padStart(5, '0')}`
-    : /^\d{6}$/.test(code)
-      ? `${/^[03]/.test(code) ? 'sz' : /^[48]/.test(code) ? 'bj' : 'sh'}${code}`
-      : code;
+  const symbol = normalizeStockCode(code)?.symbol ?? code;
   const quote = await getQuote(symbol).catch(() => null);
   if (!quote) notFound();
 

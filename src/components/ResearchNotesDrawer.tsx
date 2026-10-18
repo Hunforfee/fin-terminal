@@ -422,9 +422,6 @@ export default function ResearchNotesDrawer({
         }}
       >
         <div className="flex min-w-0 items-center gap-3">
-          <h2 id={titleId} className="text-lg font-semibold">
-            研究笔记
-          </h2>
           <div
             role="tablist"
             aria-label="笔记分类"
@@ -474,18 +471,73 @@ export default function ResearchNotesDrawer({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {!editing && (
+            <>
+              <input
+                aria-label="搜索研究笔记"
+                className="input !h-8 w-44"
+                placeholder={
+                  category === 'daily'
+                    ? '搜索日期、标题或正文'
+                    : '搜索公司、代码或笔记内容'
+                }
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setPendingDelete(null);
+                }}
+              />
+              {category === 'company' && (
+                <select
+                  aria-label="笔记公司筛选"
+                  className="input !h-8 !w-28"
+                  value={activeFilter}
+                  onChange={(event) => {
+                    setCompanyFilter(event.target.value);
+                    setPendingDelete(null);
+                  }}
+                >
+                  <option value="all">全部公司</option>
+                  {noteCompanies.map((c) => (
+                    <option key={c.symbol} value={c.symbol}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </>
+          )}
+          {!editing && (
             <button
               ref={creating}
               type="button"
               disabled={!ready}
-              className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+              aria-label={draft ? '继续草稿' : category === 'daily' ? '写心得' : '新建笔记'}
+              title={draft ? '继续草稿' : category === 'daily' ? '写心得' : '新建笔记'}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-brand-600 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
               onClick={newNote}
             >
-              {draft
-                ? '继续草稿'
-                : category === 'daily'
-                  ? '写心得'
-                  : '新建笔记'}
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                <path d="M5 12h14M12 5v14" />
+              </svg>
+            </button>
+          )}
+          {!editing && (
+            <button
+              type="button"
+              aria-label={directoryOpen ? '收起目录' : '展开目录'}
+              title={directoryOpen ? '收起目录' : '展开目录'}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+              onClick={() => setDirectoryOpen((open) => !open)}
+            >
+              {directoryOpen ? (
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                  <path d="M3 6h18M3 12h18M3 18h18" />
+                </svg>
+              ) : (
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                  <path d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              )}
             </button>
           )}
           <button
@@ -676,40 +728,6 @@ export default function ResearchNotesDrawer({
           </form>
         ) : (
           <>
-            <div className="flex shrink-0 flex-col gap-2 border-b border-slate-100 px-4 py-4 sm:flex-row sm:px-6">
-              <input
-                aria-label="搜索研究笔记"
-                className="input min-w-0 flex-1"
-                placeholder={
-                  category === 'daily'
-                    ? '搜索日期、标题或正文'
-                    : '搜索公司、代码或笔记内容'
-                }
-                value={query}
-                onChange={(event) => {
-                  setQuery(event.target.value);
-                  setPendingDelete(null);
-                }}
-              />
-              {category === 'company' && (
-                <select
-                  aria-label="笔记公司筛选"
-                  className="input sm:!w-40"
-                  value={activeFilter}
-                  onChange={(event) => {
-                    setCompanyFilter(event.target.value);
-                    setPendingDelete(null);
-                  }}
-                >
-                  <option value="all">全部公司</option>
-                  {noteCompanies.map((c) => (
-                    <option key={c.symbol} value={c.symbol}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
             {error && (
               <p role="alert" className="px-6 pt-3 text-sm text-red-600">
                 {error}

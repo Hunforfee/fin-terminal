@@ -1,110 +1,220 @@
 import type { NextRequest } from 'next/server';
 import { ok, fail, sp } from '@/lib/api';
 import { getQuotes } from '@/lib/datasource';
-import { findSwNode, swStats, SW2021 } from '@/lib/sw2021';
+import { swAllNodes, swStats, SW2021, type SwNode } from '@/lib/sw2021';
+import type { Quote } from '@/lib/datasource/types';
+import {
+  industryStockSymbol,
+  summarizeIndustry,
+  type IndustryResearchRow,
+} from '@/lib/industryResearch';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/** 行业节点 + 实时行情后的成分股 */
-export interface ConstituentRow {
-  code: string;
+export interface ConstituentRow extends IndustryResearchRow {
+  symbol: string;
+  l1: string;
+  l2: string | null;
+  l3: string | null;
+  quoteAvailable: boolean;
+  quoteTime: string | null;
+  stale: boolean;
+  /** Legacy field retained empty: reported ROE is not part of this quote API. */
+  roe: null;
+}
+
+const aCodes = (node: SwNode): string[] =>
+  [...new Set(node.stocks)].filter(
+    (code) => industryStockSymbol(code) !== null,
+  );
+const finite = (value: number | null | undefined): number | null =>
+  typeof value === 'number' && Number.isFinite(value) ? value : null;
+
+interface IndustryTreeNode {
   name: string;
-  price: number | null;
-  changePct: number | null;
-  pe: number | null;
-  pb: number | null;
-  roe: number | null;
-  totalMarketCap: number | null;
-  turnoverRate: number | null;
+  count: number;
+  declared: number;
+  children?: IndustryTreeNode[];
+}
+function treeNode(node: SwNode): IndustryTreeNode {
+  return {
+    name: node.name,
+    count: aCodes(node).length,
+    declared: node.count,
+    ...(node.children ? { children: node.children.map(treeNode) } : {}),
+  };
 }
 
-/** 6 位代码 → 带市场前缀的 symbol（沪 6/9 开头，深 0/3 开头，北 4/8/9 开头） */
-function toSymbol(code: string): string {
-  if (/^[69]/.test(code)) return `sh${code}`;
-  if (/^[48]/.test(code)) return `bj${code}`;
-  return `sz${code}`;
+function classification() {
+  const byCode = new Map<
+    string,
+    { l1: string; l2: string | null; l3: string | null }
+  >();
+  for (const first of SW2021.industries) {
+    for (const code of aCodes(first))
+      byCode.set(code, { l1: first.name, l2: null, l3: null });
+    for (const second of first.children ?? []) {
+      for (const code of aCodes(second))
+        byCode.set(code, { l1: first.name, l2: second.name, l3: null });
+      for (const third of second.children ?? []) {
+        for (const code of aCodes(third))
+          byCode.set(code, { l1: first.name, l2: second.name, l3: third.name });
+      }
+    }
+  }
+  return byCode;
 }
+const paths = classification();
 
-/**
- * GET /api/sw-industry
- *   ?node=白酒Ⅱ&level=3      —— 指定行业节点，返回其成分股（含实时行情）
- *   ?tree=1                    —— 只返回三层分类树（无行情，轻量）
- *
- * 说明：不剔除亏损股，PE 为负照常返回。
- */
+/** Fetch only this industry's A shares. A failed chunk never hides other chunks. */
 export async function GET(request: NextRequest) {
-  const p = sp(request);
+  const params = sp(request);
+  const allDeclared = new Set(SW2021.industries.flatMap((node) => node.stocks));
+  const stockCount = [...allDeclared].filter(
+    (code) => industryStockSymbol(code) !== null,
+  ).length;
+  const stats = {
+    ...swStats(),
+    stocks: stockCount,
+    declaredStocks: allDeclared.size,
+    excludedCount: allDeclared.size - stockCount,
+  };
+  const provenance = {
+    classification: 'SW2021',
+    membershipSource: 'bundled-eastmoney-f10-mapping',
+    membershipAsOf: null,
+    market: 'A',
+    roeMethod: 'pb-over-pe-estimate',
+  };
 
-  if (p.get('tree') === '1') {
+  if (params.get('tree') === '1')
     return ok({
       version: SW2021.version,
-      stats: swStats(),
-      industries: SW2021.industries.map((l1) => ({
-        name: l1.name,
-        count: l1.count,
-        children: (l1.children ?? []).map((l2) => ({
-          name: l2.name,
-          count: l2.count,
-          children: (l2.children ?? []).map((l3) => ({ name: l3.name, count: l3.count })),
-        })),
+      stats,
+      provenance,
+      industries: SW2021.industries.map(treeNode),
+    });
+  const name = params.get('node');
+  if (!name)
+    return ok({
+      version: SW2021.version,
+      stats,
+      provenance,
+      industries: SW2021.industries.map((node) => ({
+        name: node.name,
+        count: aCodes(node).length,
+        declared: node.count,
       })),
     });
-  }
-
-  const name = p.get('node');
-  if (!name) {
-    // 无参数：返回一级行业列表 + 各自成分股数量
-    return ok({
-      version: SW2021.version,
-      stats: swStats(),
-      industries: SW2021.industries.map((n) => ({ name: n.name, count: n.count })),
-    });
-  }
-
-  const lvRaw = Number(p.get('level'));
-  const level = lvRaw === 2 ? 2 : lvRaw === 3 ? 3 : 1;
-  const node = findSwNode(name, level as 1 | 2 | 3) ?? findSwNode(name);
+  const requestedLevel = params.get('level');
+  if (requestedLevel !== null && !['1', '2', '3'].includes(requestedLevel))
+    return fail('行业层级需为 1、2 或 3', 400);
+  const l1 = params.get('l1'),
+    l2 = params.get('l2');
+  const node = swAllNodes().find(
+    (candidate) =>
+      candidate.name === name &&
+      (!requestedLevel || candidate.level === Number(requestedLevel)) &&
+      (!l1 || candidate.l1 === l1) &&
+      (!l2 || candidate.l2 === l2),
+  );
   if (!node) return fail(`未找到行业「${name}」`, 404);
 
-  const codes = node.stocks;
-  if (codes.length === 0) {
-    return ok({
-      node: { name: node.name, level: node.level, l1: node.l1, l2: node.l2 ?? null },
-      count: 0,
-      rows: [] as ConstituentRow[],
-      note: '该行业在数据源侧无独立成分股（申万二级银行细分与「银行Ⅱ」合并），可查看同一级下的其他行业。',
-    });
-  }
-
-  try {
-    // 必须带市场前缀：000001 既可能是上证指数（sh000001）也可能是平安银行（sz000001），
-    // 只传裸代码会被指数白名单抢先解析，导致行业里混入指数行情。
-    const symbols = codes.map(toSymbol);
-    const quotes = await getQuotes(symbols);
-    const rows: ConstituentRow[] = quotes
-      .filter((q) => q.kind !== 'index')
-      .map((q) => ({
-        code: q.code,
-        name: q.name,
-        price: q.price,
-        changePct: q.changePct,
-        pe: q.pe,
-        pb: q.pb,
-        // ROE 由 PB/PE 恒等式派生；亏损股 PE 为负 → ROE 无法由该式还原，置空
-        roe: q.pe !== null && q.pb !== null && q.pe > 0 && q.pb > 0 ? (q.pb / q.pe) * 100 : null,
-        totalMarketCap: q.totalMarketCap,
-        turnoverRate: q.turnoverRate,
-      }))
-      .sort((a, b) => (b.totalMarketCap ?? 0) - (a.totalMarketCap ?? 0));
-
-    return ok({
-      node: { name: node.name, level: node.level, l1: node.l1, l2: node.l2 ?? null },
-      count: rows.length,
-      declared: node.count,
-      rows,
-    });
-  } catch (e) {
-    return fail(e instanceof Error ? e.message : '成分股行情获取失败', 502, e);
-  }
+  const codes = aCodes(node),
+    declaredCodes = new Set(node.stocks);
+  const nodeInfo = {
+    name: node.name,
+    code: node.code,
+    level: node.level,
+    l1: node.l1,
+    l2: node.l2 ?? null,
+    l3: node.level === 3 ? node.name : null,
+  };
+  const chunks: string[][] = [];
+  for (let start = 0; start < codes.length; start += 40)
+    chunks.push(
+      codes.slice(start, start + 40).map((code) => industryStockSymbol(code)!),
+    );
+  const quotes: Quote[] = [];
+  let next = 0,
+    failedChunks = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(4, chunks.length) }, async () => {
+      while (next < chunks.length) {
+        const chunk = chunks[next++];
+        try {
+          quotes.push(...(await getQuotes(chunk)));
+        } catch {
+          failedChunks++;
+        }
+      }
+    }),
+  );
+  const allowed = new Set(codes.map((code) => industryStockSymbol(code)!));
+  const bySymbol = new Map(
+    quotes
+      .filter((quote) => allowed.has(quote.symbol) && quote.kind === 'stock')
+      .map((quote) => [quote.symbol, quote]),
+  );
+  const rows: ConstituentRow[] = codes.map((code) => {
+    const symbol = industryStockSymbol(code)!;
+    const quote = bySymbol.get(symbol);
+    const available =
+      quote !== undefined && finite(quote.price) !== null && quote.price! > 0;
+    const pe = available ? finite(quote?.pe) : null,
+      pb = available ? finite(quote?.pb) : null;
+    return {
+      code,
+      symbol,
+      name: quote?.name || code,
+      ...(paths.get(code) ?? {
+        l1: node.l1,
+        l2: node.l2 ?? null,
+        l3: node.level === 3 ? node.name : null,
+      }),
+      price: available ? finite(quote?.price) : null,
+      changePct: available ? finite(quote?.changePct) : null,
+      pe,
+      pb,
+      roe: null,
+      roeEstimate:
+        pe !== null && pe > 0 && pb !== null && pb > 0 ? (pb / pe) * 100 : null,
+      totalMarketCap:
+        available &&
+        finite(quote?.totalMarketCap) !== null &&
+        quote!.totalMarketCap! > 0
+          ? quote!.totalMarketCap
+          : null,
+      turnoverRate: available ? finite(quote?.turnoverRate) : null,
+      quoteAvailable: available,
+      quoteTime: available ? (quote?.ts ?? null) : null,
+      stale: available && quote?.stale === true,
+    };
+  });
+  const summary = summarizeIndustry(rows, codes.length);
+  const times = rows
+    .map((row) => (row.quoteTime ? Date.parse(row.quoteTime) : NaN))
+    .filter(Number.isFinite);
+  const updatedAt = times.length
+    ? new Date(Math.max(...times)).toISOString()
+    : null;
+  return ok({
+    node: nodeInfo,
+    count: codes.length,
+    declared: node.count,
+    excludedCount: declaredCodes.size - codes.length,
+    quotedCount: summary.quotedCount,
+    missingQuoteCount: summary.missingQuoteCount,
+    failedChunks,
+    partial: summary.missingQuoteCount > 0,
+    updatedAt,
+    quoteTimeFrom: times.length
+      ? new Date(Math.min(...times)).toISOString()
+      : null,
+    rows,
+    summary,
+    provenance,
+    ...(codes.length === 0 ? { note: '该分类暂无收录的 A 股成分。' } : {}),
+  });
 }

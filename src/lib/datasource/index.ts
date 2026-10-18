@@ -18,7 +18,10 @@ import * as ifind from './ifind';
 import * as snapshot from './snapshot';
 import * as hkFinance from './hkFinance';
 import * as profile from './profile';
-import { fetchHkFundamental, fetchHkDividends, computeHkValuation, type HkValuation } from './hkFundamental';
+import {
+  fetchHkFundamental, fetchHkFundamentals, fetchHkDividends, computeHkValuation,
+  type HkFundamental, type HkValuation,
+} from './hkFundamental';
 import { cached, defaultTtl, putCache } from './cache';
 import { normalizeCode, normalizeStockCode } from './codes';
 import { computeValuation, buildFinancialSummary } from '../analytics';
@@ -128,7 +131,9 @@ function localSearch(kw: string): SearchHit[] {
 export async function getQuote(input: string): Promise<Quote | null> {
   const n = normalizeCode(input);
   if (!n) return null;
-  const quote = await cached(`quote:${n.symbol}`, defaultTtl(), async () => {
+  const ttl = defaultTtl(n.market === 'HK' ? 'HK' : 'A');
+  const key = `quote:${n.symbol}${n.market === 'HK' ? `:hk-hours-v1:${ttl}` : ''}`;
+  const quote = await cached(key, ttl, async () => {
     try {
       const q = await tencent.fetchQuote(n.symbol);
       if (q) return q;
@@ -164,11 +169,78 @@ export async function getQuotes(inputs: string[]): Promise<Quote[]> {
   for (let i = 0; i < symbols.length; i += CHUNK) chunks.push(symbols.slice(i, i + CHUNK));
 
   const results = await Promise.all(
-    chunks.map((chunk) =>
-      cached(`quotes:${chunk.join(',')}`, defaultTtl(), () => fetchQuotesChunk(chunk)),
-    ),
+    chunks.map((chunk) => {
+      const ttl = quoteTtl(chunk);
+      const key = `quotes:${chunk.join(',')}${chunk.some((s) => s.startsWith('hk')) ? `:hk-hours-v1:${ttl}` : ''}`;
+      return cached(key, ttl, () => fetchQuotesChunk(chunk));
+    }),
   );
   return results.flat();
+}
+
+/** Industry tables need quotes and HKD PB, without per-security dividend work. */
+export async function getIndustryQuotes(inputs: string[]): Promise<Quote[]> {
+  const normalized = [...new Map(
+    inputs.flatMap((input) => {
+      const n = normalizeStockCode(input);
+      return n ? [[n.symbol, n] as const] : [];
+    }),
+  ).values()];
+  const hk = normalized.filter((n) => n.market === 'HK');
+  const mainland = normalized.filter((n) => n.market !== 'HK');
+  const mainlandQuotes = getQuotes(mainland.map((n) => n.symbol)).catch(() => []);
+  const chunks: string[][] = [];
+  for (let i = 0; i < hk.length; i += CHUNK)
+    chunks.push(hk.slice(i, i + CHUNK).map((n) => n.symbol));
+  const hkTtl = defaultTtl('HK');
+  const rawQuotes = mapLimit(chunks, 4, (chunk) =>
+    cached(`industry-quotes-raw-v1:${chunk.join(',')}:hk-hours-v1:${hkTtl}`, hkTtl, () =>
+      fetchQuotesRaw(chunk),
+    ).catch(() => []),
+  );
+
+  // The per-security keys are shared with ordinary quotes/detail. A lazy batch
+  // starts only when a financial cache miss exists; successful reports keep the
+  // normal six-hour TTL, while missing/failed reports are retried after one minute.
+  let batch: Promise<Map<string, HkFundamental | null>> | undefined;
+  const fundamentals = Promise.all(
+    hk.map(async (n) => {
+      const f = await cached(`hk-main-currency-v3:${n.symbol}`, 6 * 3600e3, async () => {
+        batch ??= cached(
+          `hk-industry-main-v1:${hk.map((item) => item.code).sort().join(',')}`,
+          60_000,
+          () => fetchHkFundamentals(hk.map((item) => item.code)),
+        );
+        const value = (await batch).get(n.code);
+        if (!value) throw new Error('港股财务指标暂缺');
+        return value;
+      }).catch(() => null);
+      return [n.symbol, f] as const;
+    }),
+  );
+  const [aQuotes, hkQuotes, financials] = await Promise.all([
+    mainlandQuotes, rawQuotes, fundamentals,
+  ]);
+  const financialMap = new Map(financials);
+  const allQuotes = new Map(aQuotes.map((quote) => [quote.symbol, quote]));
+  for (const quote of hkQuotes.flat()) {
+    allQuotes.set(quote.symbol, {
+      ...quote,
+      pb: computeHkValuation(
+        financialMap.get(quote.symbol) ?? null, null, quote.price,
+      ).pb,
+    });
+  }
+  return normalized.flatMap((n) => {
+    const quote = allQuotes.get(n.symbol);
+    return quote ? [quote] : [];
+  });
+}
+
+/** Mixed baskets refresh while either market trades; A-only baskets keep their TTL. */
+function quoteTtl(symbols: string[]): number {
+  return symbols.reduce((ttl, symbol) =>
+    Math.min(ttl, defaultTtl(symbol.startsWith('hk') ? 'HK' : 'A')), 600_000);
 }
 
 /** 受控并发，避免一次打满上游 */
@@ -199,7 +271,11 @@ export async function getHkCurrentValuation(symbol: string, price: number | null
   const n = normalizeStockCode(symbol);
   if (!n || n.market !== 'HK') throw new Error('港股代码无效');
   const [fundamental, dividends] = await Promise.all([
-    cached(`hk-main-currency-v3:${n.symbol}`, 6 * 3600e3, () => fetchHkFundamental(n.code)).catch(() => null),
+    cached(`hk-main-currency-v3:${n.symbol}`, 6 * 3600e3, async () => {
+      const value = await fetchHkFundamental(n.code);
+      if (!value) throw new Error('港股财务指标暂缺');
+      return value;
+    }).catch(() => null),
     cached(`hk-dividend-events-v3:${n.symbol}`, 3600e3, () => fetchHkDividends(n.code)).catch(() => null),
   ]);
   return computeHkValuation(fundamental, dividends, price, asOf);

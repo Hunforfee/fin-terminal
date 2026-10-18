@@ -110,6 +110,80 @@ export async function fetchHkFundamental(
   return parseHkFundamental(data.result.data);
 }
 
+/**
+ * Latest indicators for an industry basket. Reports are globally ordered by date,
+ * so the first page containing a security establishes its latest report even when
+ * companies have different fiscal year ends. Missing securities remain null.
+ */
+export async function fetchHkFundamentals(
+  codes: string[],
+): Promise<Map<string, HkFundamental | null>> {
+  const unique = [...new Set(codes.filter((code) => /^\d{5}$/.test(code)))];
+  const result = new Map<string, HkFundamental | null>(
+    unique.map((code) => [code, null]),
+  );
+  const batches: string[][] = [];
+  for (let i = 0; i < unique.length; i += 30)
+    batches.push(unique.slice(i, i + 30));
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(2, batches.length) }, async () => {
+      while (next < batches.length) {
+        const batch = batches[next++];
+        const missing = new Set(batch);
+        const deadline = Date.now() + 15_000;
+        // A missing/no-report code must not force an unbounded historical crawl.
+        for (let page = 1; page <= 8 && missing.size > 0; page++) {
+          const remaining = deadline - Date.now();
+          if (remaining <= 0) break;
+          const url = new URL(
+            'https://datacenter.eastmoney.com/securities/api/data/v1/get',
+          );
+          url.search = new URLSearchParams({
+            reportName: 'RPT_HKF10_FN_MAININDICATOR',
+            columns: 'ALL',
+            filter: `(SECURITY_CODE in (${batch.map((code) => `"${code}"`).join(',')}))`,
+            pageSize: '500',
+            pageNumber: String(page),
+            sortColumns: 'REPORT_DATE',
+            sortTypes: '-1',
+          }).toString();
+          let data: Response;
+          try {
+            data = await fetchJson<Response>(url.toString(), {
+              timeoutMs: Math.min(8_000, remaining),
+              retries: 0,
+              headers: HK_HEADERS,
+            });
+          } catch {
+            break;
+          }
+          if (!data.success || !Array.isArray(data.result?.data)) break;
+          const rows = data.result.data;
+          if (rows.length === 0) break;
+          const grouped = new Map<string, Row[]>();
+          for (const row of rows) {
+            const code = String(row.SECURITY_CODE ?? '').trim();
+            if (!missing.has(code)) continue;
+            const group = grouped.get(code) ?? [];
+            group.push(row);
+            grouped.set(code, group);
+          }
+          for (const [code, group] of grouped) {
+            const fundamental = parseHkFundamental(group);
+            if (!fundamental) continue;
+            result.set(code, fundamental);
+            missing.delete(code);
+          }
+          const pages = Number(data.result.pages);
+          if (Number.isFinite(pages) && pages >= 1 && page >= pages) break;
+        }
+      }
+    }),
+  );
+  return result;
+}
+
 /** All current valuation consumers share this calculation; only raw inputs cache. */
 export function computeHkValuation(
   f: HkFundamental | null,

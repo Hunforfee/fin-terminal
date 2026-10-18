@@ -1,4 +1,4 @@
-import { isShanghaiTradingTime } from './tradingTime';
+import { isShanghaiTradingTime, isHongKongTradingTime } from './tradingTime';
 /**
  * 进程内 TTL 缓存。
  * 行情类接口上游有频率限制，且同一页面多个组件会重复请求同一标的，
@@ -14,8 +14,11 @@ const store = new Map<string, Entry<unknown>>();
 const inflight = new Map<string, Promise<unknown>>();
 
 /** 默认 TTL：交易时段 15s，非交易时段 10 分钟（收盘后数据不再变化） */
-export function defaultTtl(): number {
-  return isShanghaiTradingTime() ? 15_000 : 600_000;
+export function defaultTtl(market: 'A' | 'HK' = 'A', date?: Date): number {
+  const trading = market === 'HK'
+    ? isHongKongTradingTime(date)
+    : isShanghaiTradingTime(date);
+  return trading ? 15_000 : 600_000;
 }
 
 export async function cached<T>(key: string, ttlMs: number, producer: () => Promise<T>): Promise<T> {

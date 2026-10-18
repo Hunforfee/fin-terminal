@@ -7,13 +7,16 @@ export default function Modal({
   onClose,
   children,
   size = 'md',
+  bare = false,
 }: {
   open: boolean;
   title: string;
   onClose: () => void;
   children: React.ReactNode;
-  /** md 默认窄弹窗；lg 适合长文/表格阅读 */
-  size?: 'md' | 'lg';
+  /** md 默认窄弹窗；lg 适合长文/表格阅读；full 近乎全屏，内容自行排版 */
+  size?: 'md' | 'lg' | 'full';
+  /** 不渲染默认标题栏，由内容自己布局（如全屏双栏面板） */
+  bare?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const id = useId();
@@ -51,26 +54,30 @@ export default function Modal({
         )
           onClose();
       }}
-      className={`m-auto overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-0 text-slate-800 shadow-2xl backdrop:bg-slate-900/30 ${
-        size === 'lg'
-          ? 'max-h-[92dvh] w-[calc(100%-1.5rem)] max-w-5xl'
-          : 'max-h-[85dvh] w-[calc(100%-1.5rem)] max-w-lg'
-      }`}
+      className={`m-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-0 text-slate-800 shadow-2xl backdrop:bg-slate-900/30 ${
+        size === 'full'
+          ? 'h-[96dvh] max-h-[96dvh] w-[calc(100%-1.5rem)] max-w-[1600px] overflow-hidden'
+          : size === 'lg'
+            ? 'max-h-[92dvh] w-[calc(100%-1.5rem)] max-w-5xl'
+            : 'max-h-[85dvh] w-[calc(100%-1.5rem)] max-w-lg'
+      } ${bare ? 'overflow-hidden' : 'overflow-y-auto'}`}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-        <h2 id={id} className="min-w-0 break-words font-semibold">
-          {title}
-        </h2>
-        <button
-          type="button"
-          aria-label={`关闭${title}`}
-          onClick={onClose}
-          className="h-8 w-8 shrink-0 rounded text-xl text-slate-400 hover:bg-slate-100"
-        >
-          ×
-        </button>
-      </div>
-      {open && <div className="p-4">{children}</div>}
+      {!bare && (
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+          <h2 id={id} className="min-w-0 break-words font-semibold">
+            {title}
+          </h2>
+          <button
+            type="button"
+            aria-label={`关闭${title}`}
+            onClick={onClose}
+            className="h-8 w-8 shrink-0 rounded text-xl text-slate-400 hover:bg-slate-100"
+          >
+            ×
+          </button>
+        </div>
+      )}
+      {open && <div className={bare ? 'h-full' : 'p-4'}>{children}</div>}
     </dialog>
   );
 }

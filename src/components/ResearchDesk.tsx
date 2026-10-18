@@ -38,6 +38,24 @@ interface Note {
   date: string;
 }
 const NOTE_KEY = 'fin.research.notes.v1';
+
+/** 从笔记正文提取标题：首个非空行，去掉 Markdown 标记，超长截断 */
+function noteTitle(text: string, index: number): string {
+  const line =
+    text
+      .split('\n')
+      .map((l) => l.trim())
+      .find((l) => l && !/^```/.test(l)) ?? '';
+  const clean = line
+    .replace(/^#{1,6}\s*/, '')
+    .replace(/^>\s*/, '')
+    .replace(/^([-*+]|\d+[.)])\s+/, '')
+    .replace(/\|/g, ' ')
+    .replace(/[*_`~]/g, '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .trim();
+  return clean.length > 26 ? clean.slice(0, 26) + '…' : clean || `笔记 ${index + 1}`;
+}
 const value = (v: number | null | undefined, suffix = '') =>
   v == null || !Number.isFinite(v) ? '—' : v.toFixed(2) + suffix;
 
@@ -79,12 +97,19 @@ export default function ResearchDesk({
   );
   const [noteDraft, setNoteDraft] = useState('');
   const [noteEditTab, setNoteEditTab] = useState<'edit' | 'preview'>('edit');
+  const [navOpen, setNavOpen] = useState(true);
+  const [activeNoteId, setActiveNoteId] = useState<string>('new');
   const notesFor = (code: string) => notes.filter((n) => n.code === code);
-  const addNoteFor = (code: string, name: string, text: string) => {
-    if (!text.trim()) return false;
+  const addNoteFor = (
+    code: string,
+    name: string,
+    text: string,
+  ): string | null => {
+    if (!text.trim()) return null;
+    const id = crypto.randomUUID();
     return saveNotes([
       {
-        id: crypto.randomUUID(),
+        id,
         code,
         name,
         text: text.trim(),
@@ -93,7 +118,9 @@ export default function ResearchDesk({
         }),
       },
       ...notes,
-    ]);
+    ])
+      ? id
+      : null;
   };
   const [filter, setFilter] = useState('');
   useEffect(() => {
@@ -734,6 +761,9 @@ export default function ResearchDesk({
                         onClick={() => {
                           setNoteDraft('');
                           setNoteView({ code: q.code, name: q.name });
+                          // 有历史笔记就先看最新一条，没有则直接进入新建
+                          const latest = notes.find((n) => n.code === q.code);
+                          setActiveNoteId(latest ? latest.id : 'new');
                         }}
                         className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-opacity hover:bg-amber-50 focus-visible:text-amber-600 [@media(hover:none)]:opacity-100 ${
                           notesFor(q.code).length
@@ -901,115 +931,262 @@ export default function ResearchDesk({
       )}
       <Modal
         open={!!noteView}
-        size="lg"
+        size="full"
+        bare
         title={noteView ? `${noteView.name} · 笔记` : '笔记'}
         onClose={() => setNoteView(null)}
       >
         {noteView && (
-          <div className="space-y-4">
-            <div className="space-y-3">
-              {notesFor(noteView.code).length === 0 ? (
-                <p className="rounded-lg border border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
-                  暂无笔记，可在下方输入。支持 Markdown：表格、列表、代码块、引用、链接等。
+          <div className="flex h-full min-h-0 flex-col">
+            {/* 顶部工具栏 */}
+            <div className="flex shrink-0 items-center gap-3 border-b border-slate-200 px-4 py-3">
+              <button
+                type="button"
+                aria-label={navOpen ? '收起笔记导航' : '展开笔记导航'}
+                aria-expanded={navOpen}
+                title={navOpen ? '收起导航' : '展开导航'}
+                onClick={() => setNavOpen((v) => !v)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <path d="M9 4v16" />
+                </svg>
+              </button>
+              <div className="min-w-0">
+                <h2 className="truncate font-semibold text-slate-900">
+                  {noteView.name} · 笔记
+                </h2>
+                <p className="text-[11px] text-slate-400">
+                  {noteView.code} · 共 {notesFor(noteView.code).length} 条
                 </p>
-              ) : (
-                notesFor(noteView.code).map((n) => (
-                  <article
-                    key={n.id}
-                    className="rounded-lg border border-slate-200 bg-white p-4"
-                  >
-                    <div className="mb-2 flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
-                      <span className="text-xs text-slate-400">{n.date}</span>
-                      <button
-                        type="button"
-                        aria-label="删除笔记"
-                        className="rounded px-1.5 py-0.5 text-xs text-slate-400 hover:bg-red-50 hover:text-red-600"
-                        onClick={() =>
-                          saveNotes(notes.filter((x) => x.id !== n.id))
-                        }
-                      >
-                        删除
-                      </button>
-                    </div>
-                    <NoteBody text={n.text} />
-                  </article>
-                ))
-              )}
+              </div>
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  type="button"
+                  className="btn !py-1.5 text-xs"
+                  onClick={() => {
+                    setNoteDraft('');
+                    setNoteEditTab('edit');
+                    setActiveNoteId('new');
+                    setNavOpen(true);
+                  }}
+                >
+                  ＋ 新建笔记
+                </button>
+                <button
+                  type="button"
+                  aria-label="关闭笔记"
+                  onClick={() => setNoteView(null)}
+                  className="h-8 w-8 rounded text-xl text-slate-400 hover:bg-slate-100"
+                >
+                  ×
+                </button>
+              </div>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-medium text-slate-500">
-                  新增笔记
-                </span>
-                <div className="flex items-center gap-1 rounded-md bg-white p-0.5 shadow-sm">
-                  <button
-                    type="button"
-                    onClick={() => setNoteEditTab('edit')}
-                    className={`rounded px-2 py-1 text-xs ${
-                      noteEditTab === 'edit'
-                        ? 'bg-brand-600 text-white'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    编辑
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNoteEditTab('preview')}
-                    className={`rounded px-2 py-1 text-xs ${
-                      noteEditTab === 'preview'
-                        ? 'bg-brand-600 text-white'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    预览
-                  </button>
-                </div>
-              </div>
-              {noteEditTab === 'edit' ? (
-                <textarea
-                  aria-label="新增笔记"
-                  className="input min-h-40 w-full resize-y font-mono text-[13px] leading-6"
-                  placeholder={'记录研究观点、买卖逻辑…\n\n支持 Markdown，例如：\n| 指标 | 2024 | 2025 |\n| --- | --- | --- |\n| 营收 | 100 | 120 |'}
-                  value={noteDraft}
-                  onChange={(e) => setNoteDraft(e.target.value)}
-                />
-              ) : (
-                <div className="min-h-40 rounded-md border border-slate-200 bg-white p-3">
-                  {noteDraft.trim() ? (
-                    <NoteBody text={noteDraft} />
-                  ) : (
-                    <p className="text-sm text-slate-400">暂无可预览内容</p>
-                  )}
-                </div>
+
+            <div className="flex min-h-0 flex-1">
+              {/* 左侧：笔记标题导航 */}
+              {navOpen && (
+                <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-slate-50/70">
+                  <div className="px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                    笔记目录
+                  </div>
+                  <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+                    <button
+                      type="button"
+                      onClick={() => setActiveNoteId('new')}
+                      className={`mb-1 flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm ${
+                        activeNoteId === 'new'
+                          ? 'bg-white font-medium text-brand-700 shadow-sm'
+                          : 'text-slate-600 hover:bg-white/70'
+                      }`}
+                    >
+                      <span className="text-base leading-none">＋</span>
+                      新建笔记
+                    </button>
+                    {notesFor(noteView.code).map((n, index) => {
+                      const title = noteTitle(n.text, index);
+                      return (
+                        <button
+                          key={n.id}
+                          type="button"
+                          onClick={() => setActiveNoteId(n.id)}
+                          title={title}
+                          className={`mb-0.5 flex w-full flex-col gap-0.5 rounded-md px-2.5 py-2 text-left ${
+                            activeNoteId === n.id
+                              ? 'bg-white shadow-sm'
+                              : 'hover:bg-white/70'
+                          }`}
+                        >
+                          <span
+                            className={`truncate text-sm ${
+                              activeNoteId === n.id
+                                ? 'font-medium text-brand-700'
+                                : 'text-slate-700'
+                            }`}
+                          >
+                            {title}
+                          </span>
+                          <span className="text-[11px] text-slate-400">
+                            {n.date}
+                          </span>
+                        </button>
+                      );
+                    })}
+                    {notesFor(noteView.code).length === 0 && (
+                      <p className="px-2 py-3 text-xs text-slate-400">
+                        还没有笔记
+                      </p>
+                    )}
+                  </nav>
+                </aside>
               )}
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[11px] text-slate-400">
-                  支持 表格 / 列表 / 代码块 / 引用 / 加粗 / 链接
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => setNoteView(null)}
-                  >
-                    关闭
-                  </button>
-                  <button
-                    type="button"
-                    className="btn bg-brand-600 text-white hover:bg-brand-700"
-                    disabled={!noteDraft.trim()}
-                    onClick={() => {
-                      if (addNoteFor(noteView.code, noteView.name, noteDraft)) {
-                        setNoteDraft('');
-                        setNoteEditTab('edit');
-                      }
-                    }}
-                  >
-                    保存笔记
-                  </button>
-                </div>
-              </div>
+
+              {/* 右侧：内容区 */}
+              <section className="min-w-0 flex-1 overflow-y-auto px-6 py-5">
+                {activeNoteId === 'new' ? (
+                  <div className="mx-auto max-w-4xl space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-sm font-semibold text-slate-700">
+                        新建笔记
+                      </h3>
+                      <div className="flex items-center gap-1 rounded-md bg-slate-100 p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setNoteEditTab('edit')}
+                          className={`rounded px-2.5 py-1 text-xs ${
+                            noteEditTab === 'edit'
+                              ? 'bg-white text-slate-800 shadow-sm'
+                              : 'text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          编辑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNoteEditTab('preview')}
+                          className={`rounded px-2.5 py-1 text-xs ${
+                            noteEditTab === 'preview'
+                              ? 'bg-white text-slate-800 shadow-sm'
+                              : 'text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          预览
+                        </button>
+                      </div>
+                    </div>
+                    {noteEditTab === 'edit' ? (
+                      <textarea
+                        aria-label="新增笔记"
+                        autoFocus
+                        className="input min-h-[340px] w-full resize-y font-mono text-[13px] leading-6"
+                        placeholder={'第一行会被用作标题。\n\n支持 Markdown，例如：\n## 结论\n| 指标 | 2024 | 2025 |\n| --- | --- | --- |\n| 营收 | 100 | 120 |'}
+                        value={noteDraft}
+                        onChange={(e) => setNoteDraft(e.target.value)}
+                      />
+                    ) : (
+                      <div className="min-h-[340px] rounded-lg border border-slate-200 bg-white p-4">
+                        {noteDraft.trim() ? (
+                          <NoteBody text={noteDraft} />
+                        ) : (
+                          <p className="text-sm text-slate-400">
+                            暂无可预览内容
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[11px] text-slate-400">
+                        支持 表格 / 列表 / 代码块 / 引用 / 加粗 / 链接
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          className="btn"
+                          onClick={() => setActiveNoteId(notesFor(noteView.code)[0]?.id ?? 'new')}
+                        >
+                          取消
+                        </button>
+                        <button
+                          type="button"
+                          className="btn bg-brand-600 text-white hover:bg-brand-700"
+                          disabled={!noteDraft.trim()}
+                          onClick={() => {
+                            const created = addNoteFor(
+                              noteView.code,
+                              noteView.name,
+                              noteDraft,
+                            );
+                            if (created) {
+                              setNoteDraft('');
+                              setNoteEditTab('edit');
+                              setActiveNoteId(created);
+                            }
+                          }}
+                        >
+                          保存笔记
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  (() => {
+                    const current =
+                      notesFor(noteView.code).find((n) => n.id === activeNoteId) ??
+                      notesFor(noteView.code)[0];
+                    if (!current)
+                      return (
+                        <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-slate-400">
+                          <p>还没有笔记</p>
+                          <button
+                            type="button"
+                            className="btn"
+                            onClick={() => setActiveNoteId('new')}
+                          >
+                            写第一条
+                          </button>
+                        </div>
+                      );
+                    return (
+                      <article className="mx-auto max-w-4xl">
+                        <div className="mb-3 flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                          <span className="text-xs text-slate-400">
+                            {current.date}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              className="rounded px-1.5 py-0.5 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                              onClick={() => {
+                                setNoteDraft(current.text);
+                                setNoteEditTab('edit');
+                                setActiveNoteId('new');
+                              }}
+                            >
+                              基于此再写
+                            </button>
+                            <button
+                              type="button"
+                              aria-label="删除笔记"
+                              className="rounded px-1.5 py-0.5 text-xs text-slate-400 hover:bg-red-50 hover:text-red-600"
+                              onClick={() => {
+                                saveNotes(
+                                  notes.filter((x) => x.id !== current.id),
+                                );
+                                setActiveNoteId('new');
+                              }}
+                            >
+                              删除
+                            </button>
+                          </div>
+                        </div>
+                        <NoteBody text={current.text} />
+                      </article>
+                    );
+                  })()
+                )}
+              </section>
             </div>
           </div>
         )}

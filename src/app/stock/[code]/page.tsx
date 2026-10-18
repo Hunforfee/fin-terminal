@@ -2,7 +2,6 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import QuoteHeader from '@/components/QuoteHeader';
 import ValuationSection from '@/components/ValuationSection';
-import AiAnalysis from '@/components/AiAnalysis';
 import { getQuote } from '@/lib/datasource';
 import { normalizeStockCode } from '@/lib/datasource/codes';
 
@@ -28,8 +27,6 @@ export default async function StockPage({ params }: { params: Promise<{ code: st
         {isHkQuote && <span className="chip bg-slate-100 text-slate-500">港股</span>}
       </div>
       <QuoteHeader quote={quote} />
-
-      <AiAnalysis code={quote.code} name={quote.name} />
 
       <ValuationSection code={symbol} />
     </div>

@@ -1,5 +1,4 @@
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
 import QuoteHeader from '@/components/QuoteHeader';
 import ValuationSection from '@/components/ValuationSection';
 import { getQuote } from '@/lib/datasource';
@@ -14,18 +13,8 @@ export default async function StockPage({ params }: { params: Promise<{ code: st
   const quote = await getQuote(symbol).catch(() => null);
   if (!quote) notFound();
 
-  const isHkQuote = quote.market === 'HK';
-
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2 text-xs text-slate-500">
-        <Link href="/" className="hover:text-brand-600">
-          研究工作台
-        </Link>
-        <span>/</span>
-        <span>{quote.name}</span>
-        {isHkQuote && <span className="chip bg-slate-100 text-slate-500">港股</span>}
-      </div>
       <QuoteHeader quote={quote} />
 
       <ValuationSection code={symbol} />

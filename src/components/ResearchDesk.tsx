@@ -1197,13 +1197,13 @@ export default function ResearchDesk({
                       <textarea
                         aria-label="新增笔记"
                         autoFocus
-                        className="input min-h-[340px] w-full resize-y font-mono text-[13px] leading-6"
+                        className="input !px-4 !py-3 h-[420px] w-full resize-none overflow-y-auto font-mono text-[13px] leading-6"
                         placeholder={'第一行会被用作标题。\n\n支持 Markdown，例如：\n## 结论\n| 指标 | 2024 | 2025 |\n| --- | --- | --- |\n| 营收 | 100 | 120 |'}
                         value={noteDraft}
                         onChange={(e) => setNoteDraft(e.target.value)}
                       />
                     ) : (
-                      <div className="min-h-[340px] rounded-lg border border-slate-200 bg-white p-4">
+                      <div className="h-[420px] overflow-y-auto rounded-lg border border-slate-200 bg-white p-4">
                         {noteDraft.trim() ? (
                           <NoteBody text={noteDraft} />
                         ) : (

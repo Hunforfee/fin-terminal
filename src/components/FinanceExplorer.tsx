@@ -1,5 +1,7 @@
 'use client';
 
+import { personalStorage } from '@/lib/personalStorage';
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import FinanceCompareChart, { type CompanySeries } from '@/components/FinanceCompareChart';
 import FieldPicker, {
@@ -84,7 +86,7 @@ function peersOf(code: string): { code: string; name: string }[] {
 
 function loadModules(storageKey = LS_MODULES): Module[] {
   try {
-    const raw = localStorage.getItem(storageKey);
+    const raw = personalStorage.getItem(storageKey);
     if (raw) {
       const arr = JSON.parse(raw);
       if (Array.isArray(arr) && arr.length > 0) {
@@ -166,7 +168,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
     try {
       const isHk = modulesKey.endsWith('.hk');
       let ms = loadModules(modulesKey);
-      if (isHk && !localStorage.getItem(modulesKey)) {
+      if (isHk && !personalStorage.getItem(modulesKey)) {
         // 旧全局键里可能存有港股配置（PR#6 之前 A股/港股共用一个键），搬迁过来
         const legacy = takeLegacyHkModules(LS_MODULES);
         if (legacy) ms = legacy as unknown as typeof ms;
@@ -175,7 +177,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
         ms = ms.map((m) => ({ ...m, fields: sanitizeFields(m.fields, false) }));
       }
       setModules(ms);
-      const savedActive = localStorage.getItem(activeKey);
+      const savedActive = personalStorage.getItem(activeKey);
       const url = new URLSearchParams(window.location.search);
       if (url.get('picker') === '1') setPickerOpen(true);
       setActiveId(savedActive && ms.some(m => m.id === savedActive) ? savedActive : ms[0].id);
@@ -191,8 +193,8 @@ export default function FinanceExplorer({ code }: { code: string }) {
   useEffect(() => {
     if (!bootedRef.current || loadedStorageKey !== modulesKey) return;
     try {
-      localStorage.setItem(modulesKey, JSON.stringify(modules));
-      localStorage.setItem(activeKey, activeId);
+      personalStorage.setItem(modulesKey, JSON.stringify(modules));
+      personalStorage.setItem(activeKey, activeId);
     } catch {
       /* ignore */
     }

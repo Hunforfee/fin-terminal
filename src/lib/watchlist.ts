@@ -87,6 +87,13 @@ export function readWatchlist(raw: unknown): WatchState | null {
   return state;
 }
 export type WatchAction =
+  | {
+      type: 'import';
+      codes: string[];
+      groupId: string;
+      moveExisting: boolean;
+      newGroup?: WatchGroup;
+    }
   | { type: 'add'; code: string; groupId: string }
   | { type: 'remove'; codes: string[] }
   | { type: 'move'; codes: string[]; groupId: string }
@@ -98,6 +105,40 @@ export function changeWatchlist(
   state: WatchState,
   action: WatchAction,
 ): WatchState {
+  if (action.type === 'import') {
+    const group = action.newGroup;
+    if (
+      group &&
+      (!group.id ||
+        group.id !== action.groupId ||
+        state.groups.some((g) => g.id === group.id) ||
+        groupNameError(group.name, state.groups))
+    )
+      return state;
+    if (!group && !state.groups.some((g) => g.id === action.groupId))
+      return state;
+    const symbols = [
+      ...new Set(action.codes.map(watchSymbol).filter((s): s is string => !!s)),
+    ];
+    if (!symbols.length) return state;
+    const selected = new Set(symbols),
+      existing = new Set(state.items.map((item) => item.symbol));
+    const items = state.items.map((item) =>
+      action.moveExisting && selected.has(item.symbol)
+        ? { ...item, groupId: action.groupId }
+        : item,
+    );
+    for (const symbol of symbols)
+      if (!existing.has(symbol))
+        items.push({ symbol, groupId: action.groupId });
+    return {
+      ...state,
+      groups: group
+        ? [...state.groups, { ...group, name: group.name.trim() }]
+        : state.groups,
+      items,
+    };
+  }
   if (action.type === 'clear') return { ...state, items: [] };
   if (action.type === 'add') {
     const symbol = watchSymbol(action.code);

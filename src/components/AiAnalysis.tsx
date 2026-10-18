@@ -1,5 +1,7 @@
 'use client';
 
+import { personalStorage } from '@/lib/personalStorage';
+
 /**
  * AI 深度分析面板（个股页）：
  *   - 可编辑提示词（localStorage 保存），默认模板
@@ -46,7 +48,7 @@ const PRESETS: { id: string; label: string; url: string; model: string; hint: st
 
 function loadJson<T>(key: string, fallback: T): T {
   try {
-    const raw = localStorage.getItem(key);
+    const raw = personalStorage.getItem(key);
     return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
     return fallback;
@@ -119,21 +121,21 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
   const booted = useRef(false);
 
   useEffect(() => {
-    setPrompt(localStorage.getItem(LS_PROMPT) || DEFAULT_PROMPT);
+    setPrompt(personalStorage.getItem(LS_PROMPT) || DEFAULT_PROMPT);
     setVersions(loadJson<Version[]>(histKey(code), []));
-    setApiKey(localStorage.getItem(LS_KEY) || '');
-    setApiUrl(localStorage.getItem(LS_URL) || '');
+    setApiKey(personalStorage.getItem(LS_KEY) || '');
+    setApiUrl(personalStorage.getItem(LS_URL) || '');
     // 旧版预设模型已下线：deepseek-v4-flash → deepseek-v4.1-flash
-    const savedModel = localStorage.getItem(LS_MODEL) || '';
+    const savedModel = personalStorage.getItem(LS_MODEL) || '';
     setApiModel(savedModel === 'deepseek-v4-flash' ? 'deepseek-v4.1-flash' : savedModel);
-    if (savedModel === 'deepseek-v4-flash') localStorage.setItem(LS_MODEL, 'deepseek-v4.1-flash');
+    if (savedModel === 'deepseek-v4-flash') personalStorage.setItem(LS_MODEL, 'deepseek-v4.1-flash');
     booted.current = true;
   }, [code]);
 
   useEffect(() => {
     if (!booted.current) return;
     try {
-      localStorage.setItem(LS_PROMPT, prompt);
+      personalStorage.setItem(LS_PROMPT, prompt);
     } catch {
       /* ignore */
     }
@@ -142,7 +144,7 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
   useEffect(() => {
     if (!booted.current) return;
     try {
-      localStorage.setItem(histKey(code), JSON.stringify(versions.slice(0, 30)));
+      personalStorage.setItem(histKey(code), JSON.stringify(versions.slice(0, 30)));
     } catch {
       /* ignore */
     }
@@ -188,8 +190,8 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
     setApiUrl(p.url);
     setApiModel(p.model);
     try {
-      localStorage.setItem(LS_URL, p.url);
-      localStorage.setItem(LS_MODEL, p.model);
+      personalStorage.setItem(LS_URL, p.url);
+      personalStorage.setItem(LS_MODEL, p.model);
     } catch {}
   };
 
@@ -207,7 +209,7 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
       const list: string[] = j.data.models ?? [];
       setModels(list);
       try {
-        localStorage.setItem('fin.ai.models', JSON.stringify(list));
+        personalStorage.setItem('fin.ai.models', JSON.stringify(list));
       } catch {}
     } catch (e) {
       setModelsErr(e instanceof Error ? e.message : String(e));
@@ -345,7 +347,7 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
             onChange={(e) => setApiKey(e.target.value)}
             onBlur={() => {
               try {
-                localStorage.setItem(LS_KEY, apiKey);
+                personalStorage.setItem(LS_KEY, apiKey);
               } catch {}
             }}
             placeholder="API Key（sk-…）"
@@ -359,7 +361,7 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
               onChange={(e) => setApiUrl(e.target.value)}
               onBlur={() => {
                 try {
-                  localStorage.setItem(LS_URL, apiUrl);
+                  personalStorage.setItem(LS_URL, apiUrl);
                 } catch {}
               }}
               placeholder="接口地址（点击上方服务商一键填入）"
@@ -371,7 +373,7 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
               onChange={(e) => setApiModel(e.target.value)}
               onBlur={() => {
                 try {
-                  localStorage.setItem(LS_MODEL, apiModel);
+                  personalStorage.setItem(LS_MODEL, apiModel);
                 } catch {}
               }}
               placeholder="模型（如 deepseek-v4.1-flash）"
@@ -402,7 +404,7 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
                   onClick={() => {
                     setApiModel(m);
                     try {
-                      localStorage.setItem(LS_MODEL, m);
+                      personalStorage.setItem(LS_MODEL, m);
                     } catch {}
                   }}
                   className={`min-h-5 rounded px-1.5 font-mono text-[10px] transition ${

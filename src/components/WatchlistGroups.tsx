@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useWatchlist } from './WatchlistProvider';
 import Modal from './Modal';
+import WatchlistImport from './WatchlistImport';
 import { groupNameError, UNGROUPED, type WatchGroup } from '@/lib/watchlist';
 
 function GroupRow({ group, count }: { group: WatchGroup; count: number }) {
@@ -73,6 +74,7 @@ export default function WatchlistGroups({
 }) {
   const wl = useWatchlist();
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const count = (id: string) =>
@@ -99,19 +101,36 @@ export default function WatchlistGroups({
             </span>
           </button>
         ))}
-        <button
-          type="button"
-          disabled={!wl.ready}
-          onClick={() => {
-            setName('');
-            setError('');
-            setOpen(true);
-          }}
-          className="ml-auto shrink-0 rounded-md px-2 py-1.5 text-xs text-slate-500 hover:bg-slate-100"
-        >
-          管理分组
-        </button>
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            disabled={!wl.ready}
+            onClick={() => setImportOpen(true)}
+            className="rounded-md border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-100"
+          >
+            批量导入
+          </button>
+          <button
+            type="button"
+            disabled={!wl.ready}
+            onClick={() => {
+              setName('');
+              setError('');
+              setOpen(true);
+            }}
+            className="shrink-0 rounded-md px-2 py-1.5 text-xs text-slate-500 hover:bg-slate-100"
+          >
+            管理分组
+          </button>
+        </div>
       </div>
+      {importOpen && (
+        <WatchlistImport
+          groupId={active === 'all' ? UNGROUPED : active}
+          onClose={() => setImportOpen(false)}
+          onImported={onChange}
+        />
+      )}
       <Modal open={open} title="管理自选分组" onClose={() => setOpen(false)}>
         <div className="mb-1 flex items-center justify-between py-2 text-sm">
           <span>未分组</span>

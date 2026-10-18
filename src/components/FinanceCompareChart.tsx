@@ -20,6 +20,7 @@ export interface FinanceCompareChartProps {
   compare?: CompanySeries | null;
   height?: number;
   reportLabel?: string;
+  showLabels?: boolean;
 }
 
 const C_PRIMARY = '#3b82f6';
@@ -73,6 +74,7 @@ export default function FinanceCompareChart({
   compare,
   height = 220,
   reportLabel,
+  showLabels = false,
 }: FinanceCompareChartProps) {
   const option = useMemo(() => {
     const labels = primary.periodLabels;
@@ -83,18 +85,25 @@ export default function FinanceCompareChart({
       type: 'line',
       data: s.values,
       symbol: 'circle',
-      symbolSize: 4,
+      symbolSize: 6,
+      showSymbol: true,
+      showAllSymbol: true,
       lineStyle: { width: 2, color },
       itemStyle: { color },
       label: {
-        show: false,
+        show: showLabels,
         position: isPrimary ? 'top' : 'bottom',
         fontSize: 10,
         color,
+        backgroundColor: 'rgba(255,255,255,0.92)',
+        padding: [1, 2],
         formatter: (p: { value: number | null }) =>
           p.value === null ? '' : fmtVal(p.value, indicator.unit),
       },
-      labelLayout: { hideOverlap: true },
+      labelLayout: (p: { dataIndex: number }) => ({
+        hideOverlap: true,
+        align: p.dataIndex === 0 ? 'left' : p.dataIndex === s.values.length - 1 ? 'right' : 'center',
+      }),
       markLine: {
         silent: true,
         symbol: 'none',
@@ -145,7 +154,7 @@ export default function FinanceCompareChart({
         itemHeight: 8,
         textStyle: { fontSize: 11, color: '#64748b' },
       },
-      grid: { left: 44, right: 16, top: 25, bottom: 26 },
+      grid: { left: 44, right: 16, top: showLabels ? 40 : 25, bottom: 26 },
       xAxis: {
         type: 'category',
         data: labels,
@@ -166,7 +175,7 @@ export default function FinanceCompareChart({
       },
       series,
     };
-  }, [primary, compare, indicator]);
+  }, [primary, compare, indicator, showLabels]);
 
   const stA = stats(primary.values);
   const stB = compare ? stats(compare.values) : null;

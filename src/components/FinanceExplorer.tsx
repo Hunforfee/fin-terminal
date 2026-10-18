@@ -18,8 +18,10 @@ import {
   type Formula,
 } from '@/lib/financeFormulas';
 import { STOCKS } from '@/lib/universe';
+import { financeStorageKey } from '@/lib/financePreferences';
 
 interface CompanyFinancials {
+  currency?: string;
   code: string;
   name: string;
   periods: string[];
@@ -80,9 +82,9 @@ function peersOf(code: string): { code: string; name: string }[] {
   return [...pool, ...rest].map((s) => ({ code: s.code, name: s.name }));
 }
 
-function loadModules(): Module[] {
+function loadModules(storageKey = LS_MODULES): Module[] {
   try {
-    const raw = localStorage.getItem(LS_MODULES);
+    const raw = localStorage.getItem(storageKey);
     if (raw) {
       const arr = JSON.parse(raw);
       if (Array.isArray(arr) && arr.length > 0) {
@@ -111,6 +113,9 @@ function loadModules(): Module[] {
  * 每个模块从三大报表 178 个披露科目 + 21 项财务指标中自由配置。
  */
 export default function FinanceExplorer({ code }: { code: string }) {
+  const modulesKey = financeStorageKey(LS_MODULES, code);
+  const activeKey = financeStorageKey(LS_ACTIVE, code);
+  const [loadedStorageKey, setLoadedStorageKey] = useState('');
   const [modules, setModules] = useState<Module[]>(DEFAULT_MODULES);
   const [activeId, setActiveId] = useState<string>(DEFAULT_MODULES[0].id);
   const [renaming, setRenaming] = useState(false);
@@ -127,6 +132,8 @@ export default function FinanceExplorer({ code }: { code: string }) {
   const [selectedField, setSelectedField] = useState<string | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
+  const [visibleLabels, setVisibleLabels] = useState(true);
+  const moduleMenuRef = useRef<HTMLDetailsElement>(null);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const bootedRef = useRef(false);
 
@@ -134,35 +141,57 @@ export default function FinanceExplorer({ code }: { code: string }) {
 
   const peerList = useMemo(() => peersOf(code), [code]);
 
+  useEffect(() => {
+    const dismiss = (event: PointerEvent) => {
+      const menu = moduleMenuRef.current;
+      if (menu?.open && event.target instanceof Node && !menu.contains(event.target)) menu.open = false;
+    };
+    const escape = (event: KeyboardEvent) => {
+      const menu = moduleMenuRef.current;
+      if (event.key === 'Escape' && menu?.open) {
+        menu.open = false;
+        menu.querySelector('summary')?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', dismiss, true);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', dismiss, true);
+      document.removeEventListener('keydown', escape);
+    };
+  }, []);
+
   // 初始化：localStorage + URL 参数
   useEffect(() => {
     try {
-      const ms = loadModules();
+      const ms = loadModules(modulesKey);
       setModules(ms);
-      const savedActive = localStorage.getItem(LS_ACTIVE);
+      const savedActive = localStorage.getItem(activeKey);
       const url = new URLSearchParams(window.location.search);
       if (url.get('picker') === '1') setPickerOpen(true);
-      if (savedActive && ms.some((m) => m.id === savedActive)) setActiveId(savedActive);
+      setActiveId(savedActive && ms.some(m => m.id === savedActive) ? savedActive : ms[0].id);
       setFormulas(mergedFormulas());
     } catch {
       /* ignore */
     }
     bootedRef.current = true;
-  }, []);
+    setLoadedStorageKey(modulesKey);
+  }, [modulesKey, activeKey]);
 
   // 持久化
   useEffect(() => {
-    if (!bootedRef.current) return;
+    if (!bootedRef.current || loadedStorageKey !== modulesKey) return;
     try {
-      localStorage.setItem(LS_MODULES, JSON.stringify(modules));
-      localStorage.setItem(LS_ACTIVE, activeId);
+      localStorage.setItem(modulesKey, JSON.stringify(modules));
+      localStorage.setItem(activeKey, activeId);
     } catch {
       /* ignore */
     }
-  }, [modules, activeId]);
+  }, [modules, activeId, loadedStorageKey, modulesKey, activeKey]);
 
   // 进入页面即拉字段目录（bs/pl/cf 科目的 label/unit 需要）
   useEffect(() => {
+    setCatalog(null);
     let alive = true;
     fetch(`/api/finance-fields?code=${code}`)
       .then((r) => r.json())
@@ -264,6 +293,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
       values = f
         ? evalFormula(f.expr, c?.series ?? {}, c?.periods.length ?? 0, {
             nullAsZero: f.nullAsZero,
+            positiveDenominator: f.positiveDenominator,
           })
         : [];
     } else {
@@ -271,7 +301,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
     }
     return {
       code: c?.code ?? '',
-      name: c?.name ?? '',
+      name: `${c?.name ?? ''}${['wan','yuan'].includes(fieldMetas.get(key)?.unit ?? '') ? `（${c?.currency ?? 'CNY'}）` : ''}`,
       // 年报视图下把「2021H2」显示为「2021」
       periodLabels: granularity === 'annual' ? labels.map((l) => l.replace(/H2$/, '')) : labels,
       values,
@@ -343,7 +373,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
       label: meta?.label ?? key,
       groupLabel: meta ? `${meta.group}` : '',
       unit: meta?.unit ?? '',
-      hover: f ? `${f.name} = ${f.expr}` : undefined,
+      hover: f ? `${f.name} = ${f.expr}${f.description ? '\n' + f.description : ''}` : undefined,
     };
   });
 
@@ -480,7 +510,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
           <button onClick={() => setPickerOpen(true)} className="btn !min-h-8 !py-1 !text-xs">
             配置指标
           </button>
-          <details className="relative">
+          <details ref={moduleMenuRef} className="relative">
             <summary
               aria-label="管理分析模块"
               className="btn !min-h-8 list-none !px-2.5 !py-1 text-base [&::-webkit-details-marker]:hidden"
@@ -531,10 +561,10 @@ export default function FinanceExplorer({ code }: { code: string }) {
             className="min-w-0 lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)] lg:self-start lg:overflow-y-auto"
             aria-label="指标导航"
           >
-            <div className="hidden px-3 pb-3 text-xs text-slate-400 lg:block">
+            <div className="hidden px-2 pb-2 text-xs font-semibold text-slate-600 lg:block">
               {active.name} · {entries.length} 项指标
             </div>
-            <div className="flex gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
+            <div className="flex gap-1 overflow-x-auto pb-1 lg:flex-col lg:gap-0 lg:overflow-visible">
               {entries.map((e, index) => {
                 const selected =
                   (entries.some((x) => x.key === selectedField)
@@ -555,11 +585,11 @@ export default function FinanceExplorer({ code }: { code: string }) {
                     onClick={() => scrollTo(e.key)}
                     aria-current={selected ? 'location' : undefined}
                     title={e.hover}
-                    className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2.5 text-left text-xs transition lg:w-full ${selected ? 'bg-brand-50 font-medium text-brand-700' : 'text-slate-500 hover:bg-slate-100'} ${dragIdx === index ? 'opacity-40' : ''} ${overIdx === index && dragIdx !== null && dragIdx !== index ? 'ring-1 ring-brand-300' : ''}`}
+                    className={`flex min-h-8 shrink-0 items-center gap-1.5 rounded-md border-l-[3px] px-2 py-1.5 text-left text-[13px] leading-snug transition lg:w-full ${selected ? 'border-brand-600 bg-brand-100 font-semibold text-brand-700' : 'border-transparent font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-950'} ${dragIdx === index ? 'opacity-40' : ''} ${overIdx === index && dragIdx !== null && dragIdx !== index ? 'ring-1 ring-brand-300' : ''}`}
                   >
                     <span
                       aria-hidden="true"
-                      className={`h-1 w-1 shrink-0 rounded-full ${selected ? 'bg-brand-600' : 'bg-slate-300'}`}
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${selected ? 'bg-brand-600' : 'bg-slate-400'}`}
                     />
                     <span className="whitespace-nowrap lg:whitespace-normal">{e.label}</span>
                   </button>
@@ -594,9 +624,20 @@ export default function FinanceExplorer({ code }: { code: string }) {
                   >
                     <div className="mb-2 flex flex-wrap items-baseline justify-between gap-1">
                       <h3 className="text-sm font-semibold text-slate-900">{e.label}</h3>
-                      <span className="text-[11px] text-slate-400">
-                        {unitText(e.unit)} · 新浪财经（披露口径）
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[11px] text-slate-400">
+                          {e.key === 'fx_p-interest-coverage' ? '倍 · 费用化利息口径（东方财富）' : `${unitText(e.unit)} · ${primary?.source.includes('hkf10') ? `东方财富（${primary.currency ?? '原币'}）` : '新浪财经（披露口径）'}`}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={`${visibleLabels ? '隐藏' : '显示'}所有图表的节点数据`}
+                          aria-pressed={visibleLabels}
+                          onClick={() => setVisibleLabels(prev => !prev)}
+                          className={`shrink-0 rounded-md px-2 py-1 text-xs font-medium transition ${visibleLabels ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-100 hover:text-brand-700'}`}
+                        >
+                          {visibleLabels ? '隐藏数据' : '显示数据'}
+                        </button>
+                      </div>
                     </div>
                     {hasData ? (
                       <FinanceCompareChart
@@ -605,6 +646,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
                         primary={pS}
                         compare={hasCompare ? cS : null}
                         height={220}
+                        showLabels={visibleLabels}
                       />
                     ) : (
                       <div className="py-10 text-center text-sm text-slate-400">该科目暂未披露</div>
@@ -622,7 +664,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
         catalog={catalog}
         selected={active?.fields ?? []}
         defaultSelected={DEFAULT_MODULES[0].fields}
-        formulas={formulas}
+        formulas={modulesKey.endsWith('.hk') ? formulas.filter(f => checkExpr(f.expr, Array.from(fieldMetas.keys()).filter(k => !k.startsWith('fx_'))).ok) : formulas}
         onAddFormula={(f) => {
           const next = [...formulas, f];
           setFormulas(next);

@@ -14,6 +14,7 @@
  */
 
 import { fetchText } from './http';
+import { fetchInterestExpenses, INTEREST_FIELDS, withInterestFields } from './interestExpenses';
 
 export const PROVIDER_NAME = 'sina-statements';
 
@@ -200,8 +201,9 @@ export async function fetchStatementCatalog(code: string): Promise<StatementCata
       .map((p) => catalogFromPage(p.id, p.parsed))
       .filter((c): c is StatementCatalog => c !== null);
     if (catalog.length === 3) {
-      catalogCache.set(code, { at: Date.now(), catalog });
-      return catalog;
+      const enriched = withInterestFields(catalog);
+      catalogCache.set(code, { at: Date.now(), catalog: enriched });
+      return enriched;
     }
   }
   throw new Error(`新浪三大报表：${code} 字段目录获取失败`);
@@ -275,7 +277,7 @@ async function fetchOneStatement(
         byDate.set(date, rec);
       }
       for (const row of p.rows) {
-        if (row.kind === 'field' && row.name && row.vals[i] !== undefined) {
+        if (row.kind === 'field' && row.name && row.vals[i] !== undefined && !INTEREST_FIELDS.some(key => key === `${meta.prefix}_${row.name}`)) {
           rec.set(`${meta.prefix}_${row.name}`, toNum(row.vals[i]));
         }
       }
@@ -284,6 +286,8 @@ async function fetchOneStatement(
 }
 
 export interface CustomFinancials {
+  periodKinds?: Record<string, string>;
+  currency?: string;
   code: string;
   name: string;
   periods: string[];
@@ -308,7 +312,7 @@ export async function fetchCustomFinancials(
 
   const byDate = new Map<string, Map<string, number | null>>();
 
-  const statementFields = fields.filter((k) => /^(bs|pl|cf)_/.test(k));
+  const statementFields = fields.filter((k) => /^(bs|pl|cf)_/.test(k) && !INTEREST_FIELDS.some(f => f === k));
   const indicatorKeys = fields.filter((k) => !/^(bs|pl|cf)_/.test(k));
 
   const tasks: Promise<void>[] = [];
@@ -316,6 +320,17 @@ export async function fetchCustomFinancials(
     (key.startsWith('bs_') ? 'balance' : key.startsWith('pl_') ? 'profit' : 'cashflow') as StatementId));
   for (const id of statementIds) {
     tasks.push(fetchOneStatement(code, id, years, byDate));
+  }
+  if (fields.some(k => INTEREST_FIELDS.some(f => f === k))) {
+    tasks.push((async () => {
+      // 分红/财报附注明细缺失时保留空值，不回退到净财务费用或现金流附注。
+      const rows = await fetchInterestExpenses(code, years).catch(() => new Map<string, Map<string,number|null>>());
+      for (const [date, values] of rows) {
+        const rec = byDate.get(date) ?? new Map<string,number|null>();
+        for (const [key,value] of values) if (fields.includes(key)) rec.set(key,value);
+        byDate.set(date,rec);
+      }
+    })());
   }
 
   // 指标页数据（复用 sinaFinancial 的解析）：需要时才抓

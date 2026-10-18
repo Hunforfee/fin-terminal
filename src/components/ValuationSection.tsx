@@ -111,6 +111,7 @@ function MetricChart({
   picked,
   onPick,
   overlay,
+  dividendLabel = '预期股息率',
 }: {
   history: ValuationPoint[];
   metric: Metric;
@@ -120,13 +121,14 @@ function MetricChart({
   onPick: (p: { date: string; value: number | null }) => void;
   /** 对照口径序列（用于「叠加对比」） */
   overlay?: { values: (number | null)[]; label: string } | null;
+  dividendLabel?: string;
 }) {
   const conf = METRICS.find((m) => m.key === metric)!;
   const option = useMemo(() => {
     const dates = history.map((h) => h.date);
     const vals = history.map((h) => (metric === 'pe' ? h.pe : metric === 'pb' ? h.pb : h.dy));
     const closes = history.map((h) => h.close);
-    const name = conf.label;
+    const name = metric === 'dy' ? dividendLabel : conf.label;
 
     const mkLine = (yAxis: number, color: string, label: string, type: 'dotted' | 'dashed') => ({
       yAxis,
@@ -235,6 +237,7 @@ function MetricChart({
         backgroundColor: 'rgba(255,255,255,0.96)',
         borderColor: '#e2e8f0',
         textStyle: { color: '#0f172a', fontSize: 12 },
+        valueFormatter: (value: unknown) => typeof value === 'number' ? value.toFixed(2) : '--',
       },
       legend: {
         top: 0,
@@ -290,7 +293,7 @@ function MetricChart({
       ],
       series,
     };
-  }, [history, metric, stats, conf.label, picked, overlay]);
+  }, [history, metric, stats, conf.label, picked, overlay, dividendLabel]);
 
   return (
     <div>
@@ -407,14 +410,24 @@ export default function ValuationSection({ code }: { code: string }) {
                 className={`min-w-0 rounded-xl border p-3 text-left transition sm:p-5 ${selected === p.key ? 'border-brand-500 bg-white ring-1 ring-brand-500' : 'border-slate-200 bg-white hover:border-slate-400'}`}
               >
                 <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-500 sm:text-sm">
-                  <span>{p.label}</span>
+                  <span>{p.key === 'dy' && data.dividendYieldMethod !== 'announced-forward' ? '股息率（原口径）' : p.label}</span>
                   <span
                     className={`hidden h-1.5 w-1.5 rounded-full sm:block ${selected === p.key ? 'bg-brand-600' : 'bg-slate-200'}`}
                   />
                 </div>
-                <div className="mt-3 text-2xl font-semibold tracking-tight tabular-nums text-slate-900 sm:text-3xl">
-                  {p.stats?.cur?.toFixed(2) ?? '--'}
-                  <span className="ml-1 text-xs font-normal text-slate-500">{p.unit}</span>
+                <div className="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1 tabular-nums">
+                  <span
+                    className={`text-2xl font-semibold tracking-tight sm:text-3xl ${p.key === 'dy' ? 'text-brand-600' : 'text-slate-900'}`}
+                    title={p.key === 'dy' && data.dividendYieldMethod === 'announced-forward' ? '预期股息率：在该时间点买入后，未来一年预计税前股息收入占买入金额的比例。' : undefined}
+                  >
+                    {(p.key === 'dy' ? data.dividendYield : p.key === 'pe' ? data.pe : data.pb)?.toFixed(2) ?? '--'}
+                    <span className={`ml-0.5 text-xs font-normal ${p.key === 'dy' ? 'text-brand-600' : 'text-slate-500'}`}>{p.unit}</span>
+                  </span>
+                  {p.key === 'dy' && data.dividendYieldMethod === 'announced-forward' && (
+                    <span className="whitespace-nowrap text-xs text-slate-500 sm:text-sm" title="静态：过去十二个月已实施的税前现金分红占同日股价的比例。">
+                      （静 <span className="font-medium text-red-500">{data.staticDividendYield?.toFixed(2) ?? '--'}%</span>）
+                    </span>
+                  )}
                 </div>
                 <div className="mt-2 text-[11px] text-slate-500 sm:text-xs">
                   历史分位{' '}
@@ -428,9 +441,9 @@ export default function ValuationSection({ code }: { code: string }) {
           <div id="valuation-chart" className="card overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-6">
               <div className="flex items-center gap-3">
-                <h3 className="font-semibold text-slate-900">{current?.label} 历史走势</h3>
+                <h3 className="font-semibold text-slate-900">{current?.key === 'dy' ? data.dividendYieldMethod === 'announced-forward' ? '预期股息率' : '股息率（原口径）' : current?.label} 历史走势</h3>
                 <span className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-500">
-                  价格前复权
+                  {data.priceAdjust === 'qfq' ? '价格前复权' : '当前估值'}
                 </span>
               </div>
               <button
@@ -451,6 +464,7 @@ export default function ValuationSection({ code }: { code: string }) {
                   <MetricChart
                     history={data.history}
                     metric={current.key}
+                    dividendLabel={data.dividendYieldMethod === 'announced-forward' ? '预期股息率' : '股息率（原口径）'}
                     stats={current.stats}
                     picked={(() => {
                       const date = pins[current.key];
@@ -509,7 +523,7 @@ export default function ValuationSection({ code }: { code: string }) {
               </div>
             ) : (
               <div className="flex min-h-80 items-center justify-center px-6 text-sm text-slate-500">
-                该区间有效数据不足，暂无法展示统计结果。
+                {data.historyUnavailableReason ?? '该区间有效数据不足，暂无法展示统计结果。'}
               </div>
             )}
             <div className="flex flex-wrap justify-between gap-2 border-t border-slate-100 bg-slate-50/50 px-4 py-3 text-xs text-slate-500 sm:px-6">
@@ -536,7 +550,7 @@ export default function ValuationSection({ code }: { code: string }) {
                 （与财报复算口径分别展示）
               </p>
             )}
-            <ul className="mt-1 list-disc space-y-0.5 pl-4">
+            {!data.source.includes('hkf10') && <ul className="mt-1 list-disc space-y-0.5 pl-4">
               <li>
                 价格曲线使用<b>前复权收盘价</b>
                 。EPS、每股净资产按同一复权因子换算后计算 PE、PB，复权前后的估值比率保持一致。
@@ -547,8 +561,13 @@ export default function ValuationSection({ code }: { code: string }) {
               </li>
               <li>
                 <b>PB</b> 使用归母净资产扣除其他权益工具后的普通股净资产；与 PE 分别计算。
-                <b>股息率</b>
-                使用已实施且除息日落在过去十二个月内的税前现金分红，无分红为 0，数据缺失显示空值。
+              </li>
+              <li>
+                <b>股息率</b> 默认显示预期值：以当时已公布、金额明确的分红方案延续最近一个报告年度周期的派息水平，估计买入后未来一年的税前股息收入占比；曲线与分位使用相同口径。
+                从公告次日起纳入。同一报告期的新方案替换旧方案；明确不分红为 0，金额未确定或数据缺失显示空值；旧方案超过公告周年三个月仍未更新则停止外推。已除息的特别分红不重复预测。
+                <b>（静）</b> 是过去十二个月已实施税前现金分红除以同日不复权收盘价，送转后的每股分红按股数调整。
+                两种股息率均用不复权价格与名义每股分红匹配，不直接以现金分红除以前复权价。当前值按最近交易日收盘计算。
+                方案延续属于估计；数据源不提供完整历次修订快照，历史分红金额可能包含后续修订，不用于严格时点回测。
               </li>
               <li>
                 <b>财报生效</b>：
@@ -574,7 +593,7 @@ export default function ValuationSection({ code }: { code: string }) {
                   {data.fin.bps?.toFixed(2) ?? '--'} 元。覆盖 {data.fin.points} 个报告期。
                 </li>
               )}
-            </ul>
+            </ul>}
 
             {data.basis === 'estimate' && (
               <div className="mt-2 text-amber-700">财报抓取失败，已降级为估算口径，仅供参考。</div>

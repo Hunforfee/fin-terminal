@@ -127,6 +127,8 @@ export function periodLabel(date: string): string {
 }
 
 export interface CompanyFinancials {
+  periodKinds?: Record<string, string>;
+  currency?: string;
   code: string;
   name: string;
   /** 报告期（升序） */
@@ -227,3 +229,4 @@ export function filterByGranularity(f: CompanyFinancials, g: Granularity = 'semi
     ),
   };
 }
+

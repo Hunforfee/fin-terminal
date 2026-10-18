@@ -211,7 +211,7 @@ export function buildFinancialTimeline(
 export function buildRealValuationSeries(
   candles: Candle[],
   timeline: FinPoint[],
-  opts?: { dyByDate?: Map<string, number>; adjustedByDate?: Map<string, Candle>; shareHistory?: ShareChange[] },
+  opts?: { dyByDate?: Map<string, number | null>; staticDyByDate?: Map<string, number>; adjustedByDate?: Map<string, Candle>; shareHistory?: ShareChange[] },
 ): ValuationPoint[] {
   if (!candles.length || !timeline.length) return [];
   const out: ValuationPoint[] = [];
@@ -233,7 +233,8 @@ export function buildRealValuationSeries(
     out.push({ date: c.date, close, rawClose: c.close, adjustmentFactor: factor,
       pe: pe !== null && Number.isFinite(pe) ? round2(pe) : null,
       pb: pb !== null && Number.isFinite(pb) ? round2(pb) : null,
-      dy: opts?.dyByDate?.get(c.date) ?? null });
+      dy: opts?.dyByDate?.get(c.date) ?? null,
+      dyStatic: opts?.staticDyByDate?.get(c.date) ?? null });
   }
   return out;
 }
@@ -318,6 +319,7 @@ export function summarizeReal(
     pePercentile: peStats.percentile,
     pbPercentile: pbStats.percentile,
     dividendYield: dyLast,
+    staticDividendYield: last?.dyStatic ?? null,
     dyPercentile: dyStats.percentile,
     roe: pe && pb ? round2((pb / pe) * 100) : null,
     netProfit: np,
@@ -335,6 +337,7 @@ function pickValuation(v: {
   pePercentile: number | null;
   pbPercentile: number | null;
   dividendYield: number | null;
+  staticDividendYield: number | null;
   dyPercentile: number | null;
   roe: number | null;
   netProfit: number | null;

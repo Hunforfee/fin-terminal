@@ -430,7 +430,7 @@ export default function FieldPicker({
                             className="truncate"
                             title={
                               tab === 'formula'
-                                ? `${f.label} = ${formulas.find((x) => formulaKey(x.id) === f.key)?.expr ?? ''}`
+                                ? `${f.label} = ${formulas.find((x) => formulaKey(x.id) === f.key)?.expr ?? ''}\n${formulas.find((x) => formulaKey(x.id) === f.key)?.description ?? ''}`
                                 : f.label
                             }
                           >
@@ -492,3 +492,4 @@ export default function FieldPicker({
     </div>
   );
 }
+

@@ -17,30 +17,21 @@ export interface Formula {
   preset?: boolean;
   /** 未披露值按 0 处理（适用于「未披露=零余额」的负债类科目） */
   nullAsZero?: boolean;
+  description?: string;
+  positiveDenominator?: string;
 }
 
 /**
- * 内置预设公式（已用茅台真实数据核对）：
- * - 资产负债率 2024 = 19.04%，与新浪指标页披露值完全一致
- * - 有息负债率 = (短期借款 + 一年内到期的非流动负债 + 长期借款 + 应付债券 + 租赁负债) / 资产总计
- * - 现金/有息债 = (货币资金 + 交易性金融资产) / 有息负债；无有息负债时该期无意义 → 空点
- * - 利息保障倍数 = (利润总额 + 财务费用) / 财务费用 = EBIT / 利息费用。
- *   我国利润表不单列「利息费用」，实务上以利润表「财务费用」代替（pl_财务费用）。
- *   已用茅台 2025 四个报告期与新浪指标页披露的「利息支付倍数」逐期对账，完全一致：
- *     2025-12-31 → -139.7625（新浪 -13976.2501/100）
- *     2025-09-30 → -139.8526（新浪 -13985.2619/100）
- *     2025-06-30 → -128.0017（新浪 -12800.1722/100）
- *     2025-03-31 → -130.0618（新浪 -13006.1810/100）
- *   注意：分母必须是利润表口径 pl_财务费用，不能用现金流量表附注的 cf_财务费用
- *   （后者只是间接法下「属于筹资/投资活动的财务费用」加回项，茅台 2025 仅 2873.49 万，
- *    用它算会得出 3994 倍的错误结果）。
- *   另：当公司无有息负债、财务费用为净利息收入（为负）时，该指标本身无意义，
- *   会呈现负值——这与新浪等数据源的披露口径一致，属口径特性而非计算错误。
+ * 利息保障倍数采用费用化利息口径：(利润总额 + 费用化利息费用) / 费用化利息费用。
+ * 金额取东方财富利润表 TOTAL_PROFIT / FE_INTEREST_EXPENSE，统一万元。
+ * 禁止用净财务费用、现金流附注的财务费用代替利息费用；缺失或非正利息为缺失值。
+ * 此口径不含资本化利息，与债券披露的含资本化利息保障倍数应分开比较。
+ * 定义参考：https://www.csrc.gov.cn/ningxia/c105510/c7398729/content.shtml
  */
 export const PRESET_FORMULAS: Formula[] = [
   {
     id: 'p-debt-ratio',
-    name: '资产负债率（自算）',
+    name: '资产负债率',
     expr: 'bs_负债合计 / bs_资产总计 * 100',
     unit: 'pct',
     preset: true,
@@ -48,7 +39,7 @@ export const PRESET_FORMULAS: Formula[] = [
   },
   {
     id: 'p-interest-debt-ratio',
-    name: '有息负债率（自算）',
+    name: '有息负债率',
     expr:
       '(bs_短期借款 + bs_一年内到期的非流动负债 + bs_长期借款 + bs_应付债券 + bs_租赁负债) / bs_资产总计 * 100',
     unit: 'pct',
@@ -57,7 +48,7 @@ export const PRESET_FORMULAS: Formula[] = [
   },
   {
     id: 'p-cash-to-debt',
-    name: '现金/有息债（自算）',
+    name: '现金/有息债',
     expr:
       '(bs_货币资金 + bs_交易性金融资产) / (bs_短期借款 + bs_一年内到期的非流动负债 + bs_长期借款 + bs_应付债券 + bs_租赁负债)',
     unit: '',
@@ -66,39 +57,38 @@ export const PRESET_FORMULAS: Formula[] = [
   },
   {
     id: 'p-interest-coverage',
-    name: '利息保障倍数（自算）',
-    // 利润总额 = 归母净利 + 少数股东损益 + 所得税费用；EBIT = 利润总额 + 财务费用
-    expr:
-      '(pl_归属于母公司所有者的净利润 + pl_少数股东损益 + pl_减：所得税费用 + pl_财务费用) / pl_财务费用',
+    name: '利息保障倍数',
+    expr: '(pl_利润总额 + pl_利息费用) / pl_利息费用',
     unit: '',
     preset: true,
-    nullAsZero: true,
+    positiveDenominator: 'pl_利息费用',
+    description: '费用化利息口径：(利润总额 + 利息费用) / 利息费用；不含资本化利息。利润总额与利息费用来自东方财富同一期利润表；缺失或无正利息费用时不计算。',
   },
   // ---- 以下 5 条为扩展主流指标（周转率用期末值口径，非平均余额口径） ----
   {
     id: 'p-gross-margin',
-    name: '毛利率（自算）',
+    name: '毛利率',
     expr: '(pl_营业收入 - pl_营业成本) / pl_营业收入 * 100',
     unit: 'pct',
     preset: true,
   },
   {
     id: 'p-inventory-turnover',
-    name: '存货周转率（自算）',
+    name: '存货周转率',
     expr: 'pl_营业成本 / bs_存货',
     unit: '',
     preset: true,
   },
   {
     id: 'p-receivable-turnover',
-    name: '应收账款周转率（自算）',
+    name: '应收账款周转率',
     expr: 'pl_营业收入 / bs_应收账款',
     unit: '',
     preset: true,
   },
   {
     id: 'p-fcf',
-    name: '自由现金流（自算）',
+    name: '自由现金流',
     expr:
       'cf_经营活动产生的现金流量净额 - cf_购建固定资产、无形资产和其他长期资产所支付的现金',
     unit: 'wan',
@@ -107,7 +97,7 @@ export const PRESET_FORMULAS: Formula[] = [
   },
   {
     id: 'p-equity-multiplier',
-    name: '权益乘数（自算）',
+    name: '权益乘数',
     expr: 'bs_资产总计 / (bs_资产总计 - bs_负债合计)',
     unit: '',
     preset: true,
@@ -221,7 +211,7 @@ export function evalFormula(
   expr: string,
   series: Record<string, (number | null)[]>,
   n: number,
-  opts?: { nullAsZero?: boolean },
+  opts?: { nullAsZero?: boolean; positiveDenominator?: string },
 ): (number | null)[] {
   const nullAsZero = opts?.nullAsZero ?? false;
   const allKeys = Object.keys(series);
@@ -244,6 +234,8 @@ export function evalFormula(
 
   const out: (number | null)[] = [];
   for (let i = 0; i < n; i++) {
+    const denominator = opts?.positiveDenominator ? series[opts.positiveDenominator]?.[i] : undefined;
+    if (opts?.positiveDenominator && !(typeof denominator === 'number' && Number.isFinite(denominator) && denominator > 0)) { out.push(null); continue; }
     const args = keys.map((k) => series[k]?.[i]);
     if (!nullAsZero && args.some((v) => v === null || v === undefined || !Number.isFinite(v))) {
       out.push(null);
@@ -261,3 +253,4 @@ export function evalFormula(
   }
   return out;
 }
+

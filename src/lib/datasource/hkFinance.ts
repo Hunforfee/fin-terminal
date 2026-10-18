@@ -8,10 +8,9 @@
  *   现金流量表 RPT_HKF10_FN_CASHFLOW_PC              （长表）
  *
  * 口径说明：
- *   - 报表金额单位为元（港币或人民币，随公司账本币种，见 CURRENCY 字段）；
- *     对外统一折算成「万元」，与 A 股新浪口径对齐（前端 ÷1e4 显示为亿）。
+ *   - 保留数据源标准化口径及 CURRENCY 标识；金额折算到万，页面同时标注币种。
  *   - 指标（ROE / 增长率 / 每股等）直接取东财披露值或由披露值恒等式派生。
- *   - 港股披露节奏与 A 股相同：03-31 / 06-30 / 09-30 / 12-31（部分公司仅半年报）。
+ *   - 报告类型取 REPORT_TYPE，原始报表期取 STD_REPORT_DATE，不按自然年猜测财年。
  */
 
 import { fetchJson } from './http';
@@ -22,9 +21,10 @@ import type { Candle, Valuation, ValuationPoint, ValuationStats, SeriesStats } f
 export const PROVIDER_NAME = 'eastmoney-hkf10';
 
 const DC_URL = 'https://datacenter.eastmoney.com/securities/api/data/v1/get';
-const FX_URL = 'https://open.er-api.com/v6/latest/CNY';
+
 
 interface DcRow {
+  STD_REPORT_DATE?: string;
   REPORT_DATE?: string;
   START_DATE?: string;
   CURRENCY?: string;
@@ -36,14 +36,16 @@ interface DcRow {
 }
 
 async function dcQuery(reportName: string, filter: string, extra = ''): Promise<DcRow[]> {
-  const url =
-    `${DC_URL}?reportName=${reportName}&columns=ALL&filter=${encodeURIComponent(filter)}` +
-    `&pageNumber=1&pageSize=3000&sortTypes=-1,1&sortColumns=REPORT_DATE,STD_ITEM_CODE&source=F10&client=PC${extra}`;
-  const j = await fetchJson<{ result?: { data?: DcRow[] } | null; message?: string }>(url, {
-    timeoutMs: 15000,
-    headers: { Referer: 'https://emweb.securities.eastmoney.com/' },
-  });
-  return j.result?.data ?? [];
+  const rows: DcRow[] = [];
+  for (let page=1; ; page++) {
+    const url = `${DC_URL}?reportName=${reportName}&columns=ALL&filter=${encodeURIComponent(filter)}&pageNumber=${page}&pageSize=1000&sortTypes=-1,1&sortColumns=REPORT_DATE,STD_ITEM_CODE&source=F10&client=PC${extra}`;
+    const j = await fetchJson<{success?:boolean;result?:{data?:DcRow[];pages?:number}|null}>(url,{timeoutMs:15000,headers:{Referer:'https://emweb.securities.eastmoney.com/'}});
+    if (j.success === false || !Array.isArray(j.result?.data)) throw new Error('港股报表数据不可用');
+    rows.push(...j.result.data);
+    if (page >= (j.result.pages ?? 1)) break;
+    if (page >= 30) throw new Error('港股报表分页不完整');
+  }
+  return rows;
 }
 
 function reportDate(row: DcRow): string | null {
@@ -61,9 +63,12 @@ function num(v: unknown): number | null {
 
 /* ------------------------------------------------------- 主要指标 */
 
-interface IndicatorPoint {
+export interface IndicatorPoint {
   date: string;
   raw: Record<string, number | null>;
+  currency: string;
+  kind: string;
+  label: string;
 }
 
 const MAIN_URL = `${DC_URL}?reportName=RPT_HKF10_FN_MAININDICATOR&columns=ALL&filter=`;
@@ -90,22 +95,14 @@ export async function fetchHkIndicatorPoints(secucode: string, years = 12): Prom
           raw[k] = Number(v);
         }
       }
-      return { date: d, raw };
+      const type = String(r.REPORT_TYPE ?? '');
+      const kind = /年报/.test(type) ? 'annual' : /中报/.test(type) ? 'semi' : /一季/.test(type) ? 'q1' : /三季/.test(type) ? 'q3' : 'other';
+      const label = type.replace('年年报','年报').replace('年中报','中报').replace('年一季报','Q1').replace('年三季报','Q3') || d;
+      return { date: d, raw, currency: String(r.CURRENCY ?? ''), kind, label };
     })
     .filter((p): p is IndicatorPoint => p !== null && new Date(`${p.date}T00:00:00Z`) >= cutoff)
     .sort((a, b) => a.date.localeCompare(b.date));
   return points;
-}
-
-/** 人民币 → 港币汇率（用于账本币种为人民币的公司把每股指标换算到港币口径） */
-async function fetchCnyToHkd(): Promise<number | null> {
-  try {
-    const j = await fetchJson<{ result?: string; rates?: Record<string, number> }>(FX_URL, { timeoutMs: 8000 });
-    const hkd = j.rates?.HKD;
-    return hkd && Number.isFinite(hkd) && hkd > 0.8 && hkd < 2 ? hkd : null;
-  } catch {
-    return null;
-  }
 }
 
 /* ------------------------------------------- CompanyFinancials（指标趋势） */
@@ -185,7 +182,9 @@ export async function fetchHkFinancials(
     code,
     name: name ?? code,
     periods,
-    periodLabels: periods.map((d) => periodLabel(d)),
+    periodLabels: kept.map(p => p.label),
+    periodKinds: Object.fromEntries(kept.map(p => [p.date,p.kind])),
+    currency: kept.at(-1)?.currency,
     series,
     source: PROVIDER_NAME,
   };
@@ -229,34 +228,25 @@ export async function fetchHkStatement(
   if (dates.length === 0) return [];
   const inList = dates.map((d) => `'${d}'`).join(',');
   const rows = await dcQuery(STATEMENT_REPORTS[id], `(SECUCODE="${secucode}")(REPORT_DATE in (${inList}))`);
-  return rows
-    .map((r) => {
-      const d = reportDate(r);
-      if (!d) return null;
-      const itemCode = String(r.STD_ITEM_CODE ?? '');
-      const itemName = String(r.STD_ITEM_NAME ?? r.ITEM_NAME ?? '').trim();
-      return {
-        date: d,
-        itemCode,
-        itemName,
-        amount: num(r.AMOUNT),
-      };
-    })
-    .filter((x): x is HkStatementRow => x !== null && x.itemName !== '');
+  return parseHkStatementRows(rows);
 }
 
-/** 账本币种（取资产负债表任一行的 CURRENCY） */
-export async function fetchHkCurrency(secucode: string): Promise<string | null> {
-  try {
-    const rows = await dcQuery(
-      'RPT_HKF10_FN_BALANCE_PC',
-      `(SECUCODE="${secucode}")`,
-      // 只取最近报告期：服务端按 REPORT_DATE 排序，第一页首行即最新
-    );
-    return rows[0]?.CURRENCY ?? null;
-  } catch {
-    return null;
+export function parseHkStatementRows(rows: DcRow[]): HkStatementRow[] {
+  // 数据源有时把上一期原始报表挂在新报告期上；必须按真实报表期归位。
+  const byItem = new Map<string,HkStatementRow>();
+  const sorted = [...rows].sort((a,b) => Number(a.STD_REPORT_DATE === a.REPORT_DATE) - Number(b.STD_REPORT_DATE === b.REPORT_DATE));
+  for (const r of sorted) {
+    const date = reportDate({...r,REPORT_DATE:r.STD_REPORT_DATE ?? r.REPORT_DATE});
+    const itemCode = String(r.STD_ITEM_CODE ?? '');
+    const itemName = String(r.STD_ITEM_NAME ?? r.ITEM_NAME ?? '').trim();
+    if (date && itemCode && itemName) byItem.set(`${date}:${itemCode}`,{date,itemCode,itemName,amount:num(r.AMOUNT)});
   }
+  return [...byItem.values()];
+}
+
+/** 数据源标准化口径的币种。 */
+export async function fetchHkCurrency(secucode: string): Promise<string | null> {
+  return (await fetchHkIndicatorPoints(secucode, 2)).at(-1)?.currency ?? null;
 }
 
 /** 元 → 万元（与 A 股新浪「万元」口径对齐） */
@@ -377,157 +367,45 @@ export async function fetchHkCustomFinancials(
     code,
     name: name ?? code,
     periods,
-    periodLabels: periods.map((d) => periodLabel(d)),
+    periodLabels: periods.map(d => points.find(p => p.date === d)?.label ?? d),
+    periodKinds: Object.fromEntries(points.map(p => [p.date,p.kind])),
+    currency: points.at(-1)?.currency,
     series,
     source: PROVIDER_NAME,
   };
 }
 
-/* ------------------------------------------------------- 估值历史 */
-
-function quantile(sorted: number[], q: number): number {
-  if (sorted.length === 0) return null as unknown as number;
-  const pos = (sorted.length - 1) * q;
-  const lo = Math.floor(pos);
-  const hi = Math.ceil(pos);
-  return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+/** 按公司自身财年筛选，不把所有港股的 12 月末都当成年报。 */
+export function filterHkPeriods<T extends {periods:string[];periodLabels:string[];series:Record<string,(number|null)[]>;periodKinds?:Record<string,string>}>(f:T,g:'annual'|'semi'|'quarter'):T {
+  if(g==='quarter') return f;
+  const keep=f.periods.map((p,i)=>({p,i})).filter(({p})=>g==='annual'?f.periodKinds?.[p]==='annual':['annual','semi'].includes(f.periodKinds?.[p]??''));
+  return {...f,periods:keep.map(k=>k.p),periodLabels:keep.map(k=>f.periodLabels[k.i]),series:Object.fromEntries(Object.entries(f.series).map(([k,v])=>[k,keep.map(x=>v[x.i])]))};
 }
 
-function statsOf(values: (number | null)[], cur: number | null): SeriesStats {
-  const vals = values.filter((v): v is number => v !== null && Number.isFinite(v));
-  const sorted = [...vals].sort((a, b) => a - b);
-  const pct =
-    cur !== null && sorted.length > 0
-      ? (sorted.filter((v) => v <= cur).length / sorted.length) * 100
-      : null;
-  return {
-    current: cur,
-    percentile: pct,
-    p80: sorted.length ? quantile(sorted, 0.8) : null,
-    p50: sorted.length ? quantile(sorted, 0.5) : null,
-    p20: sorted.length ? quantile(sorted, 0.2) : null,
-    max: sorted.length ? sorted[sorted.length - 1] : null,
-    avg: sorted.length ? sorted.reduce((a, b) => a + b, 0) / sorted.length : null,
-    min: sorted.length ? sorted[0] : null,
-    count: vals.length,
-  };
+/** 当前值只使用最新已取到的快照；无可核验公告日时不伪造历史曲线/分位。 */
+export function summarizeHkSnapshot(points:IndicatorPoint[],code:string,quote:{price:number|null;pe:number|null;pb?:number|null;ts?:string|null},date:string,years:number):Valuation {
+  const latest=points.filter(p=>p.date<=date).at(-1);
+  if(!latest) throw new Error('港股财报指标不可用');
+  const comparable=latest.currency==='HKD';
+  const price=quote.price;
+  const eps=num(latest.raw.EPS_TTM),bps=num(latest.raw.BPS);
+  const pe=comparable && price!==null && price>0 && eps!==null && eps>0?price/eps:null;
+  const pb=comparable && price!==null && price>0 && bps!==null && bps>0?price/bps:null;
+  const dps=num(latest.raw.DPS_HKD);
+  const dy=price!==null && price>0 && dps!==null && dps>=0?dps/price*100:null;
+  const empty=(current:number|null):SeriesStats=>({current,percentile:null,p80:null,p50:null,p20:null,max:null,avg:null,min:null,count:0});
+  return {code,pe,pb,pePercentile:null,pbPercentile:null,dividendYield:dy,dyPercentile:null,
+    roe:num(latest.raw.ROE_YEARLY),netProfit:null,netAssets:null,history:[],basis:'real',years,
+    stats:{pe:empty(pe),pb:empty(pb),dy:empty(dy),from:date,to:date},method:'disclosure',source:PROVIDER_NAME,stale:false,
+    historyUnavailableReason:'港股财报接口未提供可核验的历史公告日及历史分红快照，暂不计算历史估值曲线和分位。',
+    marketComparison:{pe:quote.pe,pb:quote.pb??null,ts:quote.ts??null},
+    warnings:['港股当前 PE/PB 使用数据源声明为 HKD 的 EPS_TTM/每股净资产与港元行情匹配，不使用即时汇率回填历史。股息率按数据源最新年度每股股息（HKD）除以当前股价计算，不当作已验证的预期股息率。',
+      '数据源未提供完整历史公告日期、分红时点，已停止在报告期末提前引用财报和回填当前股息率。'],
+    fin:{report:latest.date,npTTM:null,shares:null,bps:comparable?bps:null,points:points.length,realDates:false,adjustGaps:0}};
 }
 
-/** 阶梯取值：日期 d 适用的最近一期报告值 */
-function stepValue<T>(points: { date: string; value: T }[], d: string): T | null {
-  let out: T | null = null;
-  for (const p of points) {
-    if (p.date <= d) out = p.value;
-    else break;
-  }
-  return out;
-}
-
-/**
- * 港股估值历史：收盘价 ÷ 东财披露 EPS_TTM / BPS（未复权价）。
- * 报告生效日按报告截止日近似（港股无公开的精确公告日接口），误差通常数日内。
- */
-export async function buildHkValuation(
-  secucode: string,
-  code: string,
-  candles: Candle[],
-  quote: { price: number | null; pe: number | null; name?: string },
-  years = 10,
-): Promise<Valuation> {
-  const points = await fetchHkIndicatorPoints(secucode, years + 3);
-  if (points.length === 0) throw new Error(`港股估值：${code} 无财报指标`);
-  const currency = (await fetchHkCurrency(secucode)) ?? '';
-  // 账本币种为人民币时，把每股指标换算到港币口径再与港股价相除
-  const cnyToHkd = currency.includes('人民币') ? await fetchCnyToHkd() : null;
-
-  const epsTtm: { date: string; value: number | null }[] = [];
-  const bpsPts: { date: string; value: number | null }[] = [];
-  const dyPts: { date: string; value: number | null }[] = [];
-  for (const p of points) {
-    const eps = num(p.raw.EPS_TTM);
-    const bps = num(p.raw.BPS);
-    const dy = num(p.raw.DIVIDEND_RATE);
-    const fx = cnyToHkd ?? 1;
-    epsTtm.push({ date: p.date, value: eps !== null ? eps * fx : null });
-    bpsPts.push({ date: p.date, value: bps !== null ? bps * fx : null });
-    dyPts.push({ date: p.date, value: dy });
-  }
-
-  const cutoff = new Date();
-  cutoff.setUTCFullYear(cutoff.getUTCFullYear() - years);
-  const cut = cutoff.toISOString().slice(0, 10);
-  const hist: ValuationPoint[] = [];
-  for (const c of candles) {
-    if (c.date < cut) continue;
-    const eps = stepValue(epsTtm, c.date);
-    const bps = stepValue(bpsPts, c.date);
-    const dy = stepValue(dyPts, c.date);
-    hist.push({
-      date: c.date,
-      pe: eps !== null && eps > 0 ? c.close / eps : null,
-      pb: bps !== null && bps > 0 ? c.close / bps : null,
-      close: c.close,
-      dy,
-    });
-  }
-  if (hist.length === 0) throw new Error(`港股估值：${code} 价格与财报无法对齐`);
-
-  const latest = points[points.length - 1];
-  const latestEps = num(latest.raw.EPS_TTM);
-  const latestBps = num(latest.raw.BPS);
-  const latestDy = num(latest.raw.DIVIDEND_RATE);
-  const fx = cnyToHkd ?? 1;
-  const price = quote.price;
-  const curPe = quote.pe ?? (price !== null && latestEps ? price / (latestEps * fx) : null);
-  const curPb = price !== null && latestBps ? price / (latestBps * fx) : null;
-  const npTtm = latestEps !== null ? (num(latest.raw.ISSUED_COMMON_SHARES) ?? 0) * latestEps / 1e8 : null;
-
-  const warnings: string[] = [
-    '港股估值口径：收盘价（未复权）÷ 东方财富披露的 EPS_TTM / 每股净资产；报告生效日按报告截止日近似，未使用真实公告日。',
-  ];
-  if (currency.includes('人民币')) {
-    warnings.push(
-      cnyToHkd
-        ? `公司账本币种为人民币，每股指标已按即期汇率（1 CNY ≈ ${cnyToHkd.toFixed(4)} HKD）换算到港币口径。`
-        : '公司账本币种为人民币，汇率换算暂不可用，估值可能存在币种偏差。',
-    );
-  }
-
-  const stats: ValuationStats = {
-    pe: statsOf(hist.map((h) => h.pe), curPe),
-    pb: statsOf(hist.map((h) => h.pb), curPb),
-    dy: statsOf(hist.map((h) => h.dy), latestDy),
-    from: hist[0].date,
-    to: hist[hist.length - 1].date,
-  };
-
-  return {
-    code,
-    pe: curPe,
-    pb: curPb,
-    pePercentile: stats.pe.percentile,
-    pbPercentile: stats.pb.percentile,
-    dividendYield: latestDy,
-    dyPercentile: stats.dy.percentile,
-    roe: num(latest.raw.ROE_YEARLY),
-    netProfit: npTtm,
-    netAssets: latestBps !== null ? ((num(latest.raw.ISSUED_COMMON_SHARES) ?? 0) * latestBps) / 1e8 : null,
-    history: hist,
-    basis: 'real',
-    warnings,
-    years,
-    stats,
-    method: 'disclosure',
-    source: PROVIDER_NAME,
-    stale: false,
-    fin: {
-      report: latest.date,
-      npTTM: npTtm,
-      shares: (num(latest.raw.ISSUED_COMMON_SHARES) ?? 0) / 1e8,
-      bps: latestBps,
-      points: points.length,
-      realDates: false,
-      adjustGaps: 0,
-    },
-  };
+export async function buildHkValuation(secucode:string,code:string,candles:Candle[],quote:{price:number|null;pe:number|null;pb?:number|null;ts?:string|null},years=10):Promise<Valuation>{
+  const points=await fetchHkIndicatorPoints(secucode,years+3);
+  const date=quote.ts?.slice(0,10) ?? candles.at(-1)?.date ?? new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai'}).format(new Date());
+  return summarizeHkSnapshot(points,code,quote,date,years);
 }

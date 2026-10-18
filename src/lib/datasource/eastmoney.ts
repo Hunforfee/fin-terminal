@@ -11,7 +11,7 @@
  */
 
 import { fetchText } from './http';
-import { normalizeCode, INDEX_WHITELIST } from './codes';
+import { normalizeCode } from './codes';
 import type { SearchHit } from './types';
 
 const SUGGEST_URL = 'https://searchapi.eastmoney.com/api/suggest/get';
@@ -25,7 +25,8 @@ interface SuggestItem {
   PinYin?: string;
   QuoteID?: string;
   SecurityTypeName?: string;
-  MktNum?: string;
+  MktNum?: string | number;
+  Classify?: string;
 }
 
 /** 剥离可能的 JSONP 包装，返回纯 JSON 文本 */
@@ -45,21 +46,31 @@ export async function fetchSearch(keyword: string, count = 12): Promise<SearchHi
   const json = JSON.parse(stripJsonp(text)) as {
     QuotationCodeTable?: { Data?: SuggestItem[] };
   };
-  const rows = json?.QuotationCodeTable?.Data ?? [];
+  return parseSearchRows(json?.QuotationCodeTable?.Data ?? []);
+}
+
+export function parseSearchRows(rows: SuggestItem[]): SearchHit[] {
 
   const hits: SearchHit[] = [];
   for (const r of rows) {
     if (!r.Code || !r.Name) continue;
     const code = r.Code;
-    const market: 'SH' | 'SZ' | 'BJ' = r.QuoteID?.startsWith('1.') ? 'SH' : r.MktNum === '0' ? 'BJ' : 'SZ';
+    const marketId = r.QuoteID?.split('.')[0] ?? (r.MktNum == null ? undefined : String(r.MktNum));
+    // 东财的 0 同时用于深圳和北京，必须结合代码/交易所类型区分。116 才是港股。
+    const market = marketId === '116' ? 'HK' : marketId === '1' ? 'SH'
+      : marketId === '0' ? (/^(?:4|8|92)/.test(code) || /京/.test(r.SecurityTypeName ?? '') ? 'BJ' : 'SZ')
+      : null;
+    if (!market || (market === 'HK' ? !/^\d{4,5}$/.test(code) : !/^\d{6}$/.test(code))) continue;
     const norm = normalizeCode(`${market.toLowerCase()}${code}`);
-    const idx = INDEX_WHITELIST[code];
+    if (!norm) continue;
+    const isIndex = r.Classify === 'Index' || r.SecurityTypeName === '指数';
+    const isFund = r.Classify === 'Fund' || r.SecurityTypeName === '基金';
     hits.push({
-      code,
-      symbol: `${market.toLowerCase()}${code}`,
+      code: norm.code,
+      symbol: norm.symbol,
       name: r.Name,
       market,
-      kind: norm?.kind ?? 'stock',
+      kind: isIndex ? 'index' : isFund ? 'etf' : norm.kind,
       pinyin: r.PinYin,
       board: r.SecurityTypeName ?? norm?.board ?? 'A股',
       secid: r.QuoteID ?? norm?.secid,

@@ -101,7 +101,7 @@ function renderMd(md: string): string {
 }
 
 export default function AiAnalysis({ code, name }: { code: string; name: string }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [promptOpen, setPromptOpen] = useState(false);
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
   const [editingPrompt, setEditingPrompt] = useState(false);

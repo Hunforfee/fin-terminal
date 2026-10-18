@@ -68,21 +68,24 @@ export default function CompanyWindow({ codes }: { codes: string[] }) {
     setReadAt(readCursor());
   }, []);
 
+  const codesKey = codes.slice(0, 40).join(',');
+
   const load = useCallback(() => {
-    if (!codes.length) {
+    if (!codesKey) {
       setEntries([]);
       return;
     }
     setEntries(null);
     setError('');
-    fetch(`/api/company-window?codes=${encodeURIComponent(codes.join(','))}`)
+    fetch(`/api/company-window?codes=${encodeURIComponent(codesKey)}`)
       .then((r) => r.json())
       .then((j) => {
         if (j?.ok && Array.isArray(j.data)) setEntries(j.data as Entry[]);
         else setError(j?.error || '公告获取失败');
       })
       .catch(() => setError('公告获取失败，请稍后重试'));
-  }, [codes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [codesKey]);
 
   const unreadImportant = useMemo(
     () =>

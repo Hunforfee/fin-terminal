@@ -17,6 +17,31 @@ export const maxDuration = 300;
 const DEFAULT_URL = 'https://api.deepseek.com/v1/chat/completions';
 const DEFAULT_MODEL = 'deepseek-chat';
 
+/**
+ * 模型自适应降级：当指定模型不存在/未开通（400004 / model ... not exist / 402 未开通）时，
+ * 依次尝试备用模型（仅对腾讯 TokenHub 生效，其他服务商只用用户指定模型）。
+ */
+const TOKENHUB_FALLBACKS = ['deepseek-v4.1-flash', 'glm-5.3-flash', 'kimi-k2.6', 'minimax-m2.7'];
+const isTokenHub = (u: string) => u.includes('tokenhub.tencentmaas.com');
+const isModelUnavailable = (status: number, text: string) =>
+  (status === 400 && /400004|does not exist/i.test(text)) || status === 402;
+
+function chatOnce(url: string, key: string, model: string, systemContent: string, userContent: string) {
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: systemContent },
+        { role: 'user', content: userContent },
+      ],
+      temperature: 0.4,
+    }),
+    signal: AbortSignal.timeout(280000),
+  });
+}
+
 export async function POST(req: NextRequest) {
   let body: { name?: string; code?: string; prompt?: string };
   try {
@@ -60,30 +85,34 @@ export async function POST(req: NextRequest) {
   const systemContent =
     '你是一名严谨的 A 股基本面分析师。你会收到用户提示词和一组实时检索到的网络资料摘要。输出结构化 Markdown（使用中文），在开头列出“信息来源”小节引用所用链接。所有关键数字注明来源与日期；不确定的内容明确说明，绝不编造。';
 
-  const upstream = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${key}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: systemContent },
-        { role: 'user', content: userContent },
-      ],
-      temperature: 0.4,
-    }),
-  }).catch((e) => e instanceof Error ? e : new Error(String(e)));
+  // ── 第 2 步：调用模型（模型不可用时自动降级到备用模型） ──
+  const triedModels = isTokenHub(url)
+    ? [model, ...TOKENHUB_FALLBACKS.filter((m) => m !== model)]
+    : [model];
+  let upstream: Response | Error = new Error('no attempt');
+  let usedModel = model;
+  let lastErrText = '';
+  for (const m of triedModels) {
+    usedModel = m;
+    const res = await chatOnce(url, key, m, systemContent, userContent).catch(
+      (e: unknown) => (e instanceof Error ? e : new Error(String(e))),
+    );
+    upstream = res;
+    if (res instanceof Error) {
+      lastErrText = res.message;
+      break; // 网络错误换模型无意义
+    }
+    if (res.ok) break;
+    lastErrText = await res.text().catch(() => '');
+    if (!isModelUnavailable(res.status, lastErrText)) break; // 其他错误（如鉴权）不重试
+  }
 
   if (upstream instanceof Error) {
     return NextResponse.json({ ok: false, error: `AI 接口请求失败：${upstream.message}` }, { status: 502 });
   }
-
   if (!upstream.ok) {
-    const text = await upstream.text().catch(() => '');
     return NextResponse.json(
-      { ok: false, error: `AI 接口返回 ${upstream.status}：${text.slice(0, 300)}` },
+      { ok: false, error: `AI 接口返回 ${upstream.status}：${lastErrText.slice(0, 300)}` },
       { status: 502 },
     );
   }
@@ -94,5 +123,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'AI 接口返回内容为空' }, { status: 502 });
   }
 
-  return NextResponse.json({ ok: true, data: { content, model, generatedAt: new Date().toISOString(), sources: hits.length } });
+  return NextResponse.json({ ok: true, data: { content, model: usedModel, generatedAt: new Date().toISOString(), sources: hits.length } });
 }

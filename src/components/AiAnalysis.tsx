@@ -113,6 +113,9 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
   const [apiKey, setApiKey] = useState('');
   const [apiUrl, setApiUrl] = useState('');
   const [apiModel, setApiModel] = useState('');
+  const [models, setModels] = useState<string[]>(() => loadJson<string[]>('fin.ai.models', []));
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsErr, setModelsErr] = useState<string | null>(null);
   const booted = useRef(false);
 
   useEffect(() => {
@@ -188,6 +191,29 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
       localStorage.setItem(LS_URL, p.url);
       localStorage.setItem(LS_MODEL, p.model);
     } catch {}
+  };
+
+  /** 拉取当前服务商账号可用的模型列表（OpenAI 兼容 /v1/models） */
+  const loadModels = async () => {
+    if (modelsLoading) return;
+    setModelsLoading(true);
+    setModelsErr(null);
+    try {
+      const r = await fetch('/api/ai-models', {
+        headers: { 'x-ai-key': apiKey, 'x-ai-url': apiUrl },
+      });
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || `请求失败（${r.status}）`);
+      const list: string[] = j.data.models ?? [];
+      setModels(list);
+      try {
+        localStorage.setItem('fin.ai.models', JSON.stringify(list));
+      } catch {}
+    } catch (e) {
+      setModelsErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setModelsLoading(false);
+    }
   };
 
   return (
@@ -352,6 +378,44 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
               className="input !w-full py-1 text-xs sm:!w-40"
             />
           </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              onClick={loadModels}
+              disabled={modelsLoading || !apiKey || !apiUrl}
+              className="min-h-6 rounded-md border border-slate-300 bg-white px-2 text-[11px] text-slate-600 transition hover:border-brand-400 hover:text-brand-600 disabled:opacity-50"
+              title="用你的 API Key 查询服务商当前可用的模型列表"
+            >
+              {modelsLoading ? '获取中…' : '获取可用模型'}
+            </button>
+            {models.length > 0 && (
+              <span className="text-[11px] text-slate-400">
+                {models.length} 个可用，点击选用：
+              </span>
+            )}
+          </div>
+          {modelsErr && <p className="text-[11px] text-red-500">{modelsErr}</p>}
+          {models.length > 0 && (
+            <div className="flex max-h-24 flex-wrap gap-1 overflow-y-auto">
+              {models.map((m) => (
+                <button
+                  key={m}
+                  onClick={() => {
+                    setApiModel(m);
+                    try {
+                      localStorage.setItem(LS_MODEL, m);
+                    } catch {}
+                  }}
+                  className={`min-h-5 rounded px-1.5 font-mono text-[10px] transition ${
+                    apiModel === m
+                      ? 'bg-brand-600 text-white'
+                      : 'border border-slate-200 bg-white text-slate-500 hover:border-brand-400 hover:text-brand-600'
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

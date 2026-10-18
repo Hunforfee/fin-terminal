@@ -14,6 +14,7 @@ import WatchlistGroups from './WatchlistGroups';
 import StockName from './StockName';
 import StockListViewport from './StockListViewport';
 import ResearchColumns from './ResearchColumns';
+import CompanyWindow from './CompanyWindow';
 import {
   RESEARCH_COLUMNS,
   RESEARCH_TABLE_KEY,
@@ -310,15 +311,11 @@ export default function ResearchDesk({
     <div className="space-y-6">
       {!management && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="card px-5 py-4">
+            <CompanyWindow codes={savedCodes.map((symbol) => symbol.replace(/^(SH|SZ|BJ)/, ''))} />
+          </div>
           {[
             ['关注公司', loading ? '—' : quotes.length, '家'],
-            [
-              '财报覆盖',
-              finLoading
-                ? '…'
-                : financials.filter((f) => f.periods.length > 0).length,
-              '家',
-            ],
             ['最近报告期', reports[0]?.periods.at(-1) ?? '—', ''],
             ['研究笔记', notebook.notes.length, '条'],
           ].map(([label, count, unit]) =>

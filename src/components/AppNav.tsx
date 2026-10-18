@@ -7,7 +7,6 @@ const items = [
   ['/industry', '行业研究'],
   ['/screener', '条件选股'],
   ['/fund', '基金'],
-  ['/health', '数据源'],
 ] as const;
 export default function AppNav() {
   const pathname = usePathname();

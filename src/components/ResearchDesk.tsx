@@ -101,6 +101,8 @@ export default function ResearchDesk({
     [quotes],
   );
   const [filter, setFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 50;
   useEffect(() => {
     setSelected([]);
   }, [group, filter]);
@@ -111,6 +113,10 @@ export default function ResearchDesk({
   const [dropStock, setDropStock] = useState<string | null>(null);
   const [preferenceError, setPreferenceError] = useState('');
   const sort = table.sort;
+  // 筛选/分组/排序变化时回到第一页
+  useEffect(() => {
+    setPage(1);
+  }, [group, filter, sort]);
   const columns = table.columns.map((id) =>
     RESEARCH_COLUMNS.find((c) => c.id === id)!,
   );
@@ -283,6 +289,9 @@ export default function ResearchDesk({
           ) || manual
         : manual;
     });
+  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const pageRows = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
   const visibleSelected = selected.filter((symbol) =>
     rows.some((row) => row.symbol === symbol),
   );
@@ -508,7 +517,7 @@ export default function ResearchDesk({
           </p>
         )}
         <StockListViewport
-          resetKey={JSON.stringify([group, filter, sort, table.columns])}
+          resetKey={JSON.stringify([group, filter, sort, table.columns, safePage])}
         >
           <table
             aria-label="基本面股票列表"
@@ -523,17 +532,27 @@ export default function ResearchDesk({
                     aria-label="选择当前列表全部公司"
                     disabled={!rows.length}
                     checked={
-                      rows.length > 0 && visibleSelected.length === rows.length
+                      pageRows.length > 0 &&
+                      pageRows.every((q) => visibleSelected.includes(q.symbol))
                     }
                     ref={(el) => {
                       if (el)
                         el.indeterminate =
-                          visibleSelected.length > 0 &&
-                          visibleSelected.length < rows.length;
+                          pageRows.some((q) => visibleSelected.includes(q.symbol)) &&
+                          !pageRows.every((q) => visibleSelected.includes(q.symbol));
                     }}
                     onChange={(e) =>
                       setSelected(
-                        e.target.checked ? rows.map((q) => q.symbol) : [],
+                        e.target.checked
+                          ? [
+                              ...selected,
+                              ...pageRows
+                                .map((q) => q.symbol)
+                                .filter((s) => !selected.includes(s)),
+                            ]
+                          : selected.filter(
+                              (s) => !pageRows.some((q) => q.symbol === s),
+                            ),
                       )
                     }
                     className="h-3.5 w-3.5 accent-blue-600"
@@ -612,7 +631,7 @@ export default function ResearchDesk({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {rows.map((q, index) => (
+              {pageRows.map((q, index) => (
                 <tr
                   key={q.symbol}
                   data-symbol={q.symbol}
@@ -826,12 +845,36 @@ export default function ResearchDesk({
           </table>
         </StockListViewport>
 
-        <div className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
-          PE / PB：行情口径　·　财务指标：各公司所列报告期累计口径
+        <div className="flex items-center gap-3 border-t border-slate-100 px-5 py-2.5 text-xs text-slate-500">
           {finErrors.length > 0 && (
-            <span className="ml-3 text-amber-700" title={finErrors.join('、')}>
+            <span className="text-amber-700" title={finErrors.join('、')}>
               财报暂不可用：{finErrors.length} 家公司
             </span>
+          )}
+          {rows.length > PAGE_SIZE && (
+            <div className="ml-auto flex items-center gap-2">
+              <span className="tabular">
+                第 {safePage} / {pageCount} 页 · 共 {rows.length} 家
+              </span>
+              <button
+                type="button"
+                aria-label="上一页"
+                disabled={safePage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="rounded-md border border-slate-200 px-2 py-1 text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                上一页
+              </button>
+              <button
+                type="button"
+                aria-label="下一页"
+                disabled={safePage >= pageCount}
+                onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                className="rounded-md border border-slate-200 px-2 py-1 text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                下一页
+              </button>
+            </div>
           )}
         </div>
       </section>

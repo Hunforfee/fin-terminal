@@ -308,17 +308,6 @@ export default function ResearchDesk({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="page-title">{management ? '关注公司' : '研究工作台'}</h1>
-        <div className="flex gap-2">
-          <Link href="/industry" className="btn">
-            行业研究
-          </Link>
-          <Link href="/screener" className="btn-primary">
-            筛选公司
-          </Link>
-        </div>
-      </div>
       {!management && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[

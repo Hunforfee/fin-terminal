@@ -105,10 +105,55 @@ export default function ResearchDesk({
     [quotes],
   );
   const [filter, setFilter] = useState('');
-  const [page, setPage] = useState(1);
   const tableRef = useRef<HTMLDivElement>(null);
   const [jumpTo, setJumpTo] = useState('');
-  const PAGE_SIZE = 50;
+  /**
+   * 每页行数按视口高度自适应，保证「一屏一页、无需滚动」，范围 10–50 行。
+   */
+  const [pageSize, setPageSize] = useState(20);
+  /** 当前页的起始行索引：缩放重排时按首行换算页码，不会把用户看的行跳走 */
+  const [pageStart, setPageStart] = useState(0);
+  useEffect(() => {
+    /**
+     * 一屏一页：用真实布局测量，而不是估算常量——
+     * 表格顶部到视口底部的空间，去掉表头行和分页栏，再除以实际行高。
+     */
+    const measure = () => {
+      const el = tableRef.current;
+      if (!el) return;
+      const vh = window.visualViewport?.height ?? window.innerHeight;
+      const top = el.getBoundingClientRect().top;
+      const thead =
+        el.querySelector('thead')?.getBoundingClientRect().height ?? 38;
+      // 行高必须用常量：tbody 高度由行数决定，用它反推会形成自反馈死循环
+      const ROW = 38;
+      const footer =
+        (el.nextElementSibling as HTMLElement | null)?.offsetHeight ?? 47;
+      const usable = vh - top - thead - footer - 16 /* 底部留白 */;
+      const fit = Math.floor(usable / ROW);
+      const next = Math.min(50, Math.max(10, Math.floor(fit / 5) * 5 || 10));
+      setPageSize((prev) => (prev === next ? prev : next));
+    };
+    // 首帧布局与字体度量可能未稳定，测两次
+    measure();
+    const raf = requestAnimationFrame(measure);
+    window.addEventListener('resize', measure);
+    window.visualViewport?.addEventListener('resize', measure);
+    const observer = new ResizeObserver(measure);
+    if (tableRef.current?.parentElement)
+      observer.observe(tableRef.current.parentElement);
+    // 表格可能在数据/错误状态切换时重新挂载，位置随之改变，再测一次
+    const mo = new MutationObserver(measure);
+    if (tableRef.current?.parentElement)
+      mo.observe(tableRef.current.parentElement, { childList: true });
+    return () => {
+      mo.disconnect();
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', measure);
+      window.visualViewport?.removeEventListener('resize', measure);
+      observer.disconnect();
+    };
+  }, [group, filter]);
   useEffect(() => {
     setSelected([]);
   }, [group, filter]);
@@ -121,7 +166,7 @@ export default function ResearchDesk({
   const sort = table.sort;
   // 筛选/分组/排序变化时回到第一页
   useEffect(() => {
-    setPage(1);
+    setPageStart(0);
   }, [group, filter, sort]);
   const columns = table.columns.map((id) =>
     RESEARCH_COLUMNS.find((c) => c.id === id)!,
@@ -340,13 +385,21 @@ export default function ResearchDesk({
           ) || manual
         : manual;
     });
-  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  const safePage = Math.min(page, pageCount);
-  const pageRows = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  // 以起始索引为准：窗口缩放导致每页行数变化时，当前首行仍留在视野内
+  // 取包含「当前首行」的那一页的页首索引：pageStart 在新 pageSize 下可能不对齐，
+  // 必须向下取整到它所在的页，否则当前行会被推到上一页之外。
+  const start = Math.min(
+    Math.floor(pageStart / pageSize) * pageSize,
+    Math.max(0, (pageCount - 1) * pageSize),
+  );
+  const safePage = Math.floor(start / pageSize) + 1;
+  const pageRows = rows.slice(start, start + pageSize);
   // 翻页后列表不再有内部滚动条，把整个表格滚回视口顶部
   const goToPage = (p: number) => {
-    const next = Math.min(Math.max(1, p), pageCount);
-    setPage(next);
+    // 用绝对行位置换算（不能用「页码 × 每页行数」以外的旧值，缩放后 pageSize 已改变）
+    const clamped = Math.min(Math.max(1, p), pageCount);
+    setPageStart((clamped - 1) * pageSize);
     requestAnimationFrame(() => {
       const top = tableRef.current?.getBoundingClientRect().top ?? 0;
       if (top < 0)
@@ -697,13 +750,13 @@ export default function ResearchDesk({
                             return;
                           e.preventDefault();
                           const targetIndex =
-                            (safePage - 1) * PAGE_SIZE +
-                            index +
-                            (e.key === 'ArrowUp' ? -1 : 1);
+                            start + index + (e.key === 'ArrowUp' ? -1 : 1);
                           const target = rows[targetIndex];
                           if (target) {
                             wl.reorderStock(q.symbol, target.symbol, group);
-                            setPage(Math.floor(targetIndex / PAGE_SIZE) + 1);
+                            setPageStart(
+                              Math.floor(targetIndex / pageSize) * pageSize,
+                            );
                             requestAnimationFrame(() => {
                               [
                                 ...document.querySelectorAll<HTMLTableRowElement>(
@@ -876,7 +929,7 @@ export default function ResearchDesk({
               财报暂不可用：{finErrors.length} 家公司
             </span>
           )}
-          {rows.length > PAGE_SIZE && (
+          {rows.length > pageSize && (
             <div className="ml-auto flex items-center gap-2">
               <span className="tabular">
                 第 {safePage} / {pageCount} 页 · 共 {rows.length} 家

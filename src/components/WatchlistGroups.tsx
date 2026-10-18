@@ -3,12 +3,14 @@ import { useEffect, useState } from 'react';
 import { useWatchlist } from './WatchlistProvider';
 import Modal from './Modal';
 import WatchlistImport from './WatchlistImport';
+import OrderButtons from './OrderButtons';
 import { groupNameError, UNGROUPED, type WatchGroup } from '@/lib/watchlist';
 
 function GroupRow({ group, count }: { group: WatchGroup; count: number }) {
   const wl = useWatchlist();
   const [name, setName] = useState(group.name);
   const [error, setError] = useState('');
+  const index = wl.groups.findIndex((g) => g.id === group.id);
   useEffect(() => {
     setName(group.name);
     setError('');
@@ -28,6 +30,14 @@ function GroupRow({ group, count }: { group: WatchGroup; count: number }) {
       }}
     >
       <div className="flex items-center gap-2">
+        <OrderButtons
+          name={`分组${group.name}`}
+          first={index === 0}
+          last={index === wl.groups.length - 1}
+          onMove={(delta) =>
+            wl.reorderGroup(group.id, wl.groups[index + delta].id)
+          }
+        />
         <input
           aria-label={`分组名称：${group.name}`}
           className="input min-w-0 flex-1"
@@ -48,8 +58,8 @@ function GroupRow({ group, count }: { group: WatchGroup; count: number }) {
         </button>
         <button
           type="button"
-          aria-label={`删除分组${group.name}并移回未分组`}
-          title="标的移回未分组"
+          aria-label={`解散分组${group.name}`}
+          title="保留其他分组归属，无其他分组的股票移回未分组"
           onClick={() => wl.deleteGroup(group.id)}
           className="shrink-0 text-xs text-slate-500 hover:text-red-600"
         >
@@ -77,6 +87,8 @@ export default function WatchlistGroups({
   const [importOpen, setImportOpen] = useState(false);
   const [name, setName] = useState('');
   const [error, setError] = useState('');
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
   const count = (id: string) =>
     wl.items.filter((item) => item.groupId === id).length;
   return (
@@ -90,14 +102,61 @@ export default function WatchlistGroups({
             type="button"
             key={group.id}
             aria-pressed={active === group.id}
+            draggable={group.id !== 'all'}
+            title={
+              group.id === 'all'
+                ? undefined
+                : '拖动调整分组顺序，或按 Alt + 左右方向键'
+            }
+            onDragStart={(e) => {
+              if (group.id === 'all') return;
+              setDragging(group.id);
+              e.dataTransfer.effectAllowed = 'move';
+              e.dataTransfer.setData('application/x-fin-group', group.id);
+            }}
+            onDragOver={(e) => {
+              if (
+                group.id === 'all' ||
+                !e.dataTransfer.types.includes('application/x-fin-group')
+              )
+                return;
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+              setDropTarget(group.id);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const source = e.dataTransfer.getData('application/x-fin-group');
+              if (source && group.id !== 'all')
+                wl.reorderGroup(source, group.id);
+              setDragging(null);
+              setDropTarget(null);
+            }}
+            onDragEnd={() => {
+              setDragging(null);
+              setDropTarget(null);
+            }}
+            onKeyDown={(e) => {
+              if (
+                !e.altKey ||
+                !['ArrowLeft', 'ArrowRight'].includes(e.key) ||
+                group.id === 'all'
+              )
+                return;
+              e.preventDefault();
+              const index = wl.groups.findIndex((g) => g.id === group.id);
+              const target =
+                wl.groups[index + (e.key === 'ArrowLeft' ? -1 : 1)];
+              if (target) wl.reorderGroup(group.id, target.id);
+            }}
             onClick={() => onChange(group.id)}
-            className={`max-w-full break-words rounded-md px-3 py-1.5 text-xs font-medium transition ${active === group.id ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+            className={`max-w-full break-words rounded-md px-3 py-1.5 text-xs font-medium transition ${group.id !== 'all' ? 'cursor-grab active:cursor-grabbing' : ''} ${dragging === group.id ? 'opacity-40' : ''} ${dropTarget === group.id && dragging !== group.id ? 'ring-2 ring-brand-300' : ''} ${active === group.id ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
           >
             {group.name}
             <span
               className={`ml-1.5 ${active === group.id ? 'text-white/70' : 'text-slate-400'}`}
             >
-              {group.id === 'all' ? wl.items.length : count(group.id)}
+              {group.id === 'all' ? wl.codes.length : count(group.id)}
             </span>
           </button>
         ))}
@@ -132,15 +191,30 @@ export default function WatchlistGroups({
         />
       )}
       <Modal open={open} title="管理自选分组" onClose={() => setOpen(false)}>
-        <div className="mb-1 flex items-center justify-between py-2 text-sm">
-          <span>未分组</span>
-          <span className="text-xs text-slate-400">{count(UNGROUPED)} 只</span>
-        </div>
-        {wl.groups
-          .filter((g) => g.id !== UNGROUPED)
-          .map((group) => (
+        {wl.groups.map((group) =>
+          group.id === UNGROUPED ? (
+            <div
+              key={group.id}
+              className="flex items-center gap-2 border-b border-slate-100 py-3 text-sm"
+            >
+              <OrderButtons
+                name="分组未分组"
+                first={wl.groups[0].id === UNGROUPED}
+                last={wl.groups.at(-1)?.id === UNGROUPED}
+                onMove={(delta) => {
+                  const index = wl.groups.findIndex((g) => g.id === UNGROUPED);
+                  wl.reorderGroup(UNGROUPED, wl.groups[index + delta].id);
+                }}
+              />
+              <span className="flex-1">未分组</span>
+              <span className="text-xs text-slate-400">
+                {count(UNGROUPED)} 只
+              </span>
+            </div>
+          ) : (
             <GroupRow key={group.id} group={group} count={count(group.id)} />
-          ))}
+          ),
+        )}
         <form
           className="mt-4"
           onSubmit={(e) => {

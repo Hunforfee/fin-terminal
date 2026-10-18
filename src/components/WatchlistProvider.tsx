@@ -26,6 +26,8 @@ import {
   migrateWatchlist,
   readWatchlist,
   watchSymbol,
+  watchCodes,
+  groupsFor,
   type WatchAction,
   type WatchState,
 } from '@/lib/watchlist';
@@ -35,21 +37,29 @@ interface WatchlistCtx extends WatchState {
   ready: boolean;
   has: (code: string) => boolean;
   groupOf: (code: string) => string;
+  groupsOf: (code: string) => string[];
+  codesIn: (groupId: string) => string[];
+  setGroups: (
+    code: string,
+    groupIds: string[],
+    newGroupName?: string,
+  ) => boolean;
+  reorderGroup: (id: string, targetId: string) => void;
+  reorderStock: (code: string, targetCode: string, groupId: string) => void;
   add: (code: string, groupId?: string) => void;
   importMany: (
     codes: string[],
     groupId: string,
-    moveExisting: boolean,
     newGroupName?: string,
   ) => {
     added: number;
-    moved: number;
     skipped: number;
     groupId: string;
   } | null;
-  remove: (code: string) => void;
-  removeMany: (codes: string[]) => void;
-  move: (codes: string[], groupId: string) => void;
+  remove: (code: string, groupId?: string) => void;
+  removeMany: (codes: string[], groupId?: string) => void;
+  move: (codes: string[], groupId: string, fromGroupId?: string) => void;
+  copy: (codes: string[], groupId: string) => void;
   createGroup: (name: string) => string | null;
   renameGroup: (id: string, name: string) => boolean;
   deleteGroup: (id: string) => void;
@@ -110,7 +120,7 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
       personalStorage.setItem(WATCHLIST_KEY, JSON.stringify(next));
       personalStorage.setItem(
         LEGACY_WATCHLIST_KEY,
-        JSON.stringify(next.items.map((item) => item.symbol)),
+        JSON.stringify(watchCodes(next)),
       );
     } catch {}
   }, []);
@@ -118,15 +128,43 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
     () => ({
       ...state,
       ready,
-      codes: state.items.map((item) => item.symbol),
+      codes: watchCodes(state),
       has: (code) =>
         state.items.some((item) => item.symbol === watchSymbol(code)),
       groupOf: (code) =>
         state.items.find((item) => item.symbol === watchSymbol(code))
           ?.groupId ?? UNGROUPED,
+      groupsOf: (code) => groupsFor(state, code),
+      codesIn: (groupId) => watchCodes(state, groupId),
+      setGroups: (code, groupIds, newGroupName) => {
+        if (
+          !booted.current ||
+          (newGroupName !== undefined &&
+            groupNameError(newGroupName, current.current.groups))
+        )
+          return false;
+        const newGroup =
+          newGroupName !== undefined
+            ? { id: crypto.randomUUID(), name: newGroupName }
+            : undefined;
+        const action: WatchAction = {
+          type: 'setGroups',
+          code,
+          groupIds: [...groupIds, ...(newGroup ? [newGroup.id] : [])],
+          newGroup,
+        };
+        if (changeWatchlist(current.current, action) === current.current)
+          return false;
+        dispatch(action);
+        return true;
+      },
+      reorderGroup: (id, targetId) =>
+        dispatch({ type: 'reorderGroups', id, targetId }),
+      reorderStock: (code, targetCode, groupId) =>
+        dispatch({ type: 'reorderStocks', code, targetCode, groupId }),
       add: (code, groupId = UNGROUPED) =>
         dispatch({ type: 'add', code, groupId }),
-      importMany: (codes, groupId, moveExisting, newGroupName) => {
+      importMany: (codes, groupId, newGroupName) => {
         if (!booted.current) return null;
         const before = current.current;
         if (
@@ -140,33 +178,33 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
           type: 'import',
           codes,
           groupId: target,
-          moveExisting,
+          moveExisting: false,
           ...(newGroupName !== undefined
             ? { newGroup: { id: target, name: newGroupName } }
             : {}),
         };
         const after = changeWatchlist(before, action);
         if (after === before) return null;
-        const old = new Map(
-          before.items.map((item) => [item.symbol, item.groupId]),
-        );
-        const added = after.items.length - before.items.length;
-        const moved = after.items.filter(
-          (item) =>
-            old.has(item.symbol) && old.get(item.symbol) !== item.groupId,
+        const old = new Set(watchCodes(before, target));
+        const added = watchCodes(after, target).filter(
+          (symbol) => !old.has(symbol),
         ).length;
         const total = new Set(codes.map(watchSymbol).filter(Boolean)).size;
         dispatch(action);
         return {
           added,
-          moved,
-          skipped: total - added - moved,
+          skipped: total - added,
           groupId: target,
         };
       },
-      remove: (code) => dispatch({ type: 'remove', codes: [code] }),
-      removeMany: (codes) => dispatch({ type: 'remove', codes }),
-      move: (codes, groupId) => dispatch({ type: 'move', codes, groupId }),
+      remove: (code, groupId) =>
+        dispatch({ type: 'remove', codes: [code], groupId }),
+      removeMany: (codes, groupId) =>
+        dispatch({ type: 'remove', codes, groupId }),
+      move: (codes, groupId, fromGroupId) =>
+        dispatch({ type: 'move', codes, groupId, fromGroupId }),
+      copy: (codes, groupId) =>
+        dispatch({ type: 'move', codes, groupId, copy: true }),
       createGroup: (name) => {
         if (!booted.current || groupNameError(name, current.current.groups))
           return null;

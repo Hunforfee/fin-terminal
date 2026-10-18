@@ -7,10 +7,21 @@ import Link from 'next/link';
 import { useWatchlist } from './WatchlistProvider';
 import WatchlistButton from './WatchlistButton';
 import WatchlistGroups from './WatchlistGroups';
+import OrderButtons from './OrderButtons';
+import StockName from './StockName';
+import ResearchColumns from './ResearchColumns';
+import {
+  RESEARCH_COLUMNS,
+  RESEARCH_TABLE_KEY,
+  defaultResearchTable,
+  readResearchTable,
+  compareResearchValues,
+  type ResearchTablePreferences,
+  type ResearchSort,
+} from '@/lib/researchColumns';
 import { UNGROUPED } from '@/lib/watchlist';
 import { normalizeCode } from '@/lib/datasource/codes';
 import type { Quote } from '@/lib/datasource/types';
-import { industryOf } from '@/lib/universe';
 
 interface Financial {
   code: string;
@@ -44,7 +55,13 @@ export default function ResearchDesk({
       ? activeGroup
       : 'all';
   const inGroup = (symbol: string) =>
-    group === 'all' || wl.groupOf(symbol) === group;
+    group === 'all' || wl.groupsOf(symbol).includes(group);
+  const savedCodes = wl.codesIn(group);
+  const groupNames = (symbol: string) =>
+    wl.groups
+      .filter((g) => wl.groupsOf(symbol).includes(g.id))
+      .map((g) => g.name);
+  const removeFromView = (symbol: string) => remove(symbol, group);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [otherAssets, setOtherAssets] = useState<Quote[]>([]);
   const [financials, setFinancials] = useState<Financial[]>([]);
@@ -60,8 +77,58 @@ export default function ResearchDesk({
   useEffect(() => {
     setSelected([]);
   }, [group, filter]);
-  const [sort, setSort] = useState<'saved' | 'pe' | 'roe'>('saved');
+  const [table, setTable] =
+    useState<ResearchTablePreferences>(defaultResearchTable);
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  const [draggingStock, setDraggingStock] = useState<string | null>(null);
+  const [dropStock, setDropStock] = useState<string | null>(null);
+  const [preferenceError, setPreferenceError] = useState('');
+  const sort = table.sort;
+  const columns = table.columns.map((id) =>
+    RESEARCH_COLUMNS.find((c) => c.id === id)!,
+  );
+  function saveTable(next: ResearchTablePreferences) {
+    setTable(next);
+    try {
+      personalStorage.setItem(RESEARCH_TABLE_KEY, JSON.stringify(next));
+      setPreferenceError('');
+    } catch {
+      setPreferenceError('表头设置未保存，浏览器存储不可用');
+    }
+  }
+  function sortBy(column: ResearchSort['column']) {
+    saveTable({
+      ...table,
+      sort: {
+        column,
+        direction:
+          sort?.column === column && sort.direction === 'asc' ? 'desc' : 'asc',
+      },
+    });
+  }
 
+  useEffect(() => {
+    try {
+      setTable(
+        readResearchTable(
+          JSON.parse(personalStorage.getItem(RESEARCH_TABLE_KEY) ?? 'null'),
+        ),
+      );
+    } catch {}
+    const stored = (event: StorageEvent) => {
+      if (event.key?.endsWith(RESEARCH_TABLE_KEY) || event.key === null) {
+        try {
+          setTable(
+            readResearchTable(
+              JSON.parse(personalStorage.getItem(RESEARCH_TABLE_KEY) ?? 'null'),
+            ),
+          );
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', stored);
+    return () => window.removeEventListener('storage', stored);
+  }, []);
   useEffect(() => {
     try {
       const n = JSON.parse(personalStorage.getItem(NOTE_KEY) ?? '[]');
@@ -73,7 +140,8 @@ export default function ResearchDesk({
         );
     } catch {}
   }, []);
-  const signature = codes.join(',');
+  // Sorting and group edits do not refetch unchanged market/financial data.
+  const signature = [...codes].sort().join(',');
   useEffect(() => {
     if (!ready) return;
     let alive = true;
@@ -165,6 +233,19 @@ export default function ResearchDesk({
     // An unavailable latest period stays empty; never substitute an older report.
     return f?.series[field]?.[f.periods.length - 1] ?? null;
   };
+  const columnValue = (
+    quote: Quote,
+    column: ResearchSort['column'],
+  ): string | number | null => {
+    if (column === 'name') return quote.name;
+    if (column === 'period')
+      return financialMap.get(quote.code)?.periods.at(-1) ?? null;
+    if (['roe', 'netMargin', 'ocfPerShare', 'debtRatio'].includes(column))
+      return latest(quote.code, column);
+    const val =
+      quote[column as 'pe' | 'pb' | 'price' | 'changePct' | 'totalMarketCap'];
+    return val != null && Number.isFinite(val) ? val : null;
+  };
   const rows = quotes
     .filter(
       (q) =>
@@ -175,23 +256,31 @@ export default function ResearchDesk({
           .includes(filter.trim().toLowerCase()),
     )
     .sort((a, b) => {
-      if (sort === 'saved')
-        return codes.indexOf(a.symbol) - codes.indexOf(b.symbol);
-      const av = sort === 'pe' ? a.pe : latest(a.code, 'roe');
-      const bv = sort === 'pe' ? b.pe : latest(b.code, 'roe');
-      if (av == null) return bv == null ? 0 : 1;
-      if (bv == null) return -1;
-      return sort === 'pe' ? av - bv : bv - av;
+      const manual =
+        savedCodes.indexOf(a.symbol) - savedCodes.indexOf(b.symbol);
+      return sort
+        ? compareResearchValues(
+            columnValue(a, sort.column),
+            columnValue(b, sort.column),
+            sort.direction,
+          ) || manual
+        : manual;
     });
   const visibleSelected = selected.filter((symbol) =>
     rows.some((row) => row.symbol === symbol),
   );
-  const filteredOtherAssets = otherAssets.filter(
-    (q) =>
-      codes.includes(q.symbol) &&
-      inGroup(q.symbol) &&
-      `${q.name}${q.code}`.toLowerCase().includes(filter.trim().toLowerCase()),
-  );
+  const filteredOtherAssets = otherAssets
+    .filter(
+      (q) =>
+        codes.includes(q.symbol) &&
+        inGroup(q.symbol) &&
+        `${q.name}${q.code}`
+          .toLowerCase()
+          .includes(filter.trim().toLowerCase()),
+    )
+    .sort(
+      (a, b) => savedCodes.indexOf(a.symbol) - savedCodes.indexOf(b.symbol),
+    );
   const destination = wl.groups.some((g) => g.id === moveTarget)
     ? moveTarget
     : UNGROUPED;
@@ -293,15 +382,62 @@ export default function ResearchDesk({
             <select
               aria-label="公司排序"
               className="input !w-32"
-              value={sort}
-              onChange={(e) => setSort(e.target.value as typeof sort)}
+              value={sort ? `${sort.column}:${sort.direction}` : 'saved'}
+              onChange={(e) => {
+                const [column, direction] = e.target.value.split(':');
+                saveTable({
+                  ...table,
+                  sort:
+                    column === 'saved'
+                      ? null
+                      : {
+                          column: column as ResearchSort['column'],
+                          direction: direction as 'asc' | 'desc',
+                        },
+                });
+              }}
             >
-              <option value="saved">关注顺序</option>
-              <option value="pe">PE 从低到高</option>
-              <option value="roe">ROE 从高到低</option>
+              <option value="saved">手动顺序</option>
+              {[{ id: 'name', label: '公司' }, ...columns].flatMap((c) =>
+                ['asc', 'desc'].map((direction) => (
+                  <option
+                    key={`${c.id}:${direction}`}
+                    value={`${c.id}:${direction}`}
+                  >
+                    {c.label} {direction === 'asc' ? '升序' : '降序'}
+                  </option>
+                )),
+              )}
             </select>
+            <button
+              type="button"
+              className="btn !text-xs"
+              onClick={() => setColumnsOpen(true)}
+            >
+              自定义表头
+            </button>
           </div>
         </div>
+        {columnsOpen && (
+          <ResearchColumns
+            columns={table.columns}
+            onClose={() => setColumnsOpen(false)}
+            onSave={(next) =>
+              saveTable({
+                columns: next,
+                sort:
+                  sort && sort.column !== 'name' && !next.includes(sort.column)
+                    ? null
+                    : sort,
+              })
+            }
+          />
+        )}
+        {preferenceError && (
+          <p role="alert" className="px-5 py-2 text-xs text-red-600">
+            {preferenceError}
+          </p>
+        )}
         <WatchlistGroups active={group} onChange={setActiveGroup} />
         {visibleSelected.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-b border-brand-100 bg-brand-50/50 px-3 py-2 sm:px-5">
@@ -323,22 +459,34 @@ export default function ResearchDesk({
             <button
               type="button"
               onClick={() => {
-                wl.move(visibleSelected, destination);
+                wl.copy(visibleSelected, destination);
                 setSelected([]);
               }}
               className="rounded-md bg-white px-2.5 py-1.5 text-xs text-brand-700 ring-1 ring-brand-200"
             >
-              移入分组
+              加入分组
             </button>
+            {group !== 'all' && (
+              <button
+                type="button"
+                onClick={() => {
+                  wl.move(visibleSelected, destination, group);
+                  setSelected([]);
+                }}
+                className="rounded-md bg-white px-2.5 py-1.5 text-xs text-slate-600 ring-1 ring-slate-200"
+              >
+                移至分组
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
-                wl.removeMany(visibleSelected);
+                wl.removeMany(visibleSelected, group);
                 setSelected([]);
               }}
               className="rounded-md px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50"
             >
-              删除自选
+              {group === 'all' || group === UNGROUPED ? '删除自选' : '移出分组'}
             </button>
             <button
               type="button"
@@ -355,10 +503,14 @@ export default function ResearchDesk({
           </p>
         )}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px] text-right">
+          <table
+            aria-label="基本面股票列表"
+            className="w-full text-right"
+            style={{ minWidth: 440 + columns.length * 105 }}
+          >
             <thead>
               <tr>
-                <th className="th !w-10 !pr-0">
+                <th className="th !w-16 !pr-0">
                   <input
                     type="checkbox"
                     aria-label="选择当前列表全部公司"
@@ -380,100 +532,243 @@ export default function ResearchDesk({
                     className="h-3.5 w-3.5 accent-blue-600"
                   />
                 </th>
-                <th className="th">公司</th>
-                <th className="th !text-right">PE-TTM</th>
-                <th className="th !text-right">PB</th>
-                <th className="th !text-right">ROE（累计）</th>
-                <th className="th !text-right">净利率</th>
-                <th className="th !text-right">每股经营现金流</th>
-                <th className="th">报告期</th>
+                <th
+                  className="th"
+                  aria-sort={
+                    sort?.column === 'name'
+                      ? sort.direction === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  }
+                >
+                  <button
+                    type="button"
+                    aria-label="按公司排序"
+                    onClick={() => sortBy('name')}
+                    className="inline-flex items-center gap-1 hover:text-brand-700"
+                  >
+                    公司
+                    <span
+                      className={
+                        sort?.column === 'name'
+                          ? 'text-brand-600'
+                          : 'text-slate-400'
+                      }
+                      aria-hidden="true"
+                    >
+                      {sort?.column === 'name'
+                        ? sort.direction === 'asc'
+                          ? '↑'
+                          : '↓'
+                        : '↕'}
+                    </span>
+                  </button>
+                </th>
+                {columns.map((c) => (
+                  <th
+                    key={c.id}
+                    className="th !text-right"
+                    aria-sort={
+                      sort?.column === c.id
+                        ? sort.direction === 'asc'
+                          ? 'ascending'
+                          : 'descending'
+                        : 'none'
+                    }
+                  >
+                    <button
+                      type="button"
+                      aria-label={`按${c.label}排序`}
+                      onClick={() => sortBy(c.id)}
+                      className="inline-flex items-center gap-1 hover:text-brand-700"
+                    >
+                      {c.label}
+                      <span
+                        className={
+                          sort?.column === c.id
+                            ? 'text-brand-600'
+                            : 'text-slate-400'
+                        }
+                        aria-hidden="true"
+                      >
+                        {sort?.column === c.id
+                          ? sort.direction === 'asc'
+                            ? '↑'
+                            : '↓'
+                          : '↕'}
+                      </span>
+                    </button>
+                  </th>
+                ))}
                 <th className="th !text-right">研究</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {rows.map((q) => (
+              {rows.map((q, index) => (
                 <tr
                   key={q.symbol}
-                  className={`transition hover:bg-slate-50/70 ${visibleSelected.includes(q.symbol) ? 'bg-brand-50/40' : ''}`}
+                  data-symbol={q.symbol}
+                  onDragOver={(e) => {
+                    if (
+                      sort ||
+                      !e.dataTransfer.types.includes('application/x-fin-stock')
+                    )
+                      return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    setDropStock(q.symbol);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const source = e.dataTransfer.getData(
+                      'application/x-fin-stock',
+                    );
+                    if (!sort && source)
+                      wl.reorderStock(source, q.symbol, group);
+                    setDraggingStock(null);
+                    setDropStock(null);
+                  }}
+                  className={`group/stock transition hover:bg-slate-50/70 ${visibleSelected.includes(q.symbol) ? 'bg-brand-50/40' : ''} ${draggingStock === q.symbol ? 'opacity-40' : ''} ${dropStock === q.symbol && draggingStock !== q.symbol ? 'outline outline-1 -outline-offset-1 outline-brand-300 bg-brand-50/50' : ''}`}
                 >
-                  <td className="td !pr-0">
-                    <input
-                      type="checkbox"
-                      aria-label={`选择${q.name}`}
-                      checked={visibleSelected.includes(q.symbol)}
-                      onChange={(e) =>
-                        setSelected((prev) =>
-                          e.target.checked
-                            ? [...prev, q.symbol]
-                            : prev.filter((s) => s !== q.symbol),
-                        )
-                      }
-                      className="h-3.5 w-3.5 accent-blue-600"
-                    />
-                  </td>
-                  <td className="td text-left">
+                  <td className="td !py-1.5 !pr-0">
                     <div className="flex items-center gap-1.5">
-                      <Link
-                        prefetch={false}
-                        href={`/stock/${q.symbol}`}
-                        className="font-medium hover:text-brand-600"
-                      >
-                        {q.name}
-                      </Link>
                       <button
                         type="button"
-                        aria-label={`删除${q.name}自选`}
-                        title="删除自选"
-                        onClick={() => remove(q.symbol)}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600 focus-visible:text-red-600"
+                        aria-label={`拖动调整${q.name}顺序`}
+                        title={
+                          sort
+                            ? '选择手动顺序后可拖动'
+                            : '拖动调整顺序，或按 Alt + 上下方向键'
+                        }
+                        disabled={!!sort}
+                        draggable={!sort}
+                        onDragStart={(e) => {
+                          setDraggingStock(q.symbol);
+                          e.dataTransfer.effectAllowed = 'move';
+                          e.dataTransfer.setData(
+                            'application/x-fin-stock',
+                            q.symbol,
+                          );
+                        }}
+                        onDragEnd={() => {
+                          setDraggingStock(null);
+                          setDropStock(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (
+                            !e.altKey ||
+                            !['ArrowUp', 'ArrowDown'].includes(e.key)
+                          )
+                            return;
+                          e.preventDefault();
+                          const target =
+                            rows[index + (e.key === 'ArrowUp' ? -1 : 1)];
+                          if (target)
+                            wl.reorderStock(q.symbol, target.symbol, group);
+                        }}
+                        className="grid h-7 w-4 shrink-0 cursor-grab place-items-center rounded text-slate-400 hover:text-brand-600 active:cursor-grabbing disabled:cursor-default disabled:opacity-20"
                       >
                         <svg
-                          aria-hidden="true"
-                          width="14"
+                          width="10"
                           height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.6"
+                          viewBox="0 0 10 14"
+                          fill="currentColor"
+                          aria-hidden="true"
                         >
-                          <path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6" />
+                          <path d="M2 1h2v2H2zm4 0h2v2H6zM2 6h2v2H2zm4 0h2v2H6zM2 11h2v2H2zm4 0h2v2H6z" />
                         </svg>
                       </button>
+                      <input
+                        type="checkbox"
+                        aria-label={`选择${q.name}`}
+                        checked={visibleSelected.includes(q.symbol)}
+                        onChange={(e) =>
+                          setSelected((prev) =>
+                            e.target.checked
+                              ? [...prev, q.symbol]
+                              : prev.filter((s) => s !== q.symbol),
+                          )
+                        }
+                        className="h-3.5 w-3.5 accent-blue-600"
+                      />
                     </div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      {q.code} · {industryOf(q.code) ?? q.market}
-                      <span className="ml-2">
+                  </td>
+                  <td className="td !py-1.5 text-left">
+                    <div className="flex items-center gap-1.5">
+                      <StockName
+                        quote={q}
+                        groups={groupNames(q.symbol)}
+                        href={`/stock/${q.symbol}`}
+                      />
+                      <span className="flex items-center opacity-0 transition-opacity group-hover/stock:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
                         <WatchlistButton
                           code={q.symbol}
                           name={q.name}
                           compact
-                          label={
-                            wl.groups.find((g) => g.id === wl.groupOf(q.symbol))
-                              ?.name ?? '未分组'
-                          }
+                          label="分组"
                         />
+                        <button
+                          type="button"
+                          aria-label={
+                            group === 'all' || group === UNGROUPED
+                              ? `删除${q.name}自选`
+                              : `将${q.name}移出当前分组`
+                          }
+                          title={
+                            group === 'all' || group === UNGROUPED
+                              ? '删除自选'
+                              : '移出当前分组'
+                          }
+                          onClick={() => removeFromView(q.symbol)}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600 focus-visible:text-red-600"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                          >
+                            <path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6" />
+                          </svg>
+                        </button>
+                        {!sort && (
+                          <OrderButtons
+                            name={q.name}
+                            first={index === 0}
+                            last={index === rows.length - 1}
+                            onMove={(delta) =>
+                              wl.reorderStock(
+                                q.symbol,
+                                rows[index + delta].symbol,
+                                group,
+                              )
+                            }
+                          />
+                        )}
                       </span>
                     </div>
-                    {q.stale && (
-                      <span className="text-xs text-amber-700">行情快照</span>
-                    )}
                   </td>
-                  <td className="td">{value(q.pe)}</td>
-                  <td className="td">{value(q.pb)}</td>
-                  <td className="td font-medium">
-                    {value(latest(q.code, 'roe'), '%')}
-                  </td>
-                  <td className="td">
-                    {value(latest(q.code, 'netMargin'), '%')}
-                  </td>
-                  <td className="td">
-                    {value(latest(q.code, 'ocfPerShare'), ' 元')}
-                  </td>
-                  <td className="td text-left !text-xs !text-slate-500">
-                    {financialMap.get(q.code)?.periods.at(-1) ??
-                      (finLoading ? '…' : '—')}
-                  </td>
-                  <td className="td">
+                  {columns.map((c) => {
+                    const v = columnValue(q, c.id);
+                    return (
+                      <td
+                        key={c.id}
+                        className={`td !py-1.5 ${c.id === 'roe' ? 'font-medium' : ''} ${c.id === 'period' ? '!text-xs !text-slate-500' : ''}`}
+                      >
+                        {c.id === 'period'
+                          ? (v ?? (finLoading ? '…' : '—'))
+                          : value(
+                              typeof v === 'number' ? v : null,
+                              'suffix' in c ? c.suffix : '',
+                            )}
+                      </td>
+                    );
+                  })}
+                  <td className="td !py-1.5">
                     <div className="flex justify-end gap-4">
                       <Link
                         prefetch={false}
@@ -496,7 +791,7 @@ export default function ResearchDesk({
               {!rows.length && (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={columns.length + 3}
                     className="py-14 text-center text-sm text-slate-500"
                   >
                     {loading || !ready
@@ -512,6 +807,7 @@ export default function ResearchDesk({
             </tbody>
           </table>
         </div>
+
         <div className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
           PE / PB：行情口径　·　财务指标：各公司所列报告期累计口径
           {finErrors.length > 0 && (
@@ -538,21 +834,17 @@ export default function ResearchDesk({
                   className="text-sm text-slate-700"
                 >
                   {q.name}{' '}
-                  <span className="ml-2 text-xs text-slate-400">{q.code}</span>
                 </Link>
                 <div className="flex shrink-0 items-center gap-3">
                   <WatchlistButton
                     code={q.symbol}
                     name={q.name}
                     compact
-                    label={
-                      wl.groups.find((g) => g.id === wl.groupOf(q.symbol))
-                        ?.name ?? '未分组'
-                    }
+                    label={'分组'}
                   />
                   <button
                     className="text-xs text-slate-500 hover:text-red-600"
-                    onClick={() => remove(q.symbol)}
+                    onClick={() => removeFromView(q.symbol)}
                   >
                     移除
                   </button>

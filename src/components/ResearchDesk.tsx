@@ -84,6 +84,10 @@ export default function ResearchDesk({
   const [dividendYields, setDividendYields] = useState<
     Map<string, number | null>
   >(() => new Map());
+  /** 扣非 PE-TTM（symbol → 值，null 表示数据不足或净利润为负） */
+  const [deductedPes, setDeductedPes] = useState<Map<string, number | null>>(
+    () => new Map(),
+  );
   const [loading, setLoading] = useState(true);
   const [finLoading, setFinLoading] = useState(false);
   const [error, setError] = useState('');
@@ -322,7 +326,29 @@ export default function ResearchDesk({
             }
           }
         }
-        await Promise.all([loadFinancials(), loadDividendYields()]);
+        async function loadDeductedPe() {
+          // 扣非 PE 需要四个季度扣非净利润，单独批量取；失败只置空
+          for (let i = 0; i < rows.length && alive; i += 20) {
+            const batch = rows.slice(i, i + 20);
+            try {
+              const j = await fetch(
+                `/api/deducted-pe?codes=${encodeURIComponent(batch.map((r) => r.symbol).join(','))}`,
+              ).then((r) => r.json());
+              if (!alive) return;
+              if (j.ok && Array.isArray(j.data)) {
+                setDeductedPes((prev) => {
+                  const next = new Map(prev);
+                  for (const row of j.data as { symbol: string; pe: number | null }[])
+                    next.set(row.symbol, row.pe);
+                  return next;
+                });
+              }
+            } catch {
+              /* 扣非 PE 不可用时该列显示「—」 */
+            }
+          }
+        }
+        await Promise.all([loadFinancials(), loadDividendYields(), loadDeductedPe()]);
       } catch (e) {
         if (alive) setError(e instanceof Error ? e.message : '数据获取失败');
       } finally {
@@ -354,6 +380,10 @@ export default function ResearchDesk({
     if (column === 'name') return quote.name;
     if (column === 'period')
       return financialMap.get(quote.code)?.periods.at(-1) ?? null;
+    if (column === 'peDeducted') {
+      const pe = deductedPes.get(quote.symbol);
+      return pe != null && Number.isFinite(pe) ? pe : null;
+    }
     if (column === 'dy') {
       const dy = dividendYields.get(quote.symbol);
       return dy != null && Number.isFinite(dy) ? dy : null;

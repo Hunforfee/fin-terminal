@@ -1,7 +1,8 @@
 export const RESEARCH_TABLE_KEY = 'fin.research.table.v1';
-export const RESEARCH_TABLE_VERSION = 2;
+export const RESEARCH_TABLE_VERSION = 3;
 export const RESEARCH_COLUMNS = [
   { id: 'pe', label: 'PE-TTM' },
+  { id: 'peDeducted', label: '扣非PE-TTM' },
   { id: 'pb', label: 'PB' },
   { id: 'dy', label: '股息率', suffix: '%' },
   { id: 'roe', label: 'ROE（累计）', suffix: '%' },
@@ -26,7 +27,7 @@ export interface ResearchTablePreferences {
 }
 export const defaultResearchTable = (): ResearchTablePreferences => ({
   version: RESEARCH_TABLE_VERSION,
-  columns: ['pe', 'pb', 'dy', 'roe', 'netMargin', 'ocfPerShare', 'period'],
+  columns: ['pe', 'peDeducted', 'pb', 'dy', 'roe', 'netMargin', 'ocfPerShare', 'period'],
   sort: null,
 });
 export function readResearchTable(raw: unknown): ResearchTablePreferences {
@@ -44,18 +45,26 @@ export function readResearchTable(raw: unknown): ResearchTablePreferences {
         ),
       ]
     : defaults.columns;
-  // 仅迁移旧偏好；当前版本缺少 dy 表示用户隐藏，空数组始终表示隐藏全部。
-  const migratedColumns: ResearchColumnId[] =
-    value.version !== RESEARCH_TABLE_VERSION &&
-    columns.length > 0 &&
-    !columns.includes('dy')
-      ? (() => {
-          const at = columns.indexOf('pb');
-          return at >= 0
-            ? [...columns.slice(0, at + 1), 'dy', ...columns.slice(at + 1)]
-            : [...columns, 'dy'];
-        })()
-      : columns;
+  /**
+   * 旧版偏好补列。原则：只在「该版本还不存在这一列」时补，用户主动隐藏必须保留。
+   * - dy 自 v2 引入：v1 及更早的偏好缺少 dy 一律补在 PB 之后；
+   * - peDeducted 自 v3 引入：v2 及更早的偏好缺少 peDeducted 补在 PE-TTM 之后。
+   * 空数组始终表示用户隐藏了全部列，不做任何补列。
+   */
+  // 无版本号视为当前格式（由本函数写出），不补列；只有明确标注旧版本才迁移
+  const version = typeof value.version === 'number' ? value.version : RESEARCH_TABLE_VERSION;
+  let migratedColumns: ResearchColumnId[] = columns;
+  const insertAfter = (id: ResearchColumnId, after: ResearchColumnId) => {
+    const at = migratedColumns.indexOf(after);
+    migratedColumns =
+      at >= 0
+        ? [...migratedColumns.slice(0, at + 1), id, ...migratedColumns.slice(at + 1)]
+        : [...migratedColumns, id];
+  };
+  if (migratedColumns.length > 0) {
+    if (version < 2 && !migratedColumns.includes('dy')) insertAfter('dy', 'pb');
+    if (version < 3 && !migratedColumns.includes('peDeducted')) insertAfter('peDeducted', 'pe');
+  }
   const sort =
     value.sort &&
     (value.sort.column === 'name' ||

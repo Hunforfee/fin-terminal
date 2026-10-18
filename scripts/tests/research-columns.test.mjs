@@ -27,9 +27,25 @@ test('custom columns retain order, sanitize unknown fields and hidden sorts, sup
     }),
     {
       version: RESEARCH_TABLE_VERSION,
-      columns: ['pb', 'dy', 'pe'],
+      // 无版本号视为当前格式，不补列（补列只发生在明确标注的旧版本上）
+      columns: ['pb', 'pe'],
       sort: { column: 'pe', direction: 'desc' },
     },
+  );
+  // v1：补 dy（PB 之后）与扣非 PE（PE 之后）
+  assert.deepEqual(
+    readResearchTable({ version: 1, columns: ['pb', 'pe', 'unknown'] }).columns,
+    ['pb', 'dy', 'pe', 'peDeducted'],
+  );
+  // v2：只补 v3 新增的扣非 PE（PE-TTM 之后），dy 已存在不再动
+  assert.deepEqual(
+    readResearchTable({ version: 2, columns: ['pe', 'dy', 'pb'] }).columns,
+    ['pe', 'peDeducted', 'dy', 'pb'],
+  );
+  // v3：完全不补
+  assert.deepEqual(
+    readResearchTable({ version: 3, columns: ['pe', 'dy', 'pb'] }).columns,
+    ['pe', 'dy', 'pb'],
   );
   assert.deepEqual(
     readResearchTable({
@@ -50,30 +66,26 @@ test('custom columns retain order, sanitize unknown fields and hidden sorts, sup
     { column: 'name', direction: 'asc' },
   );
 });
-test('saved preferences without a dividend-yield column gain it right after PB, once', () => {
-  assert.deepEqual(
-    readResearchTable({ columns: ['pe', 'pb', 'roe'] }).columns,
-    ['pe', 'pb', 'dy', 'roe'],
-  );
-  assert.deepEqual(
-    readResearchTable({ columns: ['pe', 'pb', 'dy', 'roe'] }).columns,
-    ['pe', 'pb', 'dy', 'roe'],
-  );
-  assert.deepEqual(readResearchTable({ columns: ['roe'] }).columns, [
-    'roe',
-    'dy',
-  ]);
-  assert.deepEqual(readResearchTable({ columns: [] }).columns, []);
-  assert.ok(defaultResearchTable().columns.includes('dy'));
-  assert.equal(defaultResearchTable().version, RESEARCH_TABLE_VERSION);
-  assert.equal(
-    readResearchTable({ columns: ['pe', 'pb', 'roe'] }).version,
-    RESEARCH_TABLE_VERSION,
-  );
+test('saved old preferences gain missing columns once, keyed by version', () => {
+  // v1 老偏好：dy 补在 PB 后、扣非 PE 补在 PE 后
   assert.deepEqual(
     readResearchTable({ version: 1, columns: ['pe', 'pb', 'roe'] }).columns,
-    ['pe', 'pb', 'dy', 'roe'],
+    ['pe', 'peDeducted', 'pb', 'dy', 'roe'],
   );
+  // v2 偏好（已有 dy）：只补扣非 PE
+  assert.deepEqual(
+    readResearchTable({ version: 2, columns: ['pe', 'pb', 'dy', 'roe'] }).columns,
+    ['pe', 'peDeducted', 'pb', 'dy', 'roe'],
+  );
+  // 当前版本：原样保留，用户隐藏的列不会被重新塞回
+  assert.deepEqual(
+    readResearchTable({ version: RESEARCH_TABLE_VERSION, columns: ['pe', 'pb', 'roe'] }).columns,
+    ['pe', 'pb', 'roe'],
+  );
+  assert.deepEqual(readResearchTable({ version: 1, columns: [] }).columns, []);
+  assert.ok(defaultResearchTable().columns.includes('dy'));
+  assert.ok(defaultResearchTable().columns.includes('peDeducted'));
+  assert.equal(defaultResearchTable().version, RESEARCH_TABLE_VERSION);
 });
 
 test('current preferences remember explicit dividend-yield hiding and empty columns across serialization', () => {

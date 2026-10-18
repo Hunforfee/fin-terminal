@@ -62,7 +62,7 @@ export default async function RootLayout({
                   <div className="hidden xl:block">
                     <AppNav />
                   </div>
-                  <div className="ml-auto min-w-0 w-full max-w-[210px]">
+                  <div className="ml-auto min-w-0 w-full max-w-[420px]">
                     <SearchBox placeholder="搜索股票、指数或基金" />
                   </div>
                   <AccountButton />

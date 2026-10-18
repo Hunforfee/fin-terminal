@@ -275,22 +275,8 @@ export interface MarketOverview {
   stale: boolean;
 }
 
-/** 条件筛选入参 */
-export interface ScreenCriteria {
-  market?: 'all' | 'SH' | 'SZ' | 'BJ';
-  peMin?: number;
-  peMax?: number;
-  pbMin?: number;
-  pbMax?: number;
-  roeMin?: number;
-  marketCapMin?: number;
-  marketCapMax?: number;
-  changePctMin?: number;
-  changePctMax?: number;
-  /** 行业 / 板块关键字 */
-  industry?: string;
-  limit?: number;
-}
+/** Annual-report screening has one shared, explicit financial/valuation contract. */
+export type { ValueScreenCriteria as ScreenCriteria } from '../valueScreen';
 
 /** 数据源能力声明 —— 用于 /api/health 与前端提示 */
 export interface ProviderStatus {

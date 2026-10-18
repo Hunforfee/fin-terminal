@@ -18,6 +18,7 @@ import * as ifind from './ifind';
 import * as snapshot from './snapshot';
 import * as hkFinance from './hkFinance';
 import * as profile from './profile';
+import { getValueScreenMeta, runValueScreen } from './valueScreen';
 import {
   fetchHkFundamental, fetchHkFundamentals, fetchHkDividends, computeHkValuation,
   type HkFundamental, type HkValuation,
@@ -514,63 +515,11 @@ export async function getPeers(input: string): Promise<{ industry: string | null
 /* ------------------------------------------------------------ 条件选股 */
 
 export async function screen(criteria: ScreenCriteria) {
-  const pool = STOCKS.filter((s) => {
-    if (criteria.market && criteria.market !== 'all') {
-      const n = normalizeCode(s.code);
-      if (n && n.market !== criteria.market) return false;
-    }
-    if (criteria.industry && s.industry !== criteria.industry) return false;
-    return true;
-  });
+  return runValueScreen(criteria, getQuotes);
+}
 
-  const qs = await getQuotes(pool.map((s) => s.code));
-  const industryMap = new Map(STOCKS.map((s) => [s.code, s.industry]));
-
-  let rows = qs.map((q) => {
-    const roe = q.pb !== null && q.pe ? (q.pb / q.pe) * 100 : null;
-    return {
-      code: q.code,
-      name: q.name,
-      industry: industryMap.get(q.code) ?? '--',
-      price: q.price,
-      changePct: q.changePct,
-      pe: q.pe,
-      pb: q.pb,
-      roe,
-      totalMarketCap: q.totalMarketCap,
-      stale: q.stale,
-    };
-  });
-
-  const between = (v: number | null, min?: number, max?: number) => {
-    if (v === null) return false;
-    if (min !== undefined && v < min) return false;
-    if (max !== undefined && v > max) return false;
-    return true;
-  };
-
-  rows = rows.filter((r) => {
-    if (criteria.peMin !== undefined || criteria.peMax !== undefined) {
-      // PE 为负（亏损）时排除，避免落入区间
-      if (!between(r.pe, criteria.peMin, criteria.peMax)) return false;
-    }
-    if (criteria.pbMin !== undefined || criteria.pbMax !== undefined) {
-      if (!between(r.pb, criteria.pbMin, criteria.pbMax)) return false;
-    }
-    if (criteria.roeMin !== undefined && (r.roe === null || r.roe < criteria.roeMin)) return false;
-    if (criteria.marketCapMin !== undefined && (r.totalMarketCap === null || r.totalMarketCap < criteria.marketCapMin))
-      return false;
-    if (criteria.marketCapMax !== undefined && (r.totalMarketCap === null || r.totalMarketCap > criteria.marketCapMax))
-      return false;
-    if (criteria.changePctMin !== undefined && (r.changePct === null || r.changePct < criteria.changePctMin))
-      return false;
-    if (criteria.changePctMax !== undefined && (r.changePct === null || r.changePct > criteria.changePctMax))
-      return false;
-    return true;
-  });
-
-  const limit = criteria.limit ?? 100;
-  return { total: rows.length, rows: rows.slice(0, limit) };
+export function getScreenMeta() {
+  return getValueScreenMeta();
 }
 
 /* ---------------------------------------------------------------- 大盘 */

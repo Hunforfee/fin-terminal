@@ -1,37 +1,31 @@
 import type { NextRequest } from 'next/server';
 import { ok, fail, sp } from '@/lib/api';
-import { screen } from '@/lib/datasource';
-import type { ScreenCriteria } from '@/lib/datasource/types';
+import { getScreenMeta, screen } from '@/lib/datasource';
+import { readValueScreenCriteria } from '@/lib/valueScreen';
+import type { ValueScreenCriteria } from '@/lib/valueScreen';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function num(v: string | null): number | undefined {
-  if (v === null || v === '' || v === undefined) return undefined;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : undefined;
+/** GET provides the classification/annual-period options; scans require an explicit POST. */
+export async function GET(request: NextRequest) {
+  if (sp(request).get('meta') === '1') return ok(getScreenMeta());
+  return fail('请使用 POST /api/screen 提交年报日期和筛选条件，或使用 ?meta=1 查询筛选选项', 400);
 }
 
-/** GET /api/screen?peMin=0&peMax=30&roeMin=15&industry=银行&limit=50 */
-export async function GET(request: NextRequest) {
-  const p = sp(request);
-  const criteria: ScreenCriteria = {
-    market: (p.get('market') as ScreenCriteria['market']) ?? 'all',
-    peMin: num(p.get('peMin')),
-    peMax: num(p.get('peMax')),
-    pbMin: num(p.get('pbMin')),
-    pbMax: num(p.get('pbMax')),
-    roeMin: num(p.get('roeMin')),
-    marketCapMin: num(p.get('marketCapMin')),
-    marketCapMax: num(p.get('marketCapMax')),
-    changePctMin: num(p.get('changePctMin')),
-    changePctMax: num(p.get('changePctMax')),
-    industry: p.get('industry') ?? undefined,
-    limit: Math.min(num(p.get('limit')) ?? 100, 300),
-  };
+export async function POST(request: NextRequest) {
+  let raw: unknown;
+  try { raw = await request.json(); }
+  catch { return fail('请求体必须为有效 JSON', 400); }
+
+  let criteria: ValueScreenCriteria;
   try {
-    return ok(await screen(criteria));
-  } catch (e) {
-    return fail(e instanceof Error ? e.message : '筛选失败', 502, e);
+    criteria = readValueScreenCriteria(raw, getScreenMeta().industries.map(industry => industry.name));
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : '筛选条件无效', 400);
+  }
+  try { return ok(await screen(criteria)); }
+  catch (error) {
+    return fail(error instanceof Error ? error.message : '财报筛选暂不可用', 502);
   }
 }

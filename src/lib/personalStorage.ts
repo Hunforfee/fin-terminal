@@ -25,6 +25,8 @@ export function isCloudKey(key: string): boolean {
     key === 'fin-terminal.watchlist.v2' ||
     key === 'fin.research.notes.v1' ||
     key === 'fin.research.table.v1' ||
+    key === 'fin.screener.preferences.v1' ||
+    key === 'fin.screener.schemes.v1' ||
     /^fin\.(?:financeModules|mergeTable|financeFormulas)(?:\.[\w-]+)*$/.test(
       key,
     ) ||

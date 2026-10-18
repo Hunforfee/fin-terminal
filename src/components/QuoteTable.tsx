@@ -19,12 +19,19 @@ type SortKey = 'code' | 'price' | 'changePct' | 'pe' | 'pb' | 'roe' | 'cap';
  * 行情表格（客户端拉取）。
  * 自选页与首页共用：传入代码数组即可，排序在前端做，避免每点一次都回源。
  */
-export default function QuoteTable({ codes, removable = false, emptyText = '暂无标的' }: QuoteTableProps) {
+export default function QuoteTable({
+  codes,
+  removable = false,
+  emptyText = '暂无标的',
+}: QuoteTableProps) {
   const wl = useWatchlist();
   const [rows, setRows] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: 'changePct', desc: true });
+  const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({
+    key: 'changePct',
+    desc: true,
+  });
 
   useEffect(() => {
     if (codes.length === 0) {
@@ -79,7 +86,9 @@ export default function QuoteTable({ codes, removable = false, emptyText = '暂�
   const head = (key: SortKey, label: string) => (
     <th
       className="th cursor-pointer select-none hover:text-slate-800"
-      onClick={() => setSort((s) => ({ key, desc: s.key === key ? !s.desc : true }))}
+      onClick={() =>
+        setSort((s) => ({ key, desc: s.key === key ? !s.desc : true }))
+      }
     >
       {label}
       {sort.key === key ? (sort.desc ? ' ↓' : ' ↑') : ''}
@@ -118,16 +127,22 @@ export default function QuoteTable({ codes, removable = false, emptyText = '暂�
               <tr key={q.symbol} className="hover:bg-slate-50/60">
                 <td className="td">
                   <Link
-                    href={q.kind === 'index' ? `/index/${q.code}` : `/stock/${q.code}`}
+                    href={`/${q.kind === 'index' ? 'index' : q.kind === 'fund' || q.kind === 'etf' ? 'fund' : 'stock'}/${q.symbol}`}
                     prefetch={false}
                     className="hover:text-brand-600"
                   >
                     <div className="font-medium text-slate-900">{q.name}</div>
-                    <div className="font-mono text-xs text-slate-400">{q.code}</div>
+                    <div className="font-mono text-xs text-slate-400">
+                      {q.code}
+                    </div>
                   </Link>
                 </td>
-                <td className={`td font-medium ${toneClass(q.change)}`}>{price(q.price)}</td>
-                <td className={`td ${toneClass(q.changePct)}`}>{signedPct(q.changePct)}</td>
+                <td className={`td font-medium ${toneClass(q.change)}`}>
+                  {price(q.price)}
+                </td>
+                <td className={`td ${toneClass(q.changePct)}`}>
+                  {signedPct(q.changePct)}
+                </td>
                 <td className="td">{q.pe ? q.pe.toFixed(2) : '--'}</td>
                 <td className="td">{q.pb ? q.pb.toFixed(2) : '--'}</td>
                 <td className="td">{roe ? pct(roe) : '--'}</td>
@@ -135,7 +150,7 @@ export default function QuoteTable({ codes, removable = false, emptyText = '暂�
                 {removable && (
                   <td className="td text-right">
                     <button
-                      onClick={() => wl.remove(q.code)}
+                      onClick={() => wl.remove(q.symbol)}
                       className="rounded px-2 py-1 text-xs text-slate-500 hover:bg-red-50 hover:text-red-600"
                     >
                       移除
@@ -150,4 +165,3 @@ export default function QuoteTable({ codes, removable = false, emptyText = '暂�
     </div>
   );
 }
-

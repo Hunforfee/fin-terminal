@@ -80,6 +80,10 @@ export default function ResearchDesk({
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [otherAssets, setOtherAssets] = useState<Quote[]>([]);
   const [financials, setFinancials] = useState<Financial[]>([]);
+  /** 预期股息率 %（symbol → 值，null 表示数据不可用） */
+  const [dividendYields, setDividendYields] = useState<Map<string, number | null>>(
+    () => new Map(),
+  );
   const [loading, setLoading] = useState(true);
   const [finLoading, setFinLoading] = useState(false);
   const [error, setError] = useState('');
@@ -231,6 +235,26 @@ export default function ResearchDesk({
               setFinErrors((prev) => [...prev, ...batch.map((r) => r.name)]);
           }
         }
+        // 预期股息率（与估值分析同一算法），单独批量取，失败只置空不阻塞列表
+        for (let i = 0; i < rows.length && alive; i += 20) {
+          const batch = rows.slice(i, i + 20);
+          try {
+            const j = await fetch(
+              `/api/dividend-yield?codes=${encodeURIComponent(batch.map((r) => r.symbol).join(','))}`,
+            ).then((r) => r.json());
+            if (!alive) return;
+            if (j.ok && Array.isArray(j.data)) {
+              setDividendYields((prev) => {
+                const next = new Map(prev);
+                for (const row of j.data as { symbol: string; dy: number | null }[])
+                  next.set(row.symbol, row.dy);
+                return next;
+              });
+            }
+          } catch {
+            /* 预期股息率不可用时该列显示「—」 */
+          }
+        }
       } catch (e) {
         if (alive) setError(e instanceof Error ? e.message : '数据获取失败');
       } finally {
@@ -262,6 +286,10 @@ export default function ResearchDesk({
     if (column === 'name') return quote.name;
     if (column === 'period')
       return financialMap.get(quote.code)?.periods.at(-1) ?? null;
+    if (column === 'dy') {
+      const dy = dividendYields.get(quote.symbol);
+      return dy != null && Number.isFinite(dy) ? dy : null;
+    }
     if (['roe', 'netMargin', 'ocfPerShare', 'debtRatio'].includes(column))
       return latest(quote.code, column);
     const val =

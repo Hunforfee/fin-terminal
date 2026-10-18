@@ -7,10 +7,17 @@ const { migrateWatchlist, changeWatchlist, groupsFor, watchCodes, readWatchlist 
 
 test('custom columns retain order, sanitize unknown fields and hidden sorts, support explicit empty selection',()=>{
  assert.deepEqual(readResearchTable(null),defaultResearchTable());
- assert.deepEqual(readResearchTable({columns:['pb','pe','pb','unknown'],sort:{column:'pe',direction:'desc'}}),{columns:['pb','pe'],sort:{column:'pe',direction:'desc'}});
- assert.deepEqual(readResearchTable({columns:[],sort:{column:'pe',direction:'asc'}}),{columns:[],sort:null});
+ assert.deepEqual(readResearchTable({columns:['pb','pe','pb','unknown'],sort:{column:'pe',direction:'desc'}}),{columns:['pb','dy','pe'],sort:{column:'pe',direction:'desc'}});
+ assert.deepEqual(readResearchTable({columns:[],sort:{column:'pe',direction:'asc'}}),{columns:['dy'],sort:null});
  assert.equal(readResearchTable({sort:{column:'pe',direction:'invalid'}}).sort,null);
  assert.deepEqual(readResearchTable({columns:[],sort:{column:'name',direction:'asc'}}).sort,{column:'name',direction:'asc'});
+});
+test('saved preferences without a dividend-yield column gain it right after PB, once',()=>{
+ assert.deepEqual(readResearchTable({columns:['pe','pb','roe']}).columns,['pe','pb','dy','roe']);
+ assert.deepEqual(readResearchTable({columns:['pe','pb','dy','roe']}).columns,['pe','pb','dy','roe']);
+ assert.deepEqual(readResearchTable({columns:['roe']}).columns,['roe','dy']);
+ assert.deepEqual(readResearchTable({columns:[]}).columns,['dy']);
+ assert.ok(defaultResearchTable().columns.includes('dy'));
 });
 test('ascending and descending use numeric values including negatives and zero; absent data always sorts last',()=>{
  const source=[null,0,-211.69,56.65,13.43,NaN,undefined];

@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import AiAnalysisDialog from '@/components/AiAnalysisDialog';
 import WatchlistButton from '@/components/WatchlistButton';
+import XueqiuDialog from '@/components/XueqiuDialog';
 import { fmtTime, price, signed, signedPct, toneClass } from '@/lib/format';
+import { xueqiuUrl } from '@/lib/xueqiu';
 import type { Quote } from '@/lib/datasource/types';
 
 const KIND_TEXT: Record<string, string> = {
@@ -63,6 +65,7 @@ export default function QuoteHeader({ quote }: { quote: Quote }) {
   const [profile, setProfile] = useState<Profile | null>(null);
 
   const isStock = quote.kind === 'stock';
+  const xueqiu = xueqiuUrl(quote.symbol, quote.market, quote.kind);
   useEffect(() => {
     setProfile(null);
     if (!isStock) return;
@@ -107,6 +110,14 @@ export default function QuoteHeader({ quote }: { quote: Quote }) {
           )}
           {isStock && (
             <>
+              {xueqiu && (
+                <XueqiuDialog
+                  key={quote.symbol}
+                  url={xueqiu}
+                  name={quote.name}
+                  code={quote.code}
+                />
+              )}
               <AiAnalysisDialog
                 key={quote.symbol}
                 code={quote.code}

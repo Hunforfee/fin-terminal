@@ -1,12 +1,18 @@
 'use client';
 
 import { personalStorage } from '@/lib/personalStorage';
+import useResearchNotes from './useResearchNotes';
+import ResearchNotesDrawer from './ResearchNotesDrawer';
+import type { NoteCompany } from './NoteCompanyPicker';
+import { researchNoteSymbol } from '@/lib/researchNotes';
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useWatchlist } from './WatchlistProvider';
+import WatchlistButton from './WatchlistButton';
 import WatchlistGroups from './WatchlistGroups';
 import StockName from './StockName';
+import StockListViewport from './StockListViewport';
 import ResearchColumns from './ResearchColumns';
 import {
   RESEARCH_COLUMNS,
@@ -18,8 +24,6 @@ import {
   type ResearchSort,
 } from '@/lib/researchColumns';
 import { UNGROUPED } from '@/lib/watchlist';
-import Modal from './Modal';
-import NoteBody from './NoteBody';
 import { normalizeCode } from '@/lib/datasource/codes';
 import type { Quote } from '@/lib/datasource/types';
 
@@ -28,34 +32,6 @@ interface Financial {
   name: string;
   periods: string[];
   series: Record<string, (number | null)[]>;
-}
-interface Note {
-  id: string;
-  code: string;
-  name: string;
-  text: string;
-  date: string;
-  /** 手动设置的标题；缺省时从正文首行提取 */
-  title?: string;
-}
-const NOTE_KEY = 'fin.research.notes.v1';
-
-/** 从笔记正文提取标题：首个非空行，去掉 Markdown 标记，超长截断 */
-function noteTitle(text: string, index: number): string {
-  const line =
-    text
-      .split('\n')
-      .map((l) => l.trim())
-      .find((l) => l && !/^```/.test(l)) ?? '';
-  const clean = line
-    .replace(/^#{1,6}\s*/, '')
-    .replace(/^>\s*/, '')
-    .replace(/^([-*+]|\d+[.)])\s+/, '')
-    .replace(/\|/g, ' ')
-    .replace(/[*_`~]/g, '')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .trim();
-  return clean.length > 26 ? clean.slice(0, 26) + '…' : clean || `笔记 ${index + 1}`;
 }
 const value = (v: number | null | undefined, suffix = '') =>
   v == null || !Number.isFinite(v) ? '—' : v.toFixed(2) + suffix;
@@ -74,13 +50,31 @@ export default function ResearchDesk({
     activeGroup === 'all' || wl.groups.some((g) => g.id === activeGroup)
       ? activeGroup
       : 'all';
+  const codeSet = useMemo(() => new Set(codes), [codes]);
+  const groupInfo = useMemo(() => {
+    const memberships = new Map<string, Set<string>>();
+    const names = new Map<string, string[]>();
+    for (const item of wl.items) {
+      if (!memberships.has(item.symbol))
+        memberships.set(item.symbol, new Set());
+      memberships.get(item.symbol)!.add(item.groupId);
+    }
+    for (const g of wl.groups)
+      for (const item of wl.items) {
+        if (item.groupId !== g.id) continue;
+        if (!names.has(item.symbol)) names.set(item.symbol, []);
+        names.get(item.symbol)!.push(g.name);
+      }
+    return { memberships, names };
+  }, [wl.items, wl.groups]);
   const inGroup = (symbol: string) =>
-    group === 'all' || wl.groupsOf(symbol).includes(group);
-  const savedCodes = wl.codesIn(group);
-  const groupNames = (symbol: string) =>
-    wl.groups
-      .filter((g) => wl.groupsOf(symbol).includes(g.id))
-      .map((g) => g.name);
+    group === 'all' || groupInfo.memberships.get(symbol)?.has(group);
+  const savedCodes = useMemo(() => wl.codesIn(group), [wl, group]);
+  const savedPositions = useMemo(
+    () => new Map(savedCodes.map((symbol, index) => [symbol, index])),
+    [savedCodes],
+  );
+  const groupNames = (symbol: string) => groupInfo.names.get(symbol) ?? [];
   const removeFromView = (symbol: string) => remove(symbol, group);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [otherAssets, setOtherAssets] = useState<Quote[]>([]);
@@ -89,53 +83,22 @@ export default function ResearchDesk({
   const [finLoading, setFinLoading] = useState(false);
   const [error, setError] = useState('');
   const [finErrors, setFinErrors] = useState<string[]>([]);
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [noteError, setNoteError] = useState('');
-  const [noteCode, setNoteCode] = useState('');
-  const [draft, setDraft] = useState('');
-  const [noteView, setNoteView] = useState<{ code: string; name: string } | null>(
-    null,
+  const notebook = useResearchNotes();
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [noteContext, setNoteContext] = useState<NoteCompany | null>(null);
+  const noteCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const note of notebook.notes) {
+      const symbol = researchNoteSymbol(note);
+      if (!symbol) continue;
+      counts.set(symbol, (counts.get(symbol) ?? 0) + 1);
+    }
+    return counts;
+  }, [notebook.notes]);
+  const noteCompanies = useMemo(
+    () => quotes.map((q) => ({ symbol: q.symbol, code: q.code, name: q.name })),
+    [quotes],
   );
-  const [noteDraft, setNoteDraft] = useState('');
-  const [noteEditTab, setNoteEditTab] = useState<'edit' | 'preview'>('edit');
-  const [navOpen, setNavOpen] = useState(true);
-  const [activeNoteId, setActiveNoteId] = useState<string>('new');
-  const [noteMaximized, setNoteMaximized] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [renamingId, setRenamingId] = useState<string | null>(null);
-  const [renameDraft, setRenameDraft] = useState('');
-  const [noteTitleDraft, setNoteTitleDraft] = useState('');
-  const notesFor = (code: string) => notes.filter((n) => n.code === code);
-  const addNoteFor = (
-    code: string,
-    name: string,
-    text: string,
-  ): string | null => {
-    if (!text.trim()) return null;
-    const id = crypto.randomUUID();
-    return saveNotes([
-      {
-        id,
-        code,
-        name,
-        text: text.trim(),
-        date: new Date().toLocaleDateString('zh-CN', {
-          timeZone: 'Asia/Shanghai',
-        }),
-      },
-      ...notes,
-    ])
-      ? id
-      : null;
-  };
-  /** 更新一条已有笔记（正文 / 标题），返回是否成功 */
-  const updateNote = (id: string, patch: Partial<Note>) => {
-    const target = notes.find((n) => n.id === id);
-    if (!target) return false;
-    return saveNotes(
-      notes.map((n) => (n.id === id ? { ...n, ...patch } : n)),
-    );
-  };
   const [filter, setFilter] = useState('');
   useEffect(() => {
     setSelected([]);
@@ -191,17 +154,6 @@ export default function ResearchDesk({
     };
     window.addEventListener('storage', stored);
     return () => window.removeEventListener('storage', stored);
-  }, []);
-  useEffect(() => {
-    try {
-      const n = JSON.parse(personalStorage.getItem(NOTE_KEY) ?? '[]');
-      if (Array.isArray(n))
-        setNotes(
-          n.filter(
-            (x) => x && typeof x.text === 'string' && typeof x.id === 'string',
-          ),
-        );
-    } catch {}
   }, []);
   // Sorting and group edits do not refetch unchanged market/financial data.
   const signature = [...codes].sort().join(',');
@@ -312,7 +264,7 @@ export default function ResearchDesk({
   const rows = quotes
     .filter(
       (q) =>
-        codes.includes(q.symbol) &&
+        codeSet.has(q.symbol) &&
         inGroup(q.symbol) &&
         `${q.name}${q.code}`
           .toLowerCase()
@@ -320,7 +272,8 @@ export default function ResearchDesk({
     )
     .sort((a, b) => {
       const manual =
-        savedCodes.indexOf(a.symbol) - savedCodes.indexOf(b.symbol);
+        (savedPositions.get(a.symbol) ?? 0) -
+        (savedPositions.get(b.symbol) ?? 0);
       return sort
         ? compareResearchValues(
             columnValue(a, sort.column),
@@ -335,14 +288,16 @@ export default function ResearchDesk({
   const filteredOtherAssets = otherAssets
     .filter(
       (q) =>
-        codes.includes(q.symbol) &&
+        codeSet.has(q.symbol) &&
         inGroup(q.symbol) &&
         `${q.name}${q.code}`
           .toLowerCase()
           .includes(filter.trim().toLowerCase()),
     )
     .sort(
-      (a, b) => savedCodes.indexOf(a.symbol) - savedCodes.indexOf(b.symbol),
+      (a, b) =>
+        (savedPositions.get(a.symbol) ?? 0) -
+        (savedPositions.get(b.symbol) ?? 0),
     );
   const destination = wl.groups.some((g) => g.id === moveTarget)
     ? moveTarget
@@ -350,38 +305,6 @@ export default function ResearchDesk({
   const reports = [...financials]
     .filter((f) => f.periods.length)
     .sort((a, b) => b.periods.at(-1)!.localeCompare(a.periods.at(-1)!));
-  const saveNotes = (next: Note[]) => {
-    try {
-      personalStorage.setItem(NOTE_KEY, JSON.stringify(next));
-      setNotes(next);
-      setNoteError('');
-      return true;
-    } catch {
-      setNoteError('笔记未保存，浏览器存储空间不足或不可用。');
-      return false;
-    }
-  };
-  const addNote = () => {
-    const company = quotes.find(
-      (q) => q.code === (noteCode || quotes[0]?.code),
-    );
-    if (!draft.trim() || !company) return;
-    if (
-      saveNotes([
-        {
-          id: crypto.randomUUID(),
-          code: company.code,
-          name: company.name,
-          text: draft.trim(),
-          date: new Date().toLocaleDateString('zh-CN', {
-            timeZone: 'Asia/Shanghai',
-          }),
-        },
-        ...notes,
-      ])
-    )
-      setDraft('');
-  };
 
   return (
     <div className="space-y-6">
@@ -408,27 +331,60 @@ export default function ResearchDesk({
               '家',
             ],
             ['最近报告期', reports[0]?.periods.at(-1) ?? '—', ''],
-            ['研究笔记', notes.length, '条'],
-          ].map(([label, count, unit]) => (
-            <div key={label} className="card px-5 py-5">
-              <div className="text-xs text-slate-500">{label}</div>
-              <div
-                className={`mt-3 font-semibold tabular-nums tracking-tight text-slate-900 ${label === '最近报告期' ? 'text-xl' : 'text-3xl'}`}
+            ['研究笔记', notebook.notes.length, '条'],
+          ].map(([label, count, unit]) =>
+            label === '研究笔记' ? (
+              <button
+                key={label}
+                type="button"
+                aria-label={`打开研究笔记，共${count}条`}
+                aria-haspopup="dialog"
+                aria-expanded={notesOpen}
+                disabled={!notebook.ready}
+                onClick={() => {
+                  setNoteContext(null);
+                  setNotesOpen(true);
+                }}
+                className="card px-5 py-4 text-left transition-colors hover:border-brand-200 hover:bg-brand-50/50 disabled:opacity-50"
               >
-                {count}
-                <span className="ml-1.5 text-xs font-normal text-slate-500">
-                  {unit}
-                </span>
+                <div className="text-xs font-medium text-brand-700">
+                  研究笔记
+                </div>
+                <div className="mt-3 text-3xl font-semibold tabular-nums tracking-tight text-slate-900">
+                  {count}
+                  <span className="ml-1.5 text-xs font-normal text-slate-500">
+                    条
+                  </span>
+                </div>
+              </button>
+            ) : (
+              <div key={label} className="card px-5 py-4">
+                <div className="text-xs text-slate-500">{label}</div>
+                <div
+                  className={`mt-3 font-semibold tabular-nums tracking-tight text-slate-900 ${label === '最近报告期' ? 'text-xl' : 'text-3xl'}`}
+                >
+                  {count}
+                  <span className="ml-1.5 text-xs font-normal text-slate-500">
+                    {unit}
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
+            ),
+          )}
         </div>
       )}
 
-      <section className="card overflow-hidden">
+      <section
+        id="research-stocks"
+        tabIndex={-1}
+        aria-labelledby="research-stocks-title"
+        className="card scroll-mt-24 overflow-hidden"
+      >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
-          <div className="flex items-center gap-3">
-            <h2 className="section-title">基本面跟踪</h2>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h2 id="research-stocks-title" className="section-title">
+              基本面跟踪
+            </h2>
             <span className="text-xs text-slate-500">
               {`${rows.length} 家公司`}
               {finLoading ? ' · 财报加载中…' : ''}
@@ -565,7 +521,9 @@ export default function ResearchDesk({
             {error}
           </p>
         )}
-        <div className="overflow-x-auto">
+        <StockListViewport
+          resetKey={JSON.stringify([group, filter, sort, table.columns])}
+        >
           <table
             aria-label="基本面股票列表"
             className="w-full text-right"
@@ -768,23 +726,20 @@ export default function ResearchDesk({
                         type="button"
                         aria-label={`${q.name}笔记`}
                         title={
-                          notesFor(q.code).length
-                            ? `笔记 ${notesFor(q.code).length} 条`
+                          noteCounts.get(q.symbol)
+                            ? `笔记 ${noteCounts.get(q.symbol)} 条`
                             : '添加笔记'
                         }
+                        disabled={!notebook.ready}
                         onClick={() => {
-                          setNoteDraft('');
-                          setNoteView({ code: q.code, name: q.name });
-                          // 有历史笔记就先看最新一条，没有则直接进入新建
-                          const latest = notes.find((n) => n.code === q.code);
-                          setActiveNoteId(latest ? latest.id : 'new');
-                          setEditingId(null);
+                          setNoteContext({
+                            symbol: q.symbol,
+                            code: q.code,
+                            name: q.name,
+                          });
+                          setNotesOpen(true);
                         }}
-                        className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-opacity hover:bg-amber-50 focus-visible:text-amber-600 [@media(hover:none)]:opacity-100 ${
-                          notesFor(q.code).length
-                            ? 'text-amber-500'
-                            : 'text-slate-400 hover:text-amber-600 opacity-0 group-hover/stock:opacity-100 focus-within:opacity-100'
-                        }`}
+                        className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-opacity hover:bg-amber-50 focus-visible:text-amber-600 [@media(hover:none)]:opacity-100 ${noteCounts.get(q.symbol) ? 'text-amber-500' : 'text-slate-400 hover:text-amber-600 opacity-0 group-hover/stock:opacity-100 focus-visible:opacity-100'}`}
                       >
                         <svg
                           aria-hidden="true"
@@ -883,13 +838,13 @@ export default function ResearchDesk({
               )}
             </tbody>
           </table>
-        </div>
+        </StockListViewport>
 
         <div className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
           PE / PB：行情口径　·　财务指标：各公司所列报告期累计口径
           {finErrors.length > 0 && (
-            <span className="ml-3 text-amber-700">
-              财报暂不可用：{finErrors.join('、')}
+            <span className="ml-3 text-amber-700" title={finErrors.join('、')}>
+              财报暂不可用：{finErrors.length} 家公司
             </span>
           )}
         </div>
@@ -913,6 +868,12 @@ export default function ResearchDesk({
                   {q.name}{' '}
                 </Link>
                 <div className="flex shrink-0 items-center gap-3">
+                  <WatchlistButton
+                    code={q.symbol}
+                    name={q.name}
+                    compact
+                    label={'分组'}
+                  />
                   <button
                     className="text-xs text-slate-500 hover:text-red-600"
                     onClick={() => removeFromView(q.symbol)}
@@ -925,497 +886,18 @@ export default function ResearchDesk({
           </div>
         </details>
       )}
-      {noteError && (
-        <p role="alert" className="text-sm text-red-600">
-          {noteError}
-        </p>
-      )}
-      <Modal
-        open={!!noteView}
-        size="full"
-        bare
-        maximizable
-        maximized={noteMaximized}
-        onMaximizedChange={setNoteMaximized}
-        title={noteView ? `${noteView.name} · 笔记` : '笔记'}
-        onClose={() => {
-          setNoteView(null);
-          setNoteMaximized(false);
-        }}
-      >
-        {noteView && (
-          <div className="flex h-full min-h-0 flex-col">
-            {/* 顶部工具栏（双击空白处切换最大化） */}
-            <div
-              className="flex shrink-0 items-center gap-3 border-b border-slate-200 px-4 py-3"
-              onDoubleClick={(e) => {
-                if ((e.target as HTMLElement).closest('button')) return;
-                setNoteMaximized((v) => !v);
-              }}
-            >
-              <button
-                type="button"
-                aria-label={navOpen ? '收起笔记导航' : '展开笔记导航'}
-                aria-expanded={navOpen}
-                title={navOpen ? '收起导航' : '展开导航'}
-                onClick={() => setNavOpen((v) => !v)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                  <rect x="3" y="4" width="18" height="16" rx="2" />
-                  <path d="M9 4v16" />
-                </svg>
-              </button>
-              <div className="min-w-0">
-                <h2 className="truncate font-semibold text-slate-900">
-                  {noteView.name} · 笔记
-                </h2>
-                <p className="text-[11px] text-slate-400">
-                  {noteView.code} · 共 {notesFor(noteView.code).length} 条
-                </p>
-              </div>
-              <div className="ml-auto flex items-center gap-2">
-                <button
-                  type="button"
-                  className="btn !py-1.5 text-xs"
-                  onClick={() => {
-                    setNoteDraft('');
-                    setNoteTitleDraft('');
-                    setNoteEditTab('edit');
-                    setEditingId(null);
-                    setActiveNoteId('new');
-                    setNavOpen(true);
-                  }}
-                >
-                  ＋ 新建笔记
-                </button>
-                <button
-                  type="button"
-                  aria-label={noteMaximized ? '退出最大化' : '最大化笔记弹窗'}
-                  title={noteMaximized ? '退出最大化' : '最大化（双击标题空白也可）'}
-                  onClick={() => setNoteMaximized((v) => !v)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
-                    {noteMaximized ? (
-                      <path d="M9 3H5a2 2 0 0 0-2 2v4M15 3h4a2 2 0 0 1 2 2v4M9 21H5a2 2 0 0 1-2-2v-4M15 21h4a2 2 0 0 0 2-2v-4" />
-                    ) : (
-                      <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
-                    )}
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  aria-label="关闭笔记"
-                  onClick={() => setNoteView(null)}
-                  className="h-8 w-8 rounded text-xl text-slate-400 hover:bg-slate-100"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-
-            <div className="flex min-h-0 flex-1">
-              {/* 左侧：笔记标题导航 */}
-              {navOpen && (
-                <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-slate-50/70">
-                  <div className="px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-slate-400">
-                    笔记目录
-                  </div>
-                  <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingId(null);
-                        setNoteTitleDraft('');
-                        setActiveNoteId('new');
-                      }}
-                      className={`mb-1 flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm ${
-                        activeNoteId === 'new'
-                          ? 'bg-white font-medium text-brand-700 shadow-sm'
-                          : 'text-slate-600 hover:bg-white/70'
-                      }`}
-                    >
-                      <span className="text-base leading-none">＋</span>
-                      新建笔记
-                    </button>
-                    {notesFor(noteView.code).map((n, index) => {
-                      const title = n.title?.trim() || noteTitle(n.text, index);
-                      return (
-                        <div
-                          key={n.id}
-                          className={`group/nav mb-0.5 rounded-md ${
-                            activeNoteId === n.id ? 'bg-white shadow-sm' : 'hover:bg-white/70'
-                          }`}
-                        >
-                          {renamingId === n.id ? (
-                            <input
-                              autoFocus
-                              aria-label="重命名笔记"
-                              className="input mx-1 !py-1 text-sm"
-                              value={renameDraft}
-                              onChange={(e) => setRenameDraft(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  updateNote(n.id, { title: renameDraft.trim() });
-                                  setRenamingId(null);
-                                } else if (e.key === 'Escape') setRenamingId(null);
-                              }}
-                              onBlur={() => {
-                                updateNote(n.id, { title: renameDraft.trim() });
-                                setRenamingId(null);
-                              }}
-                            />
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveNoteId(n.id);
-                                setEditingId(null);
-                              }}
-                              onDoubleClick={() => {
-                                setRenamingId(n.id);
-                                setRenameDraft(n.title ?? '');
-                              }}
-                              title={`${title}（双击重命名）`}
-                              className="flex w-full flex-col gap-0.5 rounded-md px-2.5 py-2 text-left"
-                            >
-                              <span
-                                className={`flex items-center gap-1 ${
-                                  activeNoteId === n.id
-                                    ? 'font-medium text-brand-700'
-                                    : 'text-slate-700'
-                                }`}
-                              >
-                                <span className="min-w-0 flex-1 truncate text-sm">
-                                  {title}
-                                </span>
-                                <span
-                                  role="button"
-                                  tabIndex={0}
-                                  aria-label="重命名笔记"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setRenamingId(n.id);
-                                    setRenameDraft(n.title ?? '');
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.stopPropagation();
-                                      setRenamingId(n.id);
-                                      setRenameDraft(n.title ?? '');
-                                    }
-                                  }}
-                                  className="shrink-0 rounded p-0.5 text-slate-300 opacity-0 hover:text-brand-600 group-hover/nav:opacity-100"
-                                >
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                                    <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                                  </svg>
-                                </span>
-                              </span>
-                              <span className="text-[11px] text-slate-400">
-                                {n.date}
-                              </span>
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                    {notesFor(noteView.code).length === 0 && (
-                      <p className="px-2 py-3 text-xs text-slate-400">
-                        还没有笔记
-                      </p>
-                    )}
-                  </nav>
-                </aside>
-              )}
-
-              {/* 右侧：内容区 */}
-              <section className="min-w-0 flex-1 overflow-y-auto px-6 py-5">
-                {activeNoteId === 'new' || editingId ? (
-                  <div className="mx-auto max-w-4xl space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h3 className="text-sm font-semibold text-slate-700">
-                        {editingId ? '编辑笔记' : '新建笔记'}
-                      </h3>
-                      <div className="flex items-center gap-1 rounded-md bg-slate-100 p-0.5">
-                        <button
-                          type="button"
-                          onClick={() => setNoteEditTab('edit')}
-                          className={`rounded px-2.5 py-1 text-xs ${
-                            noteEditTab === 'edit'
-                              ? 'bg-white text-slate-800 shadow-sm'
-                              : 'text-slate-500 hover:text-slate-700'
-                          }`}
-                        >
-                          编辑
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setNoteEditTab('preview')}
-                          className={`rounded px-2.5 py-1 text-xs ${
-                            noteEditTab === 'preview'
-                              ? 'bg-white text-slate-800 shadow-sm'
-                              : 'text-slate-500 hover:text-slate-700'
-                          }`}
-                        >
-                          预览
-                        </button>
-                      </div>
-                    </div>
-                    {noteEditTab === 'edit' && (editingId ? notes.find((n) => n.id === editingId) : true) && (
-                      <input
-                        aria-label="笔记标题（可选）"
-                        className="input w-full"
-                        placeholder="标题（留空则取正文第一行）"
-                        value={
-                          editingId
-                            ? (noteTitleDraft ??
-                              notes.find((n) => n.id === editingId)?.title ??
-                              '')
-                            : noteTitleDraft
-                        }
-                        onChange={(e) => setNoteTitleDraft(e.target.value)}
-                      />
-                    )}
-                    {noteEditTab === 'edit' ? (
-                      <textarea
-                        aria-label="新增笔记"
-                        autoFocus
-                        className="input !px-4 !py-3 h-[420px] w-full resize-none overflow-y-auto font-mono text-[13px] leading-6"
-                        placeholder={'第一行会被用作标题。\n\n支持 Markdown，例如：\n## 结论\n| 指标 | 2024 | 2025 |\n| --- | --- | --- |\n| 营收 | 100 | 120 |'}
-                        value={noteDraft}
-                        onChange={(e) => setNoteDraft(e.target.value)}
-                      />
-                    ) : (
-                      <div className="h-[420px] overflow-y-auto rounded-lg border border-slate-200 bg-white p-4">
-                        {noteDraft.trim() ? (
-                          <NoteBody text={noteDraft} />
-                        ) : (
-                          <p className="text-sm text-slate-400">
-                            暂无可预览内容
-                          </p>
-                        )}
-                      </div>
-                    )}
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-[11px] text-slate-400">
-                        支持 表格 / 列表 / 代码块 / 引用 / 加粗 / 链接
-                      </span>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          className="btn"
-                          onClick={() => {
-                            setEditingId(null);
-                            setNoteTitleDraft('');
-                            setActiveNoteId(
-                              editingId ?? notesFor(noteView.code)[0]?.id ?? 'new',
-                            );
-                          }}
-                        >
-                          取消
-                        </button>
-                        <button
-                          type="button"
-                          className="btn bg-brand-600 text-white hover:bg-brand-700"
-                          disabled={!noteDraft.trim()}
-                          onClick={() => {
-                            if (editingId) {
-                              if (updateNote(editingId, {
-                                text: noteDraft.trim(),
-                                title: noteTitleDraft.trim() || undefined,
-                              })) {
-                                setNoteDraft('');
-                                setNoteTitleDraft('');
-                                setNoteEditTab('edit');
-                                setActiveNoteId(editingId);
-                                setEditingId(null);
-                              }
-                              return;
-                            }
-                            const created = addNoteFor(
-                              noteView.code,
-                              noteView.name,
-                              noteDraft,
-                            );
-                            if (created) {
-                              setNoteDraft('');
-                              setNoteEditTab('edit');
-                              setActiveNoteId(created);
-                            }
-                          }}
-                        >
-                          {editingId ? '保存修改' : '保存笔记'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  (() => {
-                    const current =
-                      notesFor(noteView.code).find((n) => n.id === activeNoteId) ??
-                      notesFor(noteView.code)[0];
-                    if (!current)
-                      return (
-                        <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-slate-400">
-                          <p>还没有笔记</p>
-                          <button
-                            type="button"
-                            className="btn"
-                            onClick={() => setActiveNoteId('new')}
-                          >
-                            写第一条
-                          </button>
-                        </div>
-                      );
-                    return (
-                      <article className="mx-auto max-w-4xl">
-                        <div className="mb-3 flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
-                          <span className="text-xs text-slate-400">
-                            {current.date}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              className="rounded px-1.5 py-0.5 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                              onClick={() => {
-                                setNoteDraft(current.text);
-                                setNoteTitleDraft(current.title ?? '');
-                                setNoteEditTab('edit');
-                                setEditingId(current.id);
-                              }}
-                            >
-                              编辑
-                            </button>
-                            <button
-                              type="button"
-                              aria-label="删除笔记"
-                              className="rounded px-1.5 py-0.5 text-xs text-slate-400 hover:bg-red-50 hover:text-red-600"
-                              onClick={() => {
-                                saveNotes(
-                                  notes.filter((x) => x.id !== current.id),
-                                );
-                                setActiveNoteId('new');
-                              }}
-                            >
-                              删除
-                            </button>
-                          </div>
-                        </div>
-                        <NoteBody text={current.text} />
-                      </article>
-                    );
-                  })()
-                )}
-              </section>
-            </div>
-          </div>
-        )}
-      </Modal>
-      {!management && (
-        <div className="grid items-start gap-5 lg:grid-cols-[1fr_360px]">
-          <section className="card p-5">
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="section-title">研究笔记</h2>
-              <span className="text-xs text-slate-500">{notes.length} 条</span>
-            </div>
-            <div className="flex flex-col gap-3">
-              <select
-                aria-label="笔记所属公司"
-                className="input !w-48"
-                value={noteCode || quotes[0]?.code || ''}
-                onChange={(e) => setNoteCode(e.target.value)}
-              >
-                {quotes.map((q) => (
-                  <option key={q.code} value={q.code}>
-                    {q.name} · {q.code}
-                  </option>
-                ))}
-              </select>
-              <textarea
-                aria-label="研究笔记"
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                placeholder="投资逻辑、估值假设、待验证问题"
-                rows={3}
-                className="input resize-y"
-              />
-              <div className="flex justify-end">
-                <button
-                  disabled={!draft.trim() || !quotes.length}
-                  onClick={addNote}
-                  className="btn-primary"
-                >
-                  保存笔记
-                </button>
-              </div>
-            </div>
-            <div className="mt-5 divide-y divide-slate-100">
-              {notes.length ? (
-                notes.map((n) => (
-                  <article key={n.id} className="py-4">
-                    <div className="mb-2 flex items-center justify-between gap-3">
-                      <Link
-                        href={`/stock/${n.code}`}
-                        className="text-sm font-medium text-slate-800"
-                      >
-                        {n.name}
-                      </Link>
-                      <div className="flex items-center gap-4 text-xs text-slate-500">
-                        <time>{n.date}</time>
-                        <button
-                          aria-label={`删除${n.name}笔记`}
-                          onClick={() =>
-                            saveNotes(notes.filter((x) => x.id !== n.id))
-                          }
-                        >
-                          删除
-                        </button>
-                      </div>
-                    </div>
-                    <p className="whitespace-pre-wrap break-words text-sm leading-7 text-slate-600">
-                      {n.text}
-                    </p>
-                  </article>
-                ))
-              ) : (
-                <p className="py-4 text-sm text-slate-400">暂无研究记录</p>
-              )}
-            </div>
-          </section>
-          <section className="card p-5">
-            <h2 className="section-title">财报索引</h2>
-            <div className="mt-4 divide-y divide-slate-100">
-              {reports.slice(0, 6).map((f) => (
-                <Link
-                  prefetch={false}
-                  key={f.code}
-                  href={`/stock/${f.code}/finance`}
-                  className="flex items-center justify-between gap-3 py-4"
-                >
-                  <div>
-                    <div className="text-sm font-medium text-slate-800">
-                      {f.name}
-                    </div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      报告期 {f.periods.at(-1)}
-                    </div>
-                  </div>
-                  <span className="text-slate-400" aria-hidden="true">
-                    ↗
-                  </span>
-                </Link>
-              ))}
-              {!reports.length && (
-                <p className="py-8 text-sm text-slate-400">
-                  {finLoading ? '财报加载中…' : '暂无财报'}
-                </p>
-              )}
-            </div>
-          </section>
-        </div>
-      )}
+      <ResearchNotesDrawer
+        open={notesOpen}
+        initialCompany={noteContext}
+        onClose={() => setNotesOpen(false)}
+        companies={noteCompanies}
+        notes={notebook.notes}
+        ready={notebook.ready}
+        error={notebook.error}
+        onClearError={notebook.clearError}
+        onSave={notebook.save}
+        onRemove={notebook.remove}
+      />
     </div>
   );
 }

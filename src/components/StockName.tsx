@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useId, useState } from 'react';
+import { memo, useEffect, useId, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { industryOf } from '@/lib/universe';
@@ -26,7 +26,7 @@ function requestIndustry(symbol: string) {
   return request;
 }
 
-export default function StockName({
+function StockName({
   quote,
   groups,
   href,
@@ -118,3 +118,4 @@ export default function StockName({
     </>
   );
 }
+export default memo(StockName);

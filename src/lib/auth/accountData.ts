@@ -28,13 +28,39 @@ interface Store {
 }
 
 function readStore(): Store {
+  let raw: string;
   try {
-    const j = JSON.parse(fs.readFileSync(FILE, 'utf8')) as Store;
-    if (j && typeof j.users === 'object' && j.users) return j;
-  } catch {
-    /* 文件不存在或损坏时按空库处理 */
+    raw = fs.readFileSync(FILE, 'utf8');
+  } catch (error) {
+    // Only a genuinely new store starts empty. Corruption or read failures must
+    // reach the API as an error rather than letting a later save replace it.
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+      return { users: {} };
+    throw error;
   }
-  return { users: {} };
+  const store = JSON.parse(raw) as Store;
+  if (
+    !store ||
+    typeof store !== 'object' ||
+    Array.isArray(store) ||
+    !store.users ||
+    typeof store.users !== 'object' ||
+    Array.isArray(store.users) ||
+    Object.values(store.users).some(
+      (entry) =>
+        !entry ||
+        typeof entry !== 'object' ||
+        Array.isArray(entry) ||
+        !Number.isSafeInteger(entry.revision) ||
+        entry.revision < 0 ||
+        !entry.data ||
+        typeof entry.data !== 'object' ||
+        Array.isArray(entry.data) ||
+        Object.values(entry.data).some((value) => typeof value !== 'string'),
+    )
+  )
+    throw new Error('个人数据文件格式无效');
+  return store;
 }
 
 function writeStore(store: Store): void {
@@ -72,7 +98,7 @@ async function database(): Promise<import('pg').Pool> {
   return db;
 }
 
-/** 同步功能是否可用：文件存储始终可用（仅需 data/ 目录可写）。 */
+/** 支持数据库或文件存储；实际读写失败由数据接口返回 503。 */
 export function dataSyncReady(): boolean {
   return true;
 }

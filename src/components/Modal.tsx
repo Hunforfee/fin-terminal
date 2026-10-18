@@ -54,12 +54,14 @@ export default function Modal({
   useEffect(() => {
     if (!open) setMaximized(false);
   }, [open]);
-  const maximizedClass = '!h-screen !max-h-screen !w-screen !max-w-none !rounded-none !border-0';
+  const maximizedClass =
+    '!h-[100dvh] !max-h-[100dvh] !w-screen !max-w-none !rounded-none !border-0';
   return (
     <dialog
       ref={ref}
       style={open ? undefined : { display: 'none' }}
-      aria-labelledby={id}
+      aria-labelledby={bare ? undefined : id}
+      aria-label={bare ? title : undefined}
       onCancel={(event) => {
         event.preventDefault();
         onClose();
@@ -85,12 +87,24 @@ export default function Modal({
                   ? 'max-h-[92dvh] w-[calc(100%-1.5rem)] max-w-5xl'
                   : 'max-h-[85dvh] w-[calc(100%-1.5rem)] max-w-lg'
             }`
-      } ${bare || maximizable ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'}`}
+      } ${bare || maximizable ? '[&[open]]:flex flex-col overflow-hidden' : 'overflow-y-auto'}`}
     >
       {!bare && (
         <div
           className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3"
-          onDoubleClick={maximizable ? () => setMaximized((v) => !v) : undefined}
+          onDoubleClick={
+            maximizable
+              ? (event) => {
+                  if (
+                    (event.target as HTMLElement).closest(
+                      'button, a, input, select, textarea',
+                    )
+                  )
+                    return;
+                  setMaximized((v) => !v);
+                }
+              : undefined
+          }
         >
           <h2 id={id} className="min-w-0 break-words font-semibold">
             {title}
@@ -100,6 +114,7 @@ export default function Modal({
               <button
                 type="button"
                 aria-label={maximized ? '退出最大化' : '最大化'}
+                aria-pressed={maximized}
                 title={maximized ? '退出最大化' : '最大化'}
                 onClick={() => setMaximized((v) => !v)}
                 className="inline-flex h-8 w-8 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700"
@@ -134,7 +149,9 @@ export default function Modal({
         </div>
       )}
       {open && (
-        <div className={`min-h-0 ${bare ? 'h-full' : 'p-4'} ${maximizable ? 'flex-1' : ''}`}>
+        <div
+          className={`min-h-0 ${bare ? 'h-full' : 'p-4'} ${maximizable ? 'flex-1' : ''} ${maximizable && !bare ? 'overflow-y-auto' : ''}`}
+        >
           {children}
         </div>
       )}

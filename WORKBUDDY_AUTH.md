@@ -17,10 +17,12 @@
 ## 部署环境变量
 
 - `AUTH_SESSION_SECRET`：服务端随机密钥，至少 32 字节。不要使用示例值或提交到 Git。轮换会使现有会话失效。
-- `DATABASE_URL`：当前应用专用 PostgreSQL 连接串。托管数据库应按提供方要求启用 TLS（如连接串中配置 `sslmode=require`）；不要关闭证书验证。
+- `DATABASE_URL`：可选，当前应用专用 PostgreSQL 连接串。配置后优先使用数据库。托管数据库应按提供方要求启用 TLS（如连接串中配置 `sslmode=require`）；不要关闭证书验证。
 - `APP_ORIGIN`：公开站点源，例如 `https://a3f223f4c7a12db85.app.workbuddy.host`，用于反向代理后的同源校验。更换域名时同步修改。
 
-`src/lib/auth/accountData.ts` 首次使用会创建 `fin_account_data` 表；若数据库账号无建表权限，请先执行下方 SQL。不要使用临时容器文件作为账号数据存储。未配置数据库时，登录后的数据仍按账号保存在本机，账号菜单显示“本机已保存”；不会假报云端同步成功。
+`src/lib/auth/accountData.ts` 配置数据库时会在首次使用创建 `fin_account_data` 表；若数据库账号无建表权限，请先执行下方 SQL。未配置数据库时，改用服务端 `data/account-data.json` 按账号保存个人数据，支持同一部署的跨设备同步。文件存储适用于单进程、单实例部署；多进程或多实例请配置 PostgreSQL。`data/` 必须可写并挂载持久化磁盘，不能依赖重启或重新部署后会丢失的临时容器文件。
+
+两种存储都检查版本号，旧版本写入返回 409。文件写入先生成临时文件再原子替换；只有文件尚不存在时才初始化为空库。文件损坏、格式无效或读取失败时，数据接口返回 503 并保留原文件，不会把故障误认为空账号后覆盖已有内容。遇到此类错误应先恢复文件或存储权限，再重试同步；浏览器中的账号缓存仍保留。
 
 ```sql
 CREATE TABLE IF NOT EXISTS fin_account_data (
@@ -35,7 +37,7 @@ CREATE TABLE IF NOT EXISTS fin_account_data (
 
 | 接口 | 功能 |
 | --- | --- |
-| `GET /api/auth/session` | 会话用户（手机号脱敏）、短信服务是否接入 |
+| `GET /api/auth/session` | 会话用户（手机号脱敏）、短信服务是否接入、是否支持个人数据同步 |
 | `POST /api/auth/send-code` | `{ phone }`，成功返回重发间隔 |
 | `POST /api/auth/verify` | `{ phone, code }`，验证后签发 30 天 HttpOnly Cookie |
 | `POST /api/auth/logout` | 清除会话 Cookie |

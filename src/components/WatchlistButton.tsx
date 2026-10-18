@@ -1,10 +1,10 @@
 'use client';
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { useWatchlist } from './WatchlistProvider';
 import Modal from './Modal';
 import { groupNameError, UNGROUPED } from '@/lib/watchlist';
 
-export default function WatchlistButton({
+function WatchlistButton({
   code,
   name,
   compact = false,
@@ -163,3 +163,4 @@ export default function WatchlistButton({
     </>
   );
 }
+export default memo(WatchlistButton);

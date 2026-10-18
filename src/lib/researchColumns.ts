@@ -1,4 +1,5 @@
 export const RESEARCH_TABLE_KEY = 'fin.research.table.v1';
+export const RESEARCH_TABLE_VERSION = 2;
 export const RESEARCH_COLUMNS = [
   { id: 'pe', label: 'PE-TTM' },
   { id: 'pb', label: 'PB' },
@@ -18,10 +19,13 @@ export type ResearchSort = {
   direction: 'asc' | 'desc';
 };
 export interface ResearchTablePreferences {
+  /** Older saved preferences predate the dividend-yield column. */
+  version?: number;
   columns: ResearchColumnId[];
   sort: ResearchSort | null;
 }
 export const defaultResearchTable = (): ResearchTablePreferences => ({
+  version: RESEARCH_TABLE_VERSION,
   columns: ['pe', 'pb', 'dy', 'roe', 'netMargin', 'ocfPerShare', 'period'],
   sort: null,
 });
@@ -40,15 +44,18 @@ export function readResearchTable(raw: unknown): ResearchTablePreferences {
         ),
       ]
     : defaults.columns;
-  // 老偏好里没有「股息率」列时补上（紧随 PB 之后），让新列对既有用户生效
-  const migratedColumns: ResearchColumnId[] = columns.includes('dy')
-    ? columns
-    : (() => {
-        const at = columns.indexOf('pb');
-        return at >= 0
-          ? [...columns.slice(0, at + 1), 'dy', ...columns.slice(at + 1)]
-          : [...columns, 'dy'];
-      })();
+  // 仅迁移旧偏好；当前版本缺少 dy 表示用户隐藏，空数组始终表示隐藏全部。
+  const migratedColumns: ResearchColumnId[] =
+    value.version !== RESEARCH_TABLE_VERSION &&
+    columns.length > 0 &&
+    !columns.includes('dy')
+      ? (() => {
+          const at = columns.indexOf('pb');
+          return at >= 0
+            ? [...columns.slice(0, at + 1), 'dy', ...columns.slice(at + 1)]
+            : [...columns, 'dy'];
+        })()
+      : columns;
   const sort =
     value.sort &&
     (value.sort.column === 'name' ||
@@ -56,7 +63,7 @@ export function readResearchTable(raw: unknown): ResearchTablePreferences {
     ['asc', 'desc'].includes(value.sort.direction)
       ? value.sort
       : null;
-  return { columns: migratedColumns, sort };
+  return { version: RESEARCH_TABLE_VERSION, columns: migratedColumns, sort };
 }
 // Missing or nonfinite values stay last in both directions. Ties retain saved order.
 export function compareResearchValues(

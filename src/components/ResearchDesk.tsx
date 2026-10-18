@@ -18,6 +18,7 @@ import CompanyWindow from './CompanyWindow';
 import {
   RESEARCH_COLUMNS,
   RESEARCH_TABLE_KEY,
+  RESEARCH_TABLE_VERSION,
   defaultResearchTable,
   readResearchTable,
   compareResearchValues,
@@ -81,9 +82,9 @@ export default function ResearchDesk({
   const [otherAssets, setOtherAssets] = useState<Quote[]>([]);
   const [financials, setFinancials] = useState<Financial[]>([]);
   /** 预期股息率 %（symbol → 值，null 表示数据不可用） */
-  const [dividendYields, setDividendYields] = useState<Map<string, number | null>>(
-    () => new Map(),
-  );
+  const [dividendYields, setDividendYields] = useState<
+    Map<string, number | null>
+  >(() => new Map());
   const [loading, setLoading] = useState(true);
   const [finLoading, setFinLoading] = useState(false);
   const [error, setError] = useState('');
@@ -125,9 +126,10 @@ export default function ResearchDesk({
     RESEARCH_COLUMNS.find((c) => c.id === id)!,
   );
   function saveTable(next: ResearchTablePreferences) {
-    setTable(next);
+    const saved = { ...next, version: RESEARCH_TABLE_VERSION };
+    setTable(saved);
     try {
-      personalStorage.setItem(RESEARCH_TABLE_KEY, JSON.stringify(next));
+      personalStorage.setItem(RESEARCH_TABLE_KEY, JSON.stringify(saved));
       setPreferenceError('');
     } catch {
       setPreferenceError('表头设置未保存，浏览器存储不可用');
@@ -136,11 +138,16 @@ export default function ResearchDesk({
   function sortBy(column: ResearchSort['column']) {
     saveTable({
       ...table,
-      sort: {
-        column,
-        direction:
-          sort?.column === column && sort.direction === 'asc' ? 'desc' : 'asc',
-      },
+      sort:
+        sort?.column === column && sort.direction === 'desc'
+          ? null
+          : {
+              column,
+              direction:
+                sort?.column === column && sort.direction === 'asc'
+                  ? 'desc'
+                  : 'asc',
+            },
     });
   }
 
@@ -205,56 +212,71 @@ export default function ResearchDesk({
         const rows = all.filter((x) => x.kind === 'stock');
         setLoading(false);
         setFinLoading(rows.length > 0);
-        // Sequential batches keep first paint fast without flooding the financial source.
-        for (let i = 0; i < rows.length && alive; i += 4) {
-          const batch = rows.slice(i, i + 4);
+        async function loadFinancials() {
           try {
-            const j = await fetch('/api/finance-compare', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                codes: batch.map((r) => r.symbol),
-                years: 2,
-                granularity: 'quarter',
-                fields: ['roe', 'netMargin', 'ocfPerShare', 'debtRatio'],
-              }),
-            }).then((r) => r.json());
-            if (!alive) return;
-            if (!j.ok) throw Error(j.error ?? '财报获取失败');
-            setFinancials((prev) => [
-              ...prev.filter(
-                (f) =>
-                  !j.data.companies.some(
-                    (next: Financial) => next.code === f.code,
+            // Sequential batches keep first paint fast without flooding the financial source.
+            for (let i = 0; i < rows.length && alive; i += 4) {
+              const batch = rows.slice(i, i + 4);
+              try {
+                const j = await fetch('/api/finance-compare', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    codes: batch.map((r) => r.symbol),
+                    years: 2,
+                    granularity: 'quarter',
+                    fields: ['roe', 'netMargin', 'ocfPerShare', 'debtRatio'],
+                  }),
+                }).then((r) => r.json());
+                if (!alive) return;
+                if (!j.ok) throw Error(j.error ?? '财报获取失败');
+                setFinancials((prev) => [
+                  ...prev.filter(
+                    (f) =>
+                      !j.data.companies.some(
+                        (next: Financial) => next.code === f.code,
+                      ),
                   ),
-              ),
-              ...j.data.companies,
-            ]);
-          } catch {
-            if (alive)
-              setFinErrors((prev) => [...prev, ...batch.map((r) => r.name)]);
-          }
-        }
-        // 预期股息率（与估值分析同一算法），单独批量取，失败只置空不阻塞列表
-        for (let i = 0; i < rows.length && alive; i += 20) {
-          const batch = rows.slice(i, i + 20);
-          try {
-            const j = await fetch(
-              `/api/dividend-yield?codes=${encodeURIComponent(batch.map((r) => r.symbol).join(','))}`,
-            ).then((r) => r.json());
-            if (!alive) return;
-            if (j.ok && Array.isArray(j.data)) {
-              setDividendYields((prev) => {
-                const next = new Map(prev);
-                for (const row of j.data as { symbol: string; dy: number | null }[])
-                  next.set(row.symbol, row.dy);
-                return next;
-              });
+                  ...j.data.companies,
+                ]);
+              } catch {
+                if (alive)
+                  setFinErrors((prev) => [
+                    ...prev,
+                    ...batch.map((r) => r.name),
+                  ]);
+              }
             }
-          } catch {
-            /* 预期股息率不可用时该列显示「—」 */
+          } finally {
+            if (alive) setFinLoading(false);
           }
         }
+        async function loadDividendYields() {
+          // 预期股息率（与估值分析同一算法），单独批量取，失败只置空不阻塞列表
+          for (let i = 0; i < rows.length && alive; i += 20) {
+            const batch = rows.slice(i, i + 20);
+            try {
+              const j = await fetch(
+                `/api/dividend-yield?codes=${encodeURIComponent(batch.map((r) => r.symbol).join(','))}`,
+              ).then((r) => r.json());
+              if (!alive) return;
+              if (j.ok && Array.isArray(j.data)) {
+                setDividendYields((prev) => {
+                  const next = new Map(prev);
+                  for (const row of j.data as {
+                    symbol: string;
+                    dy: number | null;
+                  }[])
+                    next.set(row.symbol, row.dy);
+                  return next;
+                });
+              }
+            } catch {
+              /* 预期股息率不可用时该列显示「—」 */
+            }
+          }
+        }
+        await Promise.all([loadFinancials(), loadDividendYields()]);
       } catch (e) {
         if (alive) setError(e instanceof Error ? e.message : '数据获取失败');
       } finally {
@@ -340,70 +362,15 @@ export default function ResearchDesk({
   const destination = wl.groups.some((g) => g.id === moveTarget)
     ? moveTarget
     : UNGROUPED;
-  const reports = [...financials]
-    .filter((f) => f.periods.length)
-    .sort((a, b) => b.periods.at(-1)!.localeCompare(a.periods.at(-1)!));
-
   return (
     <div className="space-y-6">
-      {!management && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="card px-5 py-4">
-            <CompanyWindow codes={savedCodes.map((symbol) => symbol.replace(/^(SH|SZ|BJ)/, ''))} />
-          </div>
-          {[
-            ['关注公司', loading ? '—' : quotes.length, '家'],
-            ['最近报告期', reports[0]?.periods.at(-1) ?? '—', ''],
-            ['研究笔记', notebook.notes.length, '条'],
-          ].map(([label, count, unit]) =>
-            label === '研究笔记' ? (
-              <button
-                key={label}
-                type="button"
-                aria-label={`打开研究笔记，共${count}条`}
-                aria-haspopup="dialog"
-                aria-expanded={notesOpen}
-                disabled={!notebook.ready}
-                onClick={() => {
-                  setNoteContext(null);
-                  setNotesOpen(true);
-                }}
-                className="card px-5 py-4 text-left transition-colors hover:border-brand-200 hover:bg-brand-50/50 disabled:opacity-50"
-              >
-                <div className="text-xs font-medium text-brand-700">
-                  研究笔记
-                </div>
-                <div className="mt-3 text-3xl font-semibold tabular-nums tracking-tight text-slate-900">
-                  {count}
-                  <span className="ml-1.5 text-xs font-normal text-slate-500">
-                    条
-                  </span>
-                </div>
-              </button>
-            ) : (
-              <div key={label} className="card px-5 py-4">
-                <div className="text-xs text-slate-500">{label}</div>
-                <div
-                  className={`mt-3 font-semibold tabular-nums tracking-tight text-slate-900 ${label === '最近报告期' ? 'text-xl' : 'text-3xl'}`}
-                >
-                  {count}
-                  <span className="ml-1.5 text-xs font-normal text-slate-500">
-                    {unit}
-                  </span>
-                </div>
-              </div>
-            ),
-          )}
-        </div>
-      )}
-
       <section
         id="research-stocks"
         tabIndex={-1}
         aria-labelledby="research-stocks-title"
         className="card scroll-mt-24 overflow-hidden"
       >
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h2 id="research-stocks-title" className="section-title">
               基本面跟踪
@@ -413,47 +380,47 @@ export default function ResearchDesk({
               {finLoading ? ' · 财报加载中…' : ''}
             </span>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            {!management && (
+              <>
+                <CompanyWindow
+                  codes={savedCodes.map((symbol) =>
+                    symbol.replace(/^(SH|SZ|BJ)/, ''),
+                  )}
+                />
+                <button
+                  type="button"
+                  aria-label={`打开研究笔记，共${notebook.notes.length}条`}
+                  aria-haspopup="dialog"
+                  aria-expanded={notesOpen}
+                  disabled={!notebook.ready}
+                  onClick={() => {
+                    setNoteContext(null);
+                    setNotesOpen(true);
+                  }}
+                  className="inline-flex h-9 shrink-0 items-center gap-2 rounded-md border border-brand-100 bg-brand-50 px-3 text-[13px] font-medium text-brand-700 transition-colors hover:bg-brand-100 disabled:opacity-50"
+                >
+                  研究笔记
+                  <span className="text-xs font-normal tabular-nums text-slate-500">
+                    {notebook.notes.length} 条
+                  </span>
+                </button>
+                <span
+                  aria-hidden="true"
+                  className="mx-1 hidden h-5 border-l border-slate-200 lg:block"
+                />
+              </>
+            )}
             <input
               aria-label="筛选关注公司"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="公司名称 / 代码"
-              className="input !w-40"
+              className="input !min-h-9 !w-40 !text-xs"
             />
-            <select
-              aria-label="公司排序"
-              className="input !w-32"
-              value={sort ? `${sort.column}:${sort.direction}` : 'saved'}
-              onChange={(e) => {
-                const [column, direction] = e.target.value.split(':');
-                saveTable({
-                  ...table,
-                  sort:
-                    column === 'saved'
-                      ? null
-                      : {
-                          column: column as ResearchSort['column'],
-                          direction: direction as 'asc' | 'desc',
-                        },
-                });
-              }}
-            >
-              <option value="saved">手动顺序</option>
-              {[{ id: 'name', label: '公司' }, ...columns].flatMap((c) =>
-                ['asc', 'desc'].map((direction) => (
-                  <option
-                    key={`${c.id}:${direction}`}
-                    value={`${c.id}:${direction}`}
-                  >
-                    {c.label} {direction === 'asc' ? '升序' : '降序'}
-                  </option>
-                )),
-              )}
-            </select>
             <button
               type="button"
-              className="btn !text-xs"
+              className="btn !min-h-9 !px-3 !py-2 !text-xs"
               onClick={() => setColumnsOpen(true)}
             >
               自定义表头
@@ -545,7 +512,13 @@ export default function ResearchDesk({
           </p>
         )}
         <StockListViewport
-          resetKey={JSON.stringify([group, filter, sort, table.columns, safePage])}
+          resetKey={JSON.stringify([
+            group,
+            filter,
+            sort,
+            table.columns,
+            safePage,
+          ])}
         >
           <table
             aria-label="基本面股票列表"
@@ -566,8 +539,12 @@ export default function ResearchDesk({
                     ref={(el) => {
                       if (el)
                         el.indeterminate =
-                          pageRows.some((q) => visibleSelected.includes(q.symbol)) &&
-                          !pageRows.every((q) => visibleSelected.includes(q.symbol));
+                          pageRows.some((q) =>
+                            visibleSelected.includes(q.symbol),
+                          ) &&
+                          !pageRows.every((q) =>
+                            visibleSelected.includes(q.symbol),
+                          );
                     }}
                     onChange={(e) =>
                       setSelected(
@@ -692,7 +669,7 @@ export default function ResearchDesk({
                         aria-label={`拖动调整${q.name}顺序`}
                         title={
                           sort
-                            ? '选择手动顺序后可拖动'
+                            ? '取消表头排序后可拖动'
                             : '拖动调整顺序，或按 Alt + 上下方向键'
                         }
                         disabled={!!sort}
@@ -716,10 +693,27 @@ export default function ResearchDesk({
                           )
                             return;
                           e.preventDefault();
-                          const target =
-                            rows[index + (e.key === 'ArrowUp' ? -1 : 1)];
-                          if (target)
+                          const targetIndex =
+                            (safePage - 1) * PAGE_SIZE +
+                            index +
+                            (e.key === 'ArrowUp' ? -1 : 1);
+                          const target = rows[targetIndex];
+                          if (target) {
                             wl.reorderStock(q.symbol, target.symbol, group);
+                            setPage(Math.floor(targetIndex / PAGE_SIZE) + 1);
+                            requestAnimationFrame(() => {
+                              [
+                                ...document.querySelectorAll<HTMLTableRowElement>(
+                                  'tr[data-symbol]',
+                                ),
+                              ]
+                                .find((row) => row.dataset.symbol === q.symbol)
+                                ?.querySelector<HTMLButtonElement>(
+                                  'button[draggable]',
+                                )
+                                ?.focus();
+                            });
+                          }
                         }}
                         className="grid h-7 w-4 shrink-0 cursor-grab place-items-center rounded text-slate-400 hover:text-brand-600 active:cursor-grabbing disabled:cursor-default disabled:opacity-20"
                       >
@@ -888,7 +882,7 @@ export default function ResearchDesk({
                 type="button"
                 aria-label="上一页"
                 disabled={safePage <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => setPage(Math.max(1, safePage - 1))}
                 className="rounded-md border border-slate-200 px-2 py-1 text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 上一页
@@ -897,7 +891,7 @@ export default function ResearchDesk({
                 type="button"
                 aria-label="下一页"
                 disabled={safePage >= pageCount}
-                onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                onClick={() => setPage(Math.min(pageCount, safePage + 1))}
                 className="rounded-md border border-slate-200 px-2 py-1 text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 下一页

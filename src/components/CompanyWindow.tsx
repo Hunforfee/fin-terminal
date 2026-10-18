@@ -3,7 +3,7 @@
 /**
  * 公司窗口：自选公司公告的朋友圈式时间线。
  *
- * - 入口卡片显示「未读重要公告数」（红字提醒）或公告总数
+ * - 入口按钮显示「未读重要公告数」（红字提醒）或公告总数
  * - 弹窗内按时间倒序展示：公司头像块 + 日期 + 标题（重要红字/红标）+ 摘要
  * - 已读游标存 localStorage（fin.company-window.readAt），按时间戳判断未读
  */
@@ -90,7 +90,9 @@ export default function CompanyWindow({ codes }: { codes: string[] }) {
   const unreadImportant = useMemo(
     () =>
       (entries ?? []).filter(
-        (e) => e.important && new Date(`${e.date}T23:59:59+08:00`).getTime() > readAt,
+        (e) =>
+          e.important &&
+          new Date(`${e.date}T23:59:59+08:00`).getTime() > readAt,
       ).length,
     [entries, readAt],
   );
@@ -102,7 +104,7 @@ export default function CompanyWindow({ codes }: { codes: string[] }) {
     }
   };
 
-  // 挂载即加载公告，保证首页卡片能显示未读重要公告红字提醒
+  // 挂载即加载公告，保证入口能显示未读重要公告红字提醒
   useEffect(() => {
     load();
   }, [load]);
@@ -128,22 +130,26 @@ export default function CompanyWindow({ codes }: { codes: string[] }) {
       <button
         type="button"
         onClick={openWindow}
-        className="group/stat cursor-pointer text-left"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={
+          unreadImportant > 0
+            ? `打开公司窗口，${unreadImportant}条重要公告`
+            : `打开公司窗口${entries ? `，${entries.length}条动态` : ''}`
+        }
+        className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-md border border-brand-100 bg-brand-50 px-3 text-[13px] font-medium text-brand-700 transition-colors hover:bg-brand-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
         title="查看自选公司公告与重大事项"
       >
-        <div className="text-[11px] text-slate-400">公司窗口</div>
-        <div className="mt-0.5 flex items-baseline gap-1.5">
-          {unreadImportant > 0 ? (
-            <span className="text-xl font-semibold tabular text-red-600">
-              {unreadImportant} 条重要公告
-            </span>
-          ) : (
-            <span className="text-xl font-semibold tabular text-slate-800">
-              {entries ? entries.length : '—'}
-              <span className="ml-1 text-xs font-normal text-slate-400">条动态</span>
-            </span>
-          )}
-        </div>
+        <span>公司窗口</span>
+        {unreadImportant > 0 ? (
+          <span className="text-xs font-medium tabular-nums text-red-600">
+            {unreadImportant} 条重要公告
+          </span>
+        ) : (
+          <span className="text-xs font-normal tabular-nums text-slate-500">
+            {entries ? entries.length : '—'} 条动态
+          </span>
+        )}
       </button>
 
       <Modal
@@ -245,9 +251,7 @@ function ArticleBody({ artCode }: { artCode: string }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let alive = true;
-    fetch(
-      `/api/announcement-content?artCode=${encodeURIComponent(artCode)}`,
-    )
+    fetch(`/api/announcement-content?artCode=${encodeURIComponent(artCode)}`)
       .then((r) => r.json())
       .then((j) => {
         if (!alive) return;

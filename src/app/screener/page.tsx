@@ -7,6 +7,7 @@ import { normalizeStockCode } from '@/lib/datasource/codes';
 import { useSearchParams } from 'next/navigation';
 import { INDUSTRIES } from '@/lib/universe';
 import { pct, price, yi } from '@/lib/format';
+import { compareResearchValues } from '@/lib/researchColumns';
 
 interface Row {
   code: string;
@@ -82,21 +83,29 @@ function ScreenerInner() {
 
   useEffect(() => {
     let alive = true;
+    const controller = new AbortController();
     setLoading(true);
-    fetch(`/api/screen?${query}`)
-      .then((r) => r.json())
-      .then((j) => {
-        if (!alive) return;
-        if (j.ok) {
-          setRows(j.data.rows);
-          setTotal(j.data.total);
-          setErr(null);
-        } else setErr(j.error ?? '筛选失败');
-      })
-      .catch((e) => alive && setErr(String(e)))
-      .finally(() => alive && setLoading(false));
+    setErr(null);
+    setRows([]);
+    setTotal(0);
+    const timer = setTimeout(() => {
+      fetch(`/api/screen?${query}`, { signal: controller.signal })
+        .then((r) => r.json())
+        .then((j) => {
+          if (!alive) return;
+          if (j.ok) {
+            setRows(j.data.rows);
+            setTotal(j.data.total);
+            setErr(null);
+          } else setErr(j.error ?? '筛选失败');
+        })
+        .catch((e) => alive && setErr(String(e)))
+        .finally(() => alive && setLoading(false));
+    }, 220);
     return () => {
       alive = false;
+      clearTimeout(timer);
+      controller.abort();
     };
   }, [query]);
 
@@ -104,11 +113,11 @@ function ScreenerInner() {
     setCriteria((c) => ({ ...c, [k]: v }));
 
   const sorted = [...rows].sort((a, b) => {
-    const va = a[sort.key];
-    const vb = b[sort.key];
-    const na = typeof va === 'number' ? va : -Infinity;
-    const nb = typeof vb === 'number' ? vb : -Infinity;
-    return sort.desc ? nb - na : na - nb;
+    return compareResearchValues(
+      a[sort.key],
+      b[sort.key],
+      sort.desc ? 'desc' : 'asc',
+    );
   });
 
   const exportCsv = () => {
@@ -134,7 +143,9 @@ function ScreenerInner() {
         r.pb ?? '',
         r.roe?.toFixed(2) ?? '',
         r.totalMarketCap ?? '',
-      ].join(','),
+      ]
+        .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
+        .join(','),
     );
     const blob = new Blob([`\uFEFF${head.join(',')}\n${lines.join('\n')}`], {
       type: 'text/csv;charset=utf-8',
@@ -149,18 +160,28 @@ function ScreenerInner() {
 
   const head = (key: keyof Row, label: string) => (
     <th
-      className="th cursor-pointer select-none hover:text-slate-800"
-      onClick={() =>
-        setSort((s) => ({ key, desc: s.key === key ? !s.desc : true }))
+      className="th hover:text-slate-800"
+      aria-sort={
+        sort.key === key ? (sort.desc ? 'descending' : 'ascending') : 'none'
       }
     >
-      {label}
-      {sort.key === key ? (sort.desc ? ' ↓' : ' ↑') : ''}
+      <button
+        type="button"
+        onClick={() =>
+          setSort((s) => ({
+            key,
+            desc: s.key === key ? !s.desc : typeof rows[0]?.[key] === 'number',
+          }))
+        }
+      >
+        {label}
+        {sort.key === key ? (sort.desc ? ' ↓' : ' ↑') : ''}
+      </button>
     </th>
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <div>
         <h1 className="page-title">条件选股</h1>
         <p className="mt-1 text-xs text-slate-500">
@@ -170,7 +191,7 @@ function ScreenerInner() {
       </div>
 
       {/* 筛选面板 */}
-      <div className="card-pad space-y-5">
+      <div className="card-pad space-y-3">
         <div className="flex flex-wrap gap-1.5">
           {PRESETS.map((p) => (
             <button
@@ -251,10 +272,13 @@ function ScreenerInner() {
       </div>
 
       <div className="card max-h-[680px] overflow-auto">
-        <table className="min-w-full">
+        <table
+          aria-label="条件选股结果"
+          className="dense-data-table min-w-[760px] w-full"
+        >
           <thead className="sticky top-0 z-10 border-b border-slate-100 bg-slate-50">
             <tr>
-              {head('code', '名称/代码')}
+              {head('name', '公司')}
               {head('industry', '行业')}
               {head('price', '最新价')}
               {head('pe', 'PE(TTM)')}
@@ -265,6 +289,13 @@ function ScreenerInner() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
+            {loading && (
+              <tr>
+                <td colSpan={8} className="td !py-8 text-center text-slate-500">
+                  筛选中…
+                </td>
+              </tr>
+            )}
             {!loading && sorted.length === 0 && (
               <tr>
                 <td colSpan={8} className="td py-8 text-center text-slate-400">
@@ -277,18 +308,27 @@ function ScreenerInner() {
                 <td className="td">
                   <Link
                     href={`/stock/${r.code}`}
+                    prefetch={false}
+                    title={`${r.code} · ${r.industry}`}
                     className="hover:text-brand-600"
                   >
                     <div className="font-medium text-slate-900">{r.name}</div>
-                    <div className="font-mono text-xs text-slate-400">
-                      {r.code}
-                    </div>
                   </Link>
                 </td>
                 <td className="td text-xs text-slate-500">{r.industry}</td>
                 <td className="td font-medium">{price(r.price)}</td>
-                <td className="td">{r.pe ? r.pe.toFixed(2) : '亏损/--'}</td>
-                <td className="td">{r.pb ? r.pb.toFixed(2) : '--'}</td>
+                <td
+                  className={`td ${r.pe != null && r.pe < 0 ? '!text-amber-700' : ''}`}
+                >
+                  {r.pe != null && Number.isFinite(r.pe)
+                    ? r.pe.toFixed(2)
+                    : '—'}
+                </td>
+                <td className="td">
+                  {r.pb != null && Number.isFinite(r.pb)
+                    ? r.pb.toFixed(2)
+                    : '—'}
+                </td>
                 <td className="td">{pct(r.roe)}</td>
                 <td className="td">{yi(r.totalMarketCap)}</td>
                 <td className="td text-right">

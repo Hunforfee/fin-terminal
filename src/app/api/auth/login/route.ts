@@ -6,7 +6,11 @@ import {
   SESSION_COOKIE,
   SESSION_SECONDS,
 } from '@/lib/auth/session';
-import { verifyUser } from '@/lib/auth/userStore';
+import {
+  AccountStoreError,
+  normalizeUsername,
+  verifyUser,
+} from '@/lib/auth/userStore';
 import { allowAttempt } from '@/lib/auth/limits';
 
 export const runtime = 'nodejs';
@@ -31,9 +35,10 @@ export async function POST(request: NextRequest) {
     return fail('请求格式无效', 400);
   }
 
-  const username = typeof body.username === 'string' ? body.username.trim() : '';
-  const password = typeof body.password === 'string' ? body.password : '';
-  if (!username || !password) return fail('请输入用户名和密码', 400);
+  const username = normalizeUsername(body?.username);
+  const password = typeof body?.password === 'string' ? body.password : '';
+  if (!username || !password || password.length > 128)
+    return fail('请输入有效的用户名和密码', 400);
   if (!allowAttempt('login:' + username.toLowerCase(), 10, 600000))
     return fail('尝试过于频繁，请稍后再试', 429);
 
@@ -56,6 +61,8 @@ export async function POST(request: NextRequest) {
     );
     return response;
   } catch (e) {
+    if (e instanceof AccountStoreError)
+      return fail('账号服务暂不可用，请稍后重试', 503);
     return fail(e instanceof Error ? e.message : '登录失败', 401);
   }
 }

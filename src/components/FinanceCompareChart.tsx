@@ -3,10 +3,12 @@
 import { useMemo } from 'react';
 import EChart from './EChart';
 import type { IndicatorDef } from '@/lib/datasource/sinaFinancial';
+import { alignFinancialComparison } from '@/lib/financeChart';
 
 export interface CompanySeries {
   code: string;
   name: string;
+  periods?: string[];
   periodLabels: string[];
   values: (number | null)[];
 }
@@ -35,7 +37,8 @@ function stats(values: (number | null)[]) {
   return {
     max: sorted[sorted.length - 1],
     min: sorted[0],
-    median: sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2,
+    median:
+      sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2,
     mean: v.reduce((a, b) => a + b, 0) / v.length,
     current: values.at(-1) ?? null,
   };
@@ -66,7 +69,7 @@ function yFmt(unit: string) {
 
 /**
  * 理杏仁风格的双公司财务对比图：
- * 蓝（主）橙（对比）双序列，逐点数值标注，红色均值虚线，报告期横轴。
+ * 蓝（主）橙（对比）双序列，逐点数值标注，灰色均值虚线，报告期横轴。
  */
 export default function FinanceCompareChart({
   indicator,
@@ -76,6 +79,13 @@ export default function FinanceCompareChart({
   reportLabel,
   showLabels = false,
 }: FinanceCompareChartProps) {
+  const alignedCompare = useMemo(
+    () =>
+      compare
+        ? { ...compare, values: alignFinancialComparison(primary, compare) }
+        : null,
+    [primary, compare],
+  );
   const option = useMemo(() => {
     const labels = primary.periodLabels;
     const series: Record<string, unknown>[] = [];
@@ -93,7 +103,7 @@ export default function FinanceCompareChart({
       label: {
         show: showLabels,
         position: isPrimary ? 'top' : 'bottom',
-        fontSize: 10,
+        fontSize: 11,
         color,
         backgroundColor: 'rgba(255,255,255,0.92)',
         padding: [1, 2],
@@ -102,7 +112,12 @@ export default function FinanceCompareChart({
       },
       labelLayout: (p: { dataIndex: number }) => ({
         hideOverlap: true,
-        align: p.dataIndex === 0 ? 'left' : p.dataIndex === s.values.length - 1 ? 'right' : 'center',
+        align:
+          p.dataIndex === 0
+            ? 'left'
+            : p.dataIndex === s.values.length - 1
+              ? 'right'
+              : 'center',
       }),
       markLine: {
         silent: true,
@@ -132,8 +147,11 @@ export default function FinanceCompareChart({
     });
 
     series.push(mk(primary, C_PRIMARY, true));
-    if (compare && compare.periodLabels.length > 0) {
-      series.push(mk(compare, C_COMPARE, false));
+    if (
+      alignedCompare &&
+      alignedCompare.values.some((value) => value !== null)
+    ) {
+      series.push(mk(alignedCompare, C_COMPARE, false));
     }
 
     return {
@@ -141,6 +159,7 @@ export default function FinanceCompareChart({
       color: [C_PRIMARY, C_COMPARE],
       tooltip: {
         trigger: 'axis',
+        confine: true,
         backgroundColor: 'rgba(255,255,255,0.97)',
         borderColor: '#e2e8f0',
         textStyle: { color: '#0f172a', fontSize: 12 },
@@ -154,45 +173,53 @@ export default function FinanceCompareChart({
         itemHeight: 8,
         textStyle: { fontSize: 11, color: '#64748b' },
       },
-      grid: { left: 44, right: 16, top: showLabels ? 40 : 25, bottom: 26 },
+      grid: {
+        left: 8,
+        right: 12,
+        top: showLabels ? 40 : 28,
+        bottom: 8,
+        containLabel: true,
+      },
       xAxis: {
         type: 'category',
         data: labels,
         boundaryGap: false,
         axisLine: { lineStyle: { color: '#cbd5e1' } },
-        axisLabel: { color: '#94a3b8', fontSize: 10 },
+        axisLabel: { color: '#64748b', fontSize: 11, hideOverlap: true },
         axisTick: { show: false },
       },
       yAxis: {
         scale: true,
         axisLine: { show: false },
         axisLabel: {
-          color: '#94a3b8',
-          fontSize: 10,
+          color: '#64748b',
+          fontSize: 11,
           formatter: yFmt(indicator.unit),
         },
         splitLine: { lineStyle: { color: '#f1f5f9' } },
       },
       series,
     };
-  }, [primary, compare, indicator, showLabels]);
+  }, [primary, alignedCompare, indicator, showLabels]);
 
   const stA = stats(primary.values);
-  const stB = compare ? stats(compare.values) : null;
+  const stB = alignedCompare ? stats(alignedCompare.values) : null;
   const unitStr = String(indicator.unit);
 
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-[148px_minmax(0,1fr)]">
+    <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-[140px_minmax(0,1fr)]">
       {/* 统计卡（主公司口径，对齐参考图左栏） */}
-      <div className="space-y-2 sm:border-r sm:border-slate-100 sm:pr-4">
+      <div className="space-y-2 sm:border-r sm:border-slate-100 sm:pr-3">
         <div>
-          <div className="text-[11px] text-slate-400">最新所列报告期</div>
+          <div className="text-[11px] text-slate-500">最新所列报告期</div>
           <div className="text-2xl font-semibold tabular text-slate-900">
             {stA?.current != null ? fmtVal(stA.current, unitStr) : '--'}
           </div>
         </div>
         <div className="space-y-2 text-xs">
-          {reportLabel && <div className="mb-2 text-[11px] text-slate-400">{reportLabel}</div>}
+          {reportLabel && (
+            <div className="mb-2 text-[11px] text-slate-500">{reportLabel}</div>
+          )}
           {stA ? (
             <StatRows st={stA} unit={unitStr} />
           ) : (
@@ -201,7 +228,9 @@ export default function FinanceCompareChart({
         </div>
         {stB && (
           <div className="space-y-1 border-t border-slate-100 pt-2 text-xs">
-            <div className="mb-1 font-medium text-slate-700">对比（{compare!.name}）</div>
+            <div className="mb-1 font-medium text-slate-700">
+              对比（{compare!.name}）
+            </div>
             <StatRows st={stB} unit={unitStr} color={C_COMPARE} />
           </div>
         )}
@@ -232,7 +261,10 @@ function StatRows({
       {rows.map(([k, v]) => (
         <div key={k} className="flex justify-between">
           <span className="text-slate-500">{k}</span>
-          <span className="tabular font-medium" style={{ color: color ?? '#334155' }}>
+          <span
+            className="tabular font-medium"
+            style={{ color: color ?? '#334155' }}
+          >
             {fmtVal(v, unit)}
           </span>
         </div>

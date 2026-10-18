@@ -63,6 +63,8 @@ export default function CompanyWindow({ codes }: { codes: string[] }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [maximized, setMaximized] = useState(false);
   const openedRef = useRef(false);
+  const requestRef = useRef(0);
+  const requestController = useRef<AbortController | null>(null);
 
   useEffect(() => {
     setReadAt(readCursor());
@@ -71,19 +73,29 @@ export default function CompanyWindow({ codes }: { codes: string[] }) {
   const codesKey = codes.slice(0, 40).join(',');
 
   const load = useCallback(() => {
+    const request = ++requestRef.current;
+    requestController.current?.abort();
+    setError('');
     if (!codesKey) {
       setEntries([]);
       return;
     }
+    const controller = new AbortController();
+    requestController.current = controller;
     setEntries(null);
-    setError('');
-    fetch(`/api/company-window?codes=${encodeURIComponent(codesKey)}`)
+    fetch(`/api/company-window?codes=${encodeURIComponent(codesKey)}`, {
+      signal: controller.signal,
+    })
       .then((r) => r.json())
       .then((j) => {
+        if (request !== requestRef.current) return;
         if (j?.ok && Array.isArray(j.data)) setEntries(j.data as Entry[]);
         else setError(j?.error || '公告获取失败');
       })
-      .catch(() => setError('公告获取失败，请稍后重试'));
+      .catch(() => {
+        if (request === requestRef.current && !controller.signal.aborted)
+          setError('公告获取失败，请稍后重试');
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [codesKey]);
 
@@ -107,6 +119,10 @@ export default function CompanyWindow({ codes }: { codes: string[] }) {
   // 挂载即加载公告，保证入口能显示未读重要公告红字提醒
   useEffect(() => {
     load();
+    return () => {
+      ++requestRef.current;
+      requestController.current?.abort();
+    };
   }, [load]);
 
   const markAllRead = () => {
@@ -137,7 +153,7 @@ export default function CompanyWindow({ codes }: { codes: string[] }) {
             ? `打开公司窗口，${unreadImportant}条重要公告`
             : `打开公司窗口${entries ? `，${entries.length}条动态` : ''}`
         }
-        className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-md border border-brand-100 bg-brand-50 px-3 text-[13px] font-medium text-brand-700 transition-colors hover:bg-brand-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+        className="inline-flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-md border border-brand-100 bg-brand-50 px-2.5 text-[13px] font-medium text-brand-700 transition-colors hover:bg-brand-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 [@media(pointer:coarse)]:min-h-10"
         title="查看自选公司公告与重大事项"
       >
         <span>公司窗口</span>

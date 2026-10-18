@@ -89,7 +89,7 @@ function StockName({
         onKeyDown={(e) => {
           if (e.key === 'Escape') setPosition(null);
         }}
-        className="whitespace-nowrap font-medium text-slate-800 hover:text-brand-600 focus-visible:text-brand-600"
+        className="min-w-0 truncate font-medium text-slate-800 hover:text-brand-600 focus-visible:text-brand-600"
       >
         {quote.name}
       </Link>

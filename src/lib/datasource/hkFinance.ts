@@ -17,6 +17,7 @@ import { fetchJson } from './http';
 import type { CompanyFinancials, Granularity } from './sinaFinancial';
 import type { StatementCatalog, CustomFinancials } from './sinaStatements';
 import type { Candle, Valuation, ValuationPoint, ValuationStats, SeriesStats } from './types';
+import { hkStatementValue, statementFieldUnit } from '../financeFieldSemantics';
 
 export const PROVIDER_NAME = 'eastmoney-hkf10';
 
@@ -249,9 +250,6 @@ export async function fetchHkCurrency(secucode: string): Promise<string | null> 
   return (await fetchHkIndicatorPoints(secucode, 2)).at(-1)?.currency ?? null;
 }
 
-/** 元 → 万元（与 A 股新浪「万元」口径对齐） */
-const yuanToWan = (v: number | null): number | null => (v === null ? null : v / 1e4);
-
 /** 字段 key：bs_i1234 形式（i + 东财科目代码），label 用披露科目名 */
 export const itemKey = (prefix: 'bs' | 'pl' | 'cf', itemCode: string) => `${prefix}_i${itemCode}`;
 
@@ -280,7 +278,7 @@ export async function fetchHkCatalog(secucode: string): Promise<StatementCatalog
           label: nm,
           group: '全部科目',
           statement: id,
-          unit: 'wan' as const,
+          unit: statementFieldUnit(nm),
         }));
       return {
         id,
@@ -330,7 +328,7 @@ export async function fetchHkCustomFinancials(
         for (const r of rows) {
           if (!codes.has(r.itemCode)) continue;
           const rec = byDate.get(r.date);
-          if (rec) rec.set(itemKey(id === 'balance' ? 'bs' : id === 'profit' ? 'pl' : 'cf', r.itemCode), yuanToWan(r.amount));
+          if (rec) rec.set(itemKey(id === 'balance' ? 'bs' : id === 'profit' ? 'pl' : 'cf', r.itemCode), hkStatementValue(r.amount, r.itemName));
         }
       })(),
     );

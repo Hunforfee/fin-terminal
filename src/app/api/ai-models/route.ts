@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { aiConnection } from '@/lib/aiConnection';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,8 +9,11 @@ export const dynamic = 'force-dynamic';
  * 例：url = https://tokenhub.tencentmaas.com/v1/chat/completions → GET .../v1/models
  */
 export async function GET(req: NextRequest) {
-  const key = req.headers.get('x-ai-key') || process.env.AI_API_KEY || '';
-  const chatUrl = req.headers.get('x-ai-url') || process.env.AI_API_URL || '';
+  let connection;
+  try { connection = aiConnection(req.headers); } catch {
+    return NextResponse.json({ ok: false, error: 'AI 接口地址无效' }, { status: 400 });
+  }
+  const { key, url: chatUrl } = connection;
   if (!key) return NextResponse.json({ ok: false, error: '请先填写 API Key' }, { status: 400 });
   if (!chatUrl) return NextResponse.json({ ok: false, error: '请先选择服务商或填写接口地址' }, { status: 400 });
 
@@ -32,6 +36,8 @@ export async function GET(req: NextRequest) {
   }
 
   const j = (await r.json().catch(() => null)) as { data?: { id?: string }[] } | null;
-  const models = (j?.data ?? []).map((m) => m.id ?? '').filter(Boolean).sort();
+  if (!Array.isArray(j?.data))
+    return NextResponse.json({ ok: false, error: '模型列表返回格式无效' }, { status: 502 });
+  const models = j.data.map((m) => typeof m?.id === 'string' ? m.id : '').filter(Boolean).sort();
   return NextResponse.json({ ok: true, data: { models } });
 }

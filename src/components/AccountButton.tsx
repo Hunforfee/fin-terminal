@@ -15,7 +15,8 @@ export default function AccountButton() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const menu = useRef<HTMLDetailsElement>(null);
-  const validUsername = USERNAME_RE.test(username);
+  const validUsername =
+    USERNAME_RE.test(username) && !/^\d{11}$/.test(username);
   const validPassword = password.length >= 8;
   useEffect(() => {
     const outside = (event: PointerEvent) => {
@@ -194,7 +195,9 @@ export default function AccountButton() {
             <span className="mb-2 block text-xs text-slate-500">密码</span>
             <input
               aria-label="密码"
-              autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+              autoComplete={
+                mode === 'register' ? 'new-password' : 'current-password'
+              }
               type="password"
               value={password}
               maxLength={128}
@@ -216,7 +219,11 @@ export default function AccountButton() {
             disabled={!validUsername || !validPassword || submitting}
             className="btn-primary w-full"
           >
-            {submitting ? '提交中…' : mode === 'register' ? '注册并登录' : '登录'}
+            {submitting
+              ? '提交中…'
+              : mode === 'register'
+                ? '注册并登录'
+                : '登录'}
           </button>
           <p className="text-center text-[11px] leading-4 text-slate-400">
             登录后自选分组、研究笔记、财务配置与 AI 分析历史随账号保存。

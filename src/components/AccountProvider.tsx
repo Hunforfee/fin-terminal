@@ -64,6 +64,9 @@ export default function AccountProvider({
   const [user, setUser] = useState(initialUser);
   const userRef = useRef(user);
   userRef.current = user;
+  const authVersion = useRef(0);
+  const sessionRequest = useRef(0);
+  const authPending = useRef(false);
   const [phoneLoginReady, setPhoneLoginReady] = useState(false);
   const [hydrating, setHydrating] = useState(!!initialUser);
   const [status, setStatus] = useState<SyncStatus>(
@@ -89,10 +92,20 @@ export default function AccountProvider({
     setStatus(next ? 'loading' : 'local');
   }
   async function refreshSession() {
+    if (authPending.current) return;
+    const version = authVersion.current;
+    const request = ++sessionRequest.current;
     try {
-      const json = await fetch('/api/auth/session', { cache: 'no-store' }).then(
-        (r) => r.json(),
-      );
+      const json = await fetch('/api/auth/session', {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(12000),
+      }).then((r) => r.json());
+      if (
+        authPending.current ||
+        version !== authVersion.current ||
+        request !== sessionRequest.current
+      )
+        return;
       if (!json.ok) return;
       setPhoneLoginReady(json.data.phoneLoginReady === true);
       changeUser(json.data.user);
@@ -108,7 +121,7 @@ export default function AccountProvider({
     try {
       const response = await fetch('/api/account/data', {
         cache: 'no-store',
-        signal,
+        signal: signal ?? AbortSignal.timeout(12000),
       });
       const json = await response.json();
       if (signal?.aborted || userRef.current?.id !== id) return;
@@ -195,6 +208,7 @@ export default function AccountProvider({
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'x-fin-csrf': '1' },
         body: JSON.stringify({ revision: meta.current.revision, data }),
+        signal: AbortSignal.timeout(12000),
       });
       const json = await response.json();
       if (userRef.current?.id !== id) return;
@@ -287,15 +301,26 @@ export default function AccountProvider({
     router.refresh();
   }
   async function authRequest(path: string, username: string, password: string) {
-    const response = await fetch(path, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-fin-csrf': '1' },
-      body: JSON.stringify({ username, password }),
-    });
-    const json = await response.json();
-    if (!response.ok || !json.ok) throw new Error(json.error ?? '登录失败');
-    changeUser(json.data.user);
-    announceAuth();
+    const version = ++authVersion.current;
+    authPending.current = true;
+    try {
+      const response = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-fin-csrf': '1' },
+        body: JSON.stringify({ username, password }),
+        signal: AbortSignal.timeout(12000),
+      });
+      const json = await response.json();
+      if (!response.ok || !json.ok) throw new Error(json.error ?? '登录失败');
+      if (version !== authVersion.current) return;
+      changeUser(json.data.user);
+      announceAuth();
+    } finally {
+      if (version === authVersion.current) {
+        authPending.current = false;
+        authVersion.current++;
+      }
+    }
   }
   function login(username: string, password: string) {
     return authRequest('/api/auth/login', username, password);
@@ -304,14 +329,25 @@ export default function AccountProvider({
     return authRequest('/api/auth/register', username, password);
   }
   async function logout() {
-    await sync();
-    const response = await fetch('/api/auth/logout', {
-      method: 'POST',
-      headers: { 'x-fin-csrf': '1' },
-    });
-    if (!response.ok) throw new Error('退出失败，请重试');
-    changeUser(null);
-    announceAuth();
+    const version = ++authVersion.current;
+    authPending.current = true;
+    try {
+      await sync();
+      const response = await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'x-fin-csrf': '1' },
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!response.ok) throw new Error('退出失败，请重试');
+      if (version !== authVersion.current) return;
+      changeUser(null);
+      announceAuth();
+    } finally {
+      if (version === authVersion.current) {
+        authPending.current = false;
+        authVersion.current++;
+      }
+    }
   }
   function importGuest() {
     if (!user) return;

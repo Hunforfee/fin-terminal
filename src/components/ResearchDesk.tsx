@@ -110,9 +110,10 @@ export default function ResearchDesk({
   );
   const [filter, setFilter] = useState('');
   const tableRef = useRef<HTMLDivElement>(null);
+  const rowHeightRef = useRef<number | null>(null);
   const [jumpTo, setJumpTo] = useState('');
   /**
-   * 每页行数按视口高度自适应，保证「一屏一页、无需滚动」，范围 10–50 行。
+   * 每页行数按视口高度逐行自适应，尽量填满一屏。
    */
   const [pageSize, setPageSize] = useState(20);
   /** 当前页的起始行索引：缩放重排时按首行换算页码，不会把用户看的行跳走 */
@@ -126,16 +127,40 @@ export default function ResearchDesk({
       const el = tableRef.current;
       if (!el) return;
       const vh = window.visualViewport?.height ?? window.innerHeight;
-      const top = el.getBoundingClientRect().top;
+      const top = el.getBoundingClientRect().top + window.scrollY;
       const thead =
         el.querySelector('thead')?.getBoundingClientRect().height ?? 38;
-      // 行高必须用常量：tbody 高度由行数决定，用它反推会形成自反馈死循环
-      const ROW = 38;
+      const tableElement = el.querySelector('table');
+      const scale = tableElement?.offsetWidth
+        ? tableElement.getBoundingClientRect().width / tableElement.offsetWidth
+        : 1;
+      // 合并边框使首尾行少半条线；取前三行最大值，并让短末页沿用完整行高。
+      // 缓存未缩放的高度，缩放后再按实际比例换算，避免末页来回改变页长。
+      const measuredRows = [...el.querySelectorAll('tr[data-symbol]')].slice(
+        0,
+        3,
+      );
+      if (measuredRows.length) {
+        const rowHeight =
+          Math.max(
+            ...measuredRows.map((row) => row.getBoundingClientRect().height),
+          ) / scale;
+        rowHeightRef.current =
+          measuredRows.length >= 3
+            ? rowHeight
+            : Math.max(rowHeightRef.current ?? rowHeight, rowHeight);
+      }
+      const ROW = (rowHeightRef.current ?? 38) * scale;
       const footer =
-        (el.nextElementSibling as HTMLElement | null)?.offsetHeight ?? 47;
-      const usable = vh - top - thead - footer - 16 /* 底部留白 */;
+        el.nextElementSibling?.getBoundingClientRect().height ?? 47;
+      const scrollbar = Math.max(
+        0,
+        el.getBoundingClientRect().height -
+          (tableElement?.getBoundingClientRect().height ?? 0),
+      );
+      const usable = vh - top - thead - footer - scrollbar - 16;
       const fit = Math.floor(usable / ROW);
-      const next = Math.min(50, Math.max(10, Math.floor(fit / 5) * 5 || 10));
+      const next = Math.max(1, fit);
       setPageSize((prev) => (prev === next ? prev : next));
     };
     // 首帧布局与字体度量可能未稳定，测两次
@@ -146,12 +171,7 @@ export default function ResearchDesk({
     const observer = new ResizeObserver(measure);
     if (tableRef.current?.parentElement)
       observer.observe(tableRef.current.parentElement);
-    // 表格可能在数据/错误状态切换时重新挂载，位置随之改变，再测一次
-    const mo = new MutationObserver(measure);
-    if (tableRef.current?.parentElement)
-      mo.observe(tableRef.current.parentElement, { childList: true });
     return () => {
-      mo.disconnect();
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', measure);
       window.visualViewport?.removeEventListener('resize', measure);
@@ -432,8 +452,17 @@ export default function ResearchDesk({
     setPageStart((clamped - 1) * pageSize);
     requestAnimationFrame(() => {
       const top = tableRef.current?.getBoundingClientRect().top ?? 0;
-      if (top < 0)
-        window.scrollTo({ top: window.scrollY + top - 8, behavior: 'smooth' });
+      const offset =
+        (document.querySelector('header')?.getBoundingClientRect().height ??
+          44) + 8;
+      if (top < offset)
+        window.scrollTo({
+          top: window.scrollY + top - offset,
+          behavior: window.matchMedia('(prefers-reduced-motion: reduce)')
+            .matches
+            ? 'instant'
+            : 'smooth',
+        });
     });
   };
   const visibleSelected = selected.filter((symbol) =>
@@ -457,14 +486,14 @@ export default function ResearchDesk({
     ? moveTarget
     : UNGROUPED;
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <section
         id="research-stocks"
         tabIndex={-1}
         aria-labelledby="research-stocks-title"
         className="card scroll-mt-24 overflow-hidden"
       >
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 sm:px-4">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h2 id="research-stocks-title" className="section-title">
               基本面跟踪
@@ -492,7 +521,7 @@ export default function ResearchDesk({
                     setNoteContext(null);
                     setNotesOpen(true);
                   }}
-                  className="inline-flex h-9 shrink-0 items-center gap-2 rounded-md border border-brand-100 bg-brand-50 px-3 text-[13px] font-medium text-brand-700 transition-colors hover:bg-brand-100 disabled:opacity-50"
+                  className="inline-flex h-8 shrink-0 items-center gap-2 rounded-md border border-brand-100 bg-brand-50 px-2.5 text-[13px] font-medium text-brand-700 transition-colors hover:bg-brand-100 disabled:opacity-50 [@media(pointer:coarse)]:min-h-10"
                 >
                   研究笔记
                   <span className="text-xs font-normal tabular-nums text-slate-500">
@@ -510,11 +539,11 @@ export default function ResearchDesk({
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="公司名称 / 代码"
-              className="input !min-h-9 !w-40 !text-xs"
+              className="input !w-40 !text-xs"
             />
             <button
               type="button"
-              className="btn !min-h-9 !px-3 !py-2 !text-xs"
+              className="btn !px-2.5 !text-xs"
               onClick={() => setColumnsOpen(true)}
             >
               自定义表头
@@ -608,8 +637,8 @@ export default function ResearchDesk({
         <div ref={tableRef} className="overflow-x-auto">
           <table
             aria-label="基本面股票列表"
-            className="w-full text-right"
-            style={{ minWidth: 440 + columns.length * 105 }}
+            className="dense-data-table w-full text-right"
+            style={{ minWidth: 360 + columns.length * 105 }}
           >
             <thead>
               <tr>
@@ -650,7 +679,7 @@ export default function ResearchDesk({
                   />
                 </th>
                 <th
-                  className="th !w-[260px] !min-w-[260px] !max-w-[260px]"
+                  className="th !w-[180px] !min-w-[180px] !max-w-[180px] sm:!w-[260px] sm:!min-w-[260px] sm:!max-w-[260px]"
                   aria-sort={
                     sort?.column === 'name'
                       ? sort.direction === 'asc'
@@ -726,6 +755,7 @@ export default function ResearchDesk({
                 <tr
                   key={q.symbol}
                   data-symbol={q.symbol}
+                  aria-selected={visibleSelected.includes(q.symbol)}
                   onDragOver={(e) => {
                     if (
                       sort ||
@@ -748,7 +778,7 @@ export default function ResearchDesk({
                   }}
                   className={`group/stock transition hover:bg-slate-50/70 ${visibleSelected.includes(q.symbol) ? 'bg-brand-50/40' : ''} ${draggingStock === q.symbol ? 'opacity-40' : ''} ${dropStock === q.symbol && draggingStock !== q.symbol ? 'outline outline-1 -outline-offset-1 outline-brand-300 bg-brand-50/50' : ''}`}
                 >
-                  <td className="td !py-1.5 !pr-0">
+                  <td className="td !py-1 !pr-0">
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
@@ -828,8 +858,8 @@ export default function ResearchDesk({
                       />
                     </div>
                   </td>
-                  <td className="td !py-1.5 text-left">
-                    <div className="flex items-center gap-1.5">
+                  <td className="td max-w-[180px] !py-1 text-left sm:max-w-[260px]">
+                    <div className="flex min-w-0 items-center gap-1.5">
                       <StockName
                         quote={q}
                         groups={groupNames(q.symbol)}
@@ -852,7 +882,7 @@ export default function ResearchDesk({
                           });
                           setNotesOpen(true);
                         }}
-                        className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-opacity hover:bg-amber-50 focus-visible:text-amber-600 [@media(hover:none)]:opacity-100 ${noteCounts.get(q.symbol) ? 'text-amber-500' : 'text-slate-400 hover:text-amber-600 opacity-0 group-hover/stock:opacity-100 focus-visible:opacity-100'}`}
+                        className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-opacity hover:bg-amber-50 focus-visible:text-amber-600 [@media(hover:none)]:opacity-100 ${noteCounts.get(q.symbol) ? 'text-amber-500' : 'text-slate-400 hover:text-amber-600 opacity-0 group-hover/stock:opacity-100 focus-visible:opacity-100'}`}
                       >
                         <svg
                           aria-hidden="true"
@@ -866,7 +896,7 @@ export default function ResearchDesk({
                           <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
                         </svg>
                       </button>
-                      <span className="flex items-center opacity-0 transition-opacity group-hover/stock:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+                      <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover/stock:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
                         <button
                           type="button"
                           aria-label={
@@ -902,7 +932,7 @@ export default function ResearchDesk({
                     return (
                       <td
                         key={c.id}
-                        className={`td !py-1.5 ${c.id === 'roe' ? 'font-medium' : ''} ${c.id === 'period' ? '!text-xs !text-slate-500' : ''}`}
+                        className={`td !py-1 ${c.id === 'roe' ? 'font-semibold' : ''} ${c.id === 'dy' ? '!text-teal-700' : ''} ${typeof v === 'number' && v < 0 ? '!text-amber-700' : ''} ${c.id === 'period' ? '!text-xs !text-slate-500' : ''}`}
                       >
                         {c.id === 'period'
                           ? (v ?? (finLoading ? '…' : '—'))
@@ -913,7 +943,7 @@ export default function ResearchDesk({
                       </td>
                     );
                   })}
-                  <td className="td !py-1.5">
+                  <td className="td !py-1">
                     <div className="flex justify-end gap-4">
                       <Link
                         prefetch={false}
@@ -953,14 +983,14 @@ export default function ResearchDesk({
           </table>
         </div>
 
-        <div className="flex items-center gap-3 border-t border-slate-100 px-5 py-2.5 text-xs text-slate-500">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
           {finErrors.length > 0 && (
             <span className="text-amber-700" title={finErrors.join('、')}>
               财报暂不可用：{finErrors.length} 家公司
             </span>
           )}
           {rows.length > pageSize && (
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
               <span className="tabular">
                 第 {safePage} / {pageCount} 页 · 共 {rows.length} 家
               </span>

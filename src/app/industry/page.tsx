@@ -1,9 +1,10 @@
-"use client";
+'use client';
 
-import { Suspense, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import Link from "next/link";
-import { pct, signedPct, toneClass, yi, fmtTime } from "@/lib/format";
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { pct, signedPct, toneClass, yi, fmtTime } from '@/lib/format';
+import { compareResearchValues } from '@/lib/researchColumns';
 
 interface TreeL3 {
   name: string;
@@ -46,17 +47,17 @@ interface MembersResp {
 }
 
 type SortKey =
-  "totalMarketCap" | "changePct" | "pe" | "pb" | "roe" | "turnoverRate";
+  'totalMarketCap' | 'changePct' | 'pe' | 'pb' | 'roe' | 'turnoverRate';
 
 const COLUMNS: { key: SortKey; label: string }[] = [
-  { key: "pe", label: "PE-TTM" },
-  { key: "pb", label: "PB" },
-  { key: "roe", label: "ROE（估算）" },
-  { key: "totalMarketCap", label: "总市值" },
+  { key: 'pe', label: 'PE-TTM' },
+  { key: 'pb', label: 'PB' },
+  { key: 'roe', label: 'ROE（估算）' },
+  { key: 'totalMarketCap', label: '总市值' },
 ];
 
 function num(v: number | null, d = 2): string {
-  if (v === null || !Number.isFinite(v)) return "--";
+  if (v === null || !Number.isFinite(v)) return '--';
   return v.toFixed(d);
 }
 
@@ -72,8 +73,8 @@ export default function IndustryPage() {
 
 function IndustryContent() {
   const searchParams = useSearchParams();
-  const linkedNode = searchParams.get("node");
-  const linkedLevel = searchParams.get("level");
+  const linkedNode = searchParams.get('node');
+  const linkedLevel = searchParams.get('level');
   const [tree, setTree] = useState<TreeResp | null>(null);
   const [treeErr, setTreeErr] = useState<string | null>(null);
 
@@ -85,22 +86,22 @@ function IndustryContent() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const [sortKey, setSortKey] = useState<SortKey>("totalMarketCap");
+  const [sortKey, setSortKey] = useState<SortKey>('totalMarketCap');
   const [asc, setAsc] = useState(false);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState('');
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 
   // 分类树（轻量，仅一次）
   useEffect(() => {
     let alive = true;
-    fetch("/api/sw-industry?tree=1")
+    fetch('/api/sw-industry?tree=1')
       .then((r) => r.json())
       .then((j) => {
         if (!alive) return;
         if (j.ok) {
           const t = j.data as TreeResp;
           setTree(t);
-        } else setTreeErr(j.error ?? "分类树加载失败");
+        } else setTreeErr(j.error ?? '分类树加载失败');
       })
       .catch((e) => alive && setTreeErr(String(e)));
     return () => {
@@ -112,21 +113,21 @@ function IndustryContent() {
   useEffect(() => {
     if (!tree) return;
     for (const first of tree.industries) {
-      if (linkedLevel === "1" && first.name === linkedNode) {
+      if (linkedLevel === '1' && first.name === linkedNode) {
         setL1(first.name);
         setL2(null);
         setL3(null);
         return;
       }
       for (const second of first.children) {
-        if (linkedLevel === "2" && second.name === linkedNode) {
+        if (linkedLevel === '2' && second.name === linkedNode) {
           setL1(first.name);
           setL2(second.name);
           setL3(null);
           return;
         }
         const third = second.children.find((item) => item.name === linkedNode);
-        if (third && (linkedLevel === "3" || !linkedLevel)) {
+        if (third && (linkedLevel === '3' || !linkedLevel)) {
           setL1(first.name);
           setL2(second.name);
           setL3(third.name);
@@ -155,7 +156,7 @@ function IndustryContent() {
     if (l1) return { name: l1, level: 1 };
     return null;
   }, [l1, l2, l3]);
-  const targetKey = target ? `${target.level}:${target.name}` : "";
+  const targetKey = target ? `${target.level}:${target.name}` : '';
 
   useEffect(() => {
     if (!target) return;
@@ -163,6 +164,8 @@ function IndustryContent() {
     let alive = true;
     setLoading(true);
     setErr(null);
+    setData(null);
+    setUpdatedAt(null);
     fetch(`/api/sw-industry?node=${encodeURIComponent(name)}&level=${level}`)
       .then((r) => r.json())
       .then((j) => {
@@ -170,7 +173,7 @@ function IndustryContent() {
         if (j.ok) {
           setData(j.data as MembersResp);
           setUpdatedAt(new Date().toISOString());
-        } else setErr(j.error ?? "成分股加载失败");
+        } else setErr(j.error ?? '成分股加载失败');
       })
       .catch((e) => alive && setErr(String(e)))
       .finally(() => alive && setLoading(false));
@@ -188,11 +191,11 @@ function IndustryContent() {
         )
       : data.rows;
     return [...filtered].sort((a, b) => {
-      const va = a[sortKey];
-      const vb = b[sortKey];
-      const na = va === null ? -Infinity : va;
-      const nb = vb === null ? -Infinity : vb;
-      return asc ? na - nb : nb - na;
+      return compareResearchValues(
+        a[sortKey],
+        b[sortKey],
+        asc ? 'asc' : 'desc',
+      );
     });
   }, [data, q, sortKey, asc]);
 
@@ -237,14 +240,14 @@ function IndustryContent() {
     if (k === sortKey) setAsc((v) => !v);
     else {
       setSortKey(k);
-      setAsc(k === "pe" || k === "pb");
+      setAsc(k === 'pe' || k === 'pb');
     }
   }
 
   const breadcrumb = [l1, l2, l3].filter(Boolean) as string[];
 
   return (
-    <div className="w-full space-y-5">
+    <div className="w-full space-y-3">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
         <div>
           <h1 className="page-title flex items-center gap-3">
@@ -256,13 +259,14 @@ function IndustryContent() {
           <p className="mt-1 text-xs text-slate-500">
             {tree
               ? `${tree.stats.l1} 个一级 · ${tree.stats.l2} 个二级 · ${tree.stats.l3} 个三级行业，覆盖 ${tree.stats.stocks.toLocaleString()} 只 A 股`
-              : "正在加载分类树…"}
+              : '正在加载分类树…'}
           </p>
         </div>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="筛选成分股名称 / 代码"
+          aria-label="筛选行业成分股"
           className="w-40 rounded border border-slate-300 px-2.5 py-1.5 text-sm outline-none focus:border-brand-500 md:w-52"
         />
       </div>
@@ -274,25 +278,25 @@ function IndustryContent() {
       )}
 
       {/* 三级联动选择器 */}
-      <div className="card-pad mb-3 space-y-4">
+      <div className="card-pad space-y-2.5">
         {[
           {
-            label: "一级",
+            label: '一级',
             items: tree?.industries ?? [],
             active: l1,
-            key: "l1" as const,
+            key: 'l1' as const,
           },
           {
-            label: "二级",
+            label: '二级',
             items: curL1?.children ?? [],
             active: l2,
-            key: "l2" as const,
+            key: 'l2' as const,
           },
           {
-            label: "三级",
+            label: '三级',
             items: curL2?.children ?? [],
             active: l3,
-            key: "l3" as const,
+            key: 'l3' as const,
           },
         ].map((group) => (
           <div key={group.key} className="flex items-start gap-2">
@@ -300,18 +304,18 @@ function IndustryContent() {
               {group.label}
             </span>
             <div className="flex flex-wrap gap-1">
-              {group.key !== "l1" && (
+              {group.key !== 'l1' && (
                 <button
                   onClick={() => {
-                    if (group.key === "l2") {
+                    if (group.key === 'l2') {
                       setL2(null);
                       setL3(null);
                     } else setL3(null);
                   }}
                   className={`min-h-9 rounded-md px-2.5 py-1.5 text-xs transition ${
                     group.active === null
-                      ? "bg-brand-600 text-white"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      ? 'bg-brand-600 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
                   全部
@@ -323,22 +327,22 @@ function IndustryContent() {
                   <button
                     key={it.name}
                     onClick={() =>
-                      group.key === "l1"
+                      group.key === 'l1'
                         ? pickL1(it.name)
-                        : group.key === "l2"
+                        : group.key === 'l2'
                           ? pickL2(it.name)
                           : pickL3(it.name)
                     }
                     title={`${it.name}（${it.count} 只）`}
                     className={`rounded px-2 py-0.5 text-xs transition ${
                       active
-                        ? "bg-brand-600 text-white"
-                        : "bg-slate-50 text-slate-600 ring-1 ring-slate-200 hover:bg-brand-50 hover:text-brand-700"
+                        ? 'bg-brand-600 text-white'
+                        : 'bg-slate-50 text-slate-600 ring-1 ring-slate-200 hover:bg-brand-50 hover:text-brand-700'
                     }`}
                   >
                     {it.name}
                     <span
-                      className={`ml-1 ${active ? "text-white/70" : "text-slate-400"}`}
+                      className={`ml-1 ${active ? 'text-white/70' : 'text-slate-400'}`}
                     >
                       {it.count}
                     </span>
@@ -347,9 +351,9 @@ function IndustryContent() {
               })}
               {group.items.length === 0 && (
                 <span className="px-1 py-0.5 text-xs text-slate-300">
-                  {group.key === "l2"
-                    ? "请先选择一级行业"
-                    : "该二级行业无三级细分"}
+                  {group.key === 'l2'
+                    ? '请先选择一级行业'
+                    : '该二级行业无三级细分'}
                 </span>
               )}
             </div>
@@ -366,8 +370,8 @@ function IndustryContent() {
               <span
                 className={
                   i === breadcrumb.length - 1
-                    ? "text-brand-700"
-                    : "text-slate-500"
+                    ? 'text-brand-700'
+                    : 'text-slate-500'
                 }
               >
                 {b}
@@ -387,15 +391,15 @@ function IndustryContent() {
               )}
             </span>
             <span>
-              PE 中位{" "}
+              PE 中位{' '}
               <b className="text-slate-800">
-                {summary.peMed === null ? "--" : summary.peMed.toFixed(1)}
+                {summary.peMed === null ? '--' : summary.peMed.toFixed(1)}
               </b>
             </span>
             <span>
-              PB 中位{" "}
+              PB 中位{' '}
               <b className="text-slate-800">
-                {summary.pbMed === null ? "--" : summary.pbMed.toFixed(2)}
+                {summary.pbMed === null ? '--' : summary.pbMed.toFixed(2)}
               </b>
             </span>
             <span>
@@ -427,7 +431,10 @@ function IndustryContent() {
       )}
 
       <div className="max-h-[680px] overflow-auto rounded-xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[740px] text-sm">
+        <table
+          aria-label="行业成分股"
+          className="dense-data-table w-full min-w-[740px] text-[13px]"
+        >
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
               <th className="w-12 px-3 py-2 font-medium">#</th>
@@ -436,13 +443,21 @@ function IndustryContent() {
               {COLUMNS.map((c) => (
                 <th
                   key={c.key}
-                  onClick={() => clickSort(c.key)}
+                  aria-sort={
+                    sortKey === c.key
+                      ? asc
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  }
                   className="cursor-pointer select-none whitespace-nowrap px-3 py-2 font-medium hover:text-slate-900"
                 >
-                  {c.label}
-                  <span className="ml-1 text-slate-400">
-                    {sortKey === c.key ? (asc ? "↑" : "↓") : ""}
-                  </span>
+                  <button type="button" onClick={() => clickSort(c.key)}>
+                    {c.label}
+                    <span className="ml-1 text-slate-400">
+                      {sortKey === c.key ? (asc ? '↑' : '↓') : ''}
+                    </span>
+                  </button>
                 </th>
               ))}
             </tr>
@@ -470,6 +485,7 @@ function IndustryContent() {
                   <td className="px-3 py-2">
                     <Link
                       href={`/stock/${r.code}`}
+                      prefetch={false}
                       className="flex items-baseline gap-2"
                     >
                       <span className="font-medium text-brand-700 hover:underline">
@@ -484,7 +500,7 @@ function IndustryContent() {
                     {num(r.price)}
                   </td>
                   <td
-                    className={`px-3 py-2 tabular-nums ${r.pe !== null && r.pe < 0 ? "text-amber-600" : "text-slate-700"}`}
+                    className={`px-3 py-2 tabular-nums ${r.pe !== null && r.pe < 0 ? 'text-amber-600' : 'text-slate-700'}`}
                   >
                     {num(r.pe, 1)}
                   </td>
@@ -505,7 +521,7 @@ function IndustryContent() {
                   colSpan={7}
                   className="px-3 py-12 text-center text-sm text-slate-400"
                 >
-                  {data?.note ? "该分类暂无成分股" : "没有匹配的股票"}
+                  {data?.note ? '该分类暂无成分股' : '没有匹配的股票'}
                 </td>
               </tr>
             )}

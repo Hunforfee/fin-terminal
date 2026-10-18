@@ -17,7 +17,7 @@ export default async function FundListPage() {
       </div>
 
       <div className="card overflow-x-auto">
-        <table className="min-w-full">
+        <table className="dense-data-table min-w-[680px] w-full">
           <thead className="border-b border-slate-100 bg-slate-50/60">
             <tr>
               <th className="th">名称 / 代码</th>
@@ -40,16 +40,24 @@ export default async function FundListPage() {
             {quotes.map((q) => (
               <tr key={q.symbol} className="hover:bg-slate-50/60">
                 <td className="td">
-                  <Link href={`/fund/${q.code}`} className="hover:text-brand-600">
+                  <Link
+                    href={`/fund/${q.code}`}
+                    prefetch={false}
+                    title={q.code}
+                    className="hover:text-brand-600"
+                  >
                     <div className="font-medium text-slate-900">{q.name}</div>
-                    <div className="font-mono text-xs text-slate-400">{q.code}</div>
                   </Link>
                 </td>
                 <td className="td text-xs text-slate-500">
                   {metaMap.get(q.code)?.industry ?? '--'}
                 </td>
-                <td className={`td font-medium ${toneClass(q.change)}`}>{price(q.price)}</td>
-                <td className={`td ${toneClass(q.changePct)}`}>{signedPct(q.changePct)}</td>
+                <td className={`td font-medium ${toneClass(q.change)}`}>
+                  {price(q.price)}
+                </td>
+                <td className={`td ${toneClass(q.changePct)}`}>
+                  {signedPct(q.changePct)}
+                </td>
                 <td className="td text-slate-500">{price(q.open)}</td>
                 <td className="td text-slate-500">{price(q.high)}</td>
                 <td className="td text-slate-500">{price(q.low)}</td>

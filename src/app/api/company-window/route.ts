@@ -26,12 +26,15 @@ async function mapLimit<T, R>(
 ): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) {
-      const i = next++;
-      out[i] = await fn(items[i]);
-    }
-  });
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (next < items.length) {
+        const i = next++;
+        out[i] = await fn(items[i]);
+      }
+    },
+  );
   await Promise.all(workers);
   return out;
 }
@@ -40,14 +43,16 @@ async function mapLimit<T, R>(
 export async function GET(request: NextRequest) {
   const codesParam = request.nextUrl.searchParams.get('codes') ?? '';
   const codes = [
-    ...new Set(
+    ...new Map(
       codesParam
         .split(',')
         .map((c) => normalizeStockCode(c))
         .filter(
-          (n): n is NonNullable<ReturnType<typeof normalizeStockCode>> => !!n,
-        ),
-    ),
+          (n): n is NonNullable<ReturnType<typeof normalizeStockCode>> =>
+            !!n && n.market !== 'HK',
+        )
+        .map((n) => [n.symbol, n] as const),
+    ).values(),
   ].slice(0, 40);
   if (!codes.length) return json({ ok: true, data: [] });
 

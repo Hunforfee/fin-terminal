@@ -6,7 +6,12 @@ import {
   SESSION_COOKIE,
   SESSION_SECONDS,
 } from '@/lib/auth/session';
-import { checkPasswordStrength, registerUser } from '@/lib/auth/userStore';
+import {
+  AccountStoreError,
+  checkPasswordStrength,
+  normalizeUsername,
+  registerUser,
+} from '@/lib/auth/userStore';
 import { allowAttempt } from '@/lib/auth/limits';
 
 export const runtime = 'nodejs';
@@ -31,10 +36,13 @@ export async function POST(request: NextRequest) {
     return fail('请求格式无效', 400);
   }
 
-  const username = typeof body.username === 'string' ? body.username.trim() : '';
-  const password = body.password;
-  if (!/^[\w\u4e00-\u9fa5-]{3,24}$/.test(username))
-    return fail('用户名需 3-24 位字母、数字、下划线、中文或连字符', 400);
+  const username = normalizeUsername(body?.username);
+  const password = body?.password;
+  if (!username)
+    return fail(
+      '用户名需 3-24 位字母、数字、下划线、中文或连字符，不能是 11 位纯数字',
+      400,
+    );
   const weak = checkPasswordStrength(password);
   if (weak) return fail(weak, 400);
   if (!allowAttempt('register-ip', 10, 3600000))
@@ -62,6 +70,8 @@ export async function POST(request: NextRequest) {
     );
     return response;
   } catch (e) {
+    if (e instanceof AccountStoreError)
+      return fail('账号服务暂不可用，请稍后重试', 503);
     return fail(e instanceof Error ? e.message : '注册失败', 400);
   }
 }

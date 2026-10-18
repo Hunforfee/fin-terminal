@@ -15,6 +15,7 @@
 
 import { fetchText } from './http';
 import { fetchInterestExpenses, INTEREST_FIELDS, withInterestFields } from './interestExpenses';
+import { statementFieldUnit, type StatementFieldUnit } from '../financeFieldSemantics';
 
 export const PROVIDER_NAME = 'sina-statements';
 
@@ -47,7 +48,7 @@ export interface StatementFieldDef {
   group: string;
   statement: StatementId;
   /** 三大报表数值单位均为「万元」（新浪披露口径） */
-  unit: 'wan';
+  unit: StatementFieldUnit;
 }
 
 export interface FieldGroup {
@@ -139,7 +140,7 @@ const catalogCache = new Map<string, { at: number; catalog: StatementCatalog[] }
 const CATALOG_TTL = 24 * 60 * 60 * 1000;
 
 /** 解析单年页面 → 目录（失败返回 null） */
-function catalogFromPage(id: StatementId, parsed: { rows: ParsedRow[]; unit: string } | null): StatementCatalog | null {
+export function catalogFromPage(id: StatementId, parsed: { rows: ParsedRow[]; unit: string } | null): StatementCatalog | null {
   if (!parsed || parsed.rows.length === 0) return null;
   const meta = STATEMENT_META[id];
   const groups: FieldGroup[] = [];
@@ -158,7 +159,7 @@ function catalogFromPage(id: StatementId, parsed: { rows: ParsedRow[]; unit: str
         label: row.name,
         group: cur.label,
         statement: id,
-        unit: 'wan',
+        unit: statementFieldUnit(row.name),
       });
     }
   }

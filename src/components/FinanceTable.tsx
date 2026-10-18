@@ -8,6 +8,11 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import FieldPicker, { allFieldMetas, type PickerCatalog } from '@/components/FieldPicker';
 import { INDICATORS } from '@/lib/datasource/sinaFinancial';
 import { financeStorageKey, sanitizeFields, takeLegacyHkMergeFields } from '@/lib/financePreferences';
+import {
+  financialUnitText,
+  formatFinancialValue as fmtVal,
+  showSingleQuarterChange,
+} from '@/lib/financeFieldSemantics';
 
 interface CompanyFinancials {
   periodKinds?: Record<string,string>;
@@ -69,20 +74,6 @@ function loadShowAll(): boolean {
   } catch {
     return false;
   }
-}
-
-/** 万元 → 亿（统一折算，与行头「亿」标签保持一致） */
-function fmtWan(v: number | null): string {
-  if (v === null || !Number.isFinite(v)) return '—';
-  return (v / 1e4).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function fmtVal(v: number | null, unit: string): string {
-  if (v === null || !Number.isFinite(v)) return '—';
-  if (unit === 'pct') return `${v.toFixed(2)}%`;
-  if (unit === 'wan') return fmtWan(v);
-  if (unit === 'yuan') return v.toFixed(2);
-  return v.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /** 百分比变动（同比/环比），null 安全 */
@@ -410,7 +401,7 @@ export default function FinanceTable({ code }: { code: string }) {
     const header = ['指标', '单位', ...colsDesc.map((c) => c.label)];
     const lines = [header.join(',')];
     for (const r of rows) {
-      const unit = r.meta?.unit === 'pct' ? '%' : r.meta?.unit === 'wan' ? '万元' : '';
+      const unit = financialUnitText(r.meta?.unit ?? '', r.meta?.label ?? r.key, true);
       for (const c of companies) {
         const name = companies.length > 1 ? `${c.name}(${c.code})` : '';
         const cells = colsDesc.map((col) => {
@@ -609,18 +600,16 @@ export default function FinanceTable({ code }: { code: string }) {
               !err &&
               rows.map((r) => {
                 const unit = r.meta?.unit ?? '';
-                const isPct = unit === 'pct';
-                const unitText = isPct ? '%' : unit === 'wan' ? '亿' : unit === 'yuan' ? '元' : '';
+                const unitText = financialUnitText(unit, r.meta?.label ?? r.key);
                 return (
                   <tbody key={r.key} className="finance-metric border-b-2 border-slate-200">
                     {companies.map((c, ci) => {
                       const showYoY = companies.length === 1;
-                      // 「单季」只对流量类科目有意义（利润表/现金流量表、每股指标等）。
-                      // 资产负债表科目（bs_）是时点数，比率类指标（%、如 ROE/资产负债率）无单季概念，
-                      // 对它们套用“当期−上期再同比”会得出荒谬数值，一律不显示。
-                      const isStock = r.key.startsWith('bs_');
-                      const isRatio = unit === 'pct';
-                      const hasSingle = showYoY && !isStock && !isRatio && !r.key.startsWith('fx_');
+                      // 仅季报中的可加减利润/现金流总额显示单季同比。
+                      // 比率、存量和每股金额不满足累计相减条件。
+                      const isStock = r.key.startsWith('bs_') || ['bps', 'undistPerShare'].includes(r.key);
+                      const isRatio = unit === 'pct' || unit === 'ratio';
+                      const hasSingle = showYoY && showSingleQuarterChange(r.key, unit, granularity);
                       return (
                         <Fragment key={c.code}>
                           {/* 数值行 */}
@@ -709,10 +698,10 @@ export default function FinanceTable({ code }: { code: string }) {
         <div className="border-t border-slate-100 px-4 py-3 text-xs leading-6 text-slate-500">
           <details>
             <summary>报表口径</summary>
-            口径：三大报表科目为新浪披露的累计值（单位：万元，统一折算为亿元展示）；财务指标（ROE
+            口径：三大报表总额按万元获取并折算为亿元展示，每股金额和比率按各行单位展示；财务指标（ROE
             等）来自新浪财务指标页。 累积 = 与上一年同期累计值相比；单季 = 单季值（当期累计 −
             同年上一报告期累计）与上年同期单季相比，仅季报视图提供；null 表示当期未披露。
-            资产负债表科目为时点数、比率类指标（ROE、资产负债率等）为比率，均无“单季”概念，故不显示单季行。
+            资产负债表科目为时点数、比率和每股指标不作累计相减，故不显示单季行。
             {showAll &&
               ' 当前为「全部数据项」模式（178 个科目 + 21 项指标），科目为累计值口径，行较多可搜索定位。'}
             {view === 'indicators' && !showAll && ` 当前显示 ${rows.length} 项指标。`}

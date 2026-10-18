@@ -2,7 +2,12 @@
 
 import { useEffect, useRef } from 'react';
 import * as echarts from 'echarts/core';
-import { BarChart, CandlestickChart, LineChart, ScatterChart } from 'echarts/charts';
+import {
+  BarChart,
+  CandlestickChart,
+  LineChart,
+  ScatterChart,
+} from 'echarts/charts';
 import {
   AxisPointerComponent,
   DataZoomComponent,
@@ -60,6 +65,11 @@ export default function EChart({
 }: EChartProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const instRef = useRef<echarts.ECharts | null>(null);
+  const pointClickRef = useRef(onPointClick);
+
+  useEffect(() => {
+    pointClickRef.current = onPointClick;
+  }, [onPointClick]);
 
   useEffect(() => {
     if (!boxRef.current) return;
@@ -77,8 +87,8 @@ export default function EChart({
         name?: string;
         event?: { offsetX?: number; offsetY?: number };
       };
-      if (!onPointClick || !e?.name) return;
-      onPointClick({
+      if (!e?.name) return;
+      pointClickRef.current?.({
         name: String(e.name),
         px: e.event?.offsetX ?? 0,
         py: e.event?.offsetY ?? 0,
@@ -99,5 +109,11 @@ export default function EChart({
     instRef.current?.setOption(option, true);
   }, [option]);
 
-  return <div ref={boxRef} style={{ height, width: '100%', minWidth: 0 }} className={className} />;
+  return (
+    <div
+      ref={boxRef}
+      style={{ height, width: '100%', minWidth: 0 }}
+      className={className}
+    />
+  );
 }

@@ -19,8 +19,9 @@
  * 路由返回 503，与 WORKBUDDY_AUTH.md 的「无固定验证码/无后门」契约一致。
  */
 
-import { createHash, createHmac } from 'node:crypto';
+import { createHash, randomInt } from 'node:crypto';
 import { sessionSecret } from './session';
+import { tc3Authorization } from './tc3';
 
 const SMS_HOST = 'sms.tencentcloudapi.com';
 const SMS_SERVICE = 'sms';
@@ -45,7 +46,9 @@ function smsConfig() {
   const sdkAppId = process.env.SMS_SDK_APP_ID || '';
   const signName = process.env.SMS_SIGN_NAME || '';
   const templateId = process.env.SMS_TEMPLATE_ID || '';
-  const ok = Boolean(secretId && secretKey && sdkAppId && signName && templateId);
+  const ok = Boolean(
+    secretId && secretKey && sdkAppId && signName && templateId,
+  );
   return { secretId, secretKey, sdkAppId, signName, templateId, ok };
 }
 
@@ -66,26 +69,6 @@ function tc3Headers(
   payload: string,
   timestamp: number,
 ): Record<string, string> {
-  const date = new Date(timestamp * 1000).toISOString().slice(0, 10);
-  const canonicalRequest = [
-    'POST',
-    '/',
-    '',
-    `content-type:application/json; charset=utf-8\nhost:${SMS_HOST}\nx-tc-action:${SMS_ACTION.toLowerCase()}`,
-    '',
-    payload,
-  ].join('\n');
-  const hashedRequest = createHash('sha256').update(canonicalRequest).digest('hex');
-  const stringToSign = [
-    'TC3-HMAC-SHA256',
-    timestamp,
-    `${date}/${SMS_SERVICE}/tc3_request`,
-    hashedRequest,
-  ].join('\n');
-  const kDate = createHmac('sha256', `TC3${secretKey}`).update(date).digest();
-  const kService = createHmac('sha256', kDate).update(SMS_SERVICE).digest();
-  const kSigning = createHmac('sha256', kService).update('tc3_request').digest();
-  const signature = createHmac('sha256', kSigning).update(stringToSign).digest('hex');
   return {
     'Content-Type': 'application/json; charset=utf-8',
     Host: SMS_HOST,
@@ -93,7 +76,15 @@ function tc3Headers(
     'X-TC-Version': SMS_VERSION,
     'X-TC-Region': process.env.SMS_REGION || 'ap-guangzhou',
     'X-TC-Timestamp': String(timestamp),
-    Authorization: `TC3-HMAC-SHA256 Credential=${secretId}/${date}/${SMS_SERVICE}/tc3_request, SignedHeaders=content-type;host;x-tc-action, Signature=${signature}`,
+    Authorization: tc3Authorization({
+      secretId,
+      secretKey,
+      host: SMS_HOST,
+      service: SMS_SERVICE,
+      action: SMS_ACTION,
+      payload,
+      timestamp,
+    }),
   };
 }
 
@@ -101,7 +92,7 @@ function tc3Headers(
 export async function sendPhoneCode(phone: string): Promise<void> {
   const cfg = smsConfig();
   if (!cfg.ok) throw new Error('短信服务未配置');
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const code = String(randomInt(100000, 1000000));
   const payload = JSON.stringify({
     PhoneNumberSet: [`+86${phone}`],
     SmsSdkAppId: cfg.sdkAppId,
@@ -111,7 +102,12 @@ export async function sendPhoneCode(phone: string): Promise<void> {
   });
   const res = await fetch(`https://${SMS_HOST}/`, {
     method: 'POST',
-    headers: tc3Headers(cfg.secretId, cfg.secretKey, payload, Math.floor(Date.now() / 1000)),
+    headers: tc3Headers(
+      cfg.secretId,
+      cfg.secretKey,
+      payload,
+      Math.floor(Date.now() / 1000),
+    ),
     body: payload,
     signal: AbortSignal.timeout(10000),
   });
@@ -123,7 +119,7 @@ export async function sendPhoneCode(phone: string): Promise<void> {
   } | null;
   const apiErr = j?.Response?.Error;
   const sendErr = j?.Response?.SendStatusSet?.[0];
-  if (!res.ok || apiErr || (sendErr && sendErr.Code !== 'Ok')) {
+  if (!res.ok || apiErr || sendErr?.Code !== 'Ok') {
     const msg = apiErr?.Message ?? sendErr?.Message ?? `HTTP ${res.status}`;
     throw new Error(`短信发送失败：${msg}`);
   }
@@ -155,6 +151,7 @@ export async function verifyPhoneCode(
   if (entry.hash !== hashCode(phone, code)) throw new Error('验证码错误');
   store.delete(phone); // 一次性消费
   const id =
-    'u' + createHash('sha256').update(`fin-user:${phone}`).digest('hex').slice(0, 24);
+    'u' +
+    createHash('sha256').update(`fin-user:${phone}`).digest('hex').slice(0, 24);
   return { id, phone };
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { searchStockContext, enrichHitsWithPages, formatHits } from '@/lib/aiSearch';
 import { getValuation, getFinancial, getQuote, getCompanyProfile } from '@/lib/datasource';
+import { aiConnection } from '@/lib/aiConnection';
 
 /** 把站点自建的结构化数据（行情估值/财务摘要/公司资料）拼成注入 prompt 的文本块 */
 async function buildLocalDataBlock(code: string): Promise<string> {
@@ -74,8 +75,6 @@ export const maxDuration = 300;
  * 未配置时返回 400 与明确提示，不做任何伪 AI 兜底。
  */
 
-const DEFAULT_URL = 'https://api.deepseek.com/v1/chat/completions';
-const DEFAULT_MODEL = 'deepseek-chat';
 
 /**
  * 模型自适应降级：当指定模型不存在/未开通（400004 / model ... not exist / 402 未开通）时，
@@ -105,11 +104,19 @@ function chatOnce(url: string, key: string, model: string, systemContent: string
 export async function POST(req: NextRequest) {
   let body: { name?: string; code?: string; prompt?: string };
   try {
-    body = await req.json();
+    const raw = await req.text();
+    if (raw.length > 64000)
+      return NextResponse.json({ ok: false, error: '请求内容过长' }, { status: 413 });
+    body = JSON.parse(raw);
   } catch {
     return NextResponse.json({ ok: false, error: '请求体不是合法 JSON' }, { status: 400 });
   }
 
+  if (!body || typeof body !== 'object' || Array.isArray(body) ||
+    ['name', 'code', 'prompt'].some((field) => {
+      const value = body[field as keyof typeof body];
+      return value !== undefined && typeof value !== 'string';
+    })) return NextResponse.json({ ok: false, error: '请求格式无效' }, { status: 400 });
   const name = (body.name ?? '').trim();
   const code = (body.code ?? '').trim();
   const prompt = (body.prompt ?? '').trim();
@@ -117,9 +124,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: '提示词为空' }, { status: 400 });
   }
 
-  const key = req.headers.get('x-ai-key') || process.env.AI_API_KEY || '';
-  const url = req.headers.get('x-ai-url') || process.env.AI_API_URL || DEFAULT_URL;
-  const model = req.headers.get('x-ai-model') || process.env.AI_MODEL || DEFAULT_MODEL;
+  let connection;
+  try { connection = aiConnection(req.headers); } catch {
+    return NextResponse.json({ ok: false, error: 'AI 接口地址无效' }, { status: 400 });
+  }
+  const { key, url, model } = connection;
 
   if (!key) {
     return NextResponse.json(
@@ -190,8 +199,8 @@ export async function POST(req: NextRequest) {
   }
 
   const j = (await upstream.json().catch(() => null)) as { choices?: { message?: { content?: string } }[] } | null;
-  const content = j?.choices?.[0]?.message?.content ?? '';
-  if (!content) {
+  const content = j?.choices?.[0]?.message?.content;
+  if (typeof content !== 'string' || !content.trim()) {
     return NextResponse.json({ ok: false, error: 'AI 接口返回内容为空' }, { status: 502 });
   }
 

@@ -12,7 +12,7 @@
  * 一次性消费、哈希存储（会话密钥加盐）、重发覆盖旧码。
  */
 
-import { createHash } from 'node:crypto';
+import { createHash, randomInt } from 'node:crypto';
 import nodemailer from 'nodemailer';
 import { sessionSecret } from './session';
 
@@ -56,7 +56,7 @@ export function maskEmail(email: string): string {
 export async function sendEmailCode(email: string): Promise<void> {
   const cfg = smtpConfig();
   if (!cfg.ok) throw new Error('邮箱验证服务未配置');
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const code = String(randomInt(100000, 1000000));
   const minutes = Math.round(CODE_TTL_MS / 60000);
   const transporter = nodemailer.createTransport({
     host: cfg.host,
@@ -102,6 +102,7 @@ export async function verifyEmailCode(
   if (entry.hash !== hashCode(email, code)) throw new Error('验证码错误');
   store.delete(email); // 一次性消费
   const id =
-    'u' + createHash('sha256').update(`fin-user:${email}`).digest('hex').slice(0, 24);
+    'u' +
+    createHash('sha256').update(`fin-user:${email}`).digest('hex').slice(0, 24);
   return { id, email };
 }

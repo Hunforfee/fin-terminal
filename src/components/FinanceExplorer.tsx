@@ -3,13 +3,18 @@
 import { personalStorage } from '@/lib/personalStorage';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import FinanceCompareChart, { type CompanySeries } from '@/components/FinanceCompareChart';
+import FinanceCompareChart, {
+  type CompanySeries,
+} from '@/components/FinanceCompareChart';
 import FieldPicker, {
   allFieldMetas,
   type FieldMeta,
   type PickerCatalog,
 } from '@/components/FieldPicker';
-import { INDICATORS, type IndicatorGroup } from '@/lib/datasource/sinaFinancial';
+import {
+  INDICATORS,
+  type IndicatorGroup,
+} from '@/lib/datasource/sinaFinancial';
 import {
   checkExpr,
   evalFormula,
@@ -20,7 +25,12 @@ import {
   type Formula,
 } from '@/lib/financeFormulas';
 import { STOCKS } from '@/lib/universe';
-import { financeStorageKey, sanitizeFields, takeLegacyHkModules } from '@/lib/financePreferences';
+import { normalizeStockCode } from '@/lib/datasource/codes';
+import {
+  financeStorageKey,
+  sanitizeFields,
+  takeLegacyHkModules,
+} from '@/lib/financePreferences';
 
 interface CompanyFinancials {
   currency?: string;
@@ -41,7 +51,13 @@ interface Module {
   fields: string[];
 }
 
-const GROUPS: IndicatorGroup[] = ['profit', 'growth', 'solvency', 'cashflow', 'pershare'];
+const GROUPS: IndicatorGroup[] = [
+  'profit',
+  'growth',
+  'solvency',
+  'cashflow',
+  'pershare',
+];
 const GROUP_LABEL: Record<IndicatorGroup, string> = {
   profit: '盈利能力',
   growth: '成长性',
@@ -55,7 +71,14 @@ const DEFAULT_MODULES: Module[] = [
   {
     id: 'm-overview',
     name: '关键指标',
-    fields: ['roe', 'netMargin', 'revenueGrowth', 'profitGrowth', 'ocfPerShare', 'debtRatio'],
+    fields: [
+      'roe',
+      'netMargin',
+      'revenueGrowth',
+      'profitGrowth',
+      'ocfPerShare',
+      'debtRatio',
+    ],
   },
   ...GROUPS.map((g) => ({
     id: `m-${g}`,
@@ -78,9 +101,12 @@ function unitText(unit: string): string {
 
 /** 同行业的可选对比对象（含自身所属行业优先） */
 function peersOf(code: string): { code: string; name: string }[] {
-  const self = STOCKS.find((s) => s.code === code);
-  const pool = self ? STOCKS.filter((s) => s.industry === self.industry && s.code !== code) : [];
-  const rest = STOCKS.filter((s) => s.code !== code && !pool.includes(s));
+  const stockCode = normalizeStockCode(code)?.code ?? code;
+  const self = STOCKS.find((s) => s.code === stockCode);
+  const pool = self
+    ? STOCKS.filter((s) => s.industry === self.industry && s.code !== stockCode)
+    : [];
+  const rest = STOCKS.filter((s) => s.code !== stockCode && !pool.includes(s));
   return [...pool, ...rest].map((s) => ({ code: s.code, name: s.name }));
 }
 
@@ -93,7 +119,10 @@ function loadModules(storageKey = LS_MODULES): Module[] {
         const valid = arr
           .filter(
             (m) =>
-              m && typeof m.id === 'string' && typeof m.name === 'string' && Array.isArray(m.fields)
+              m &&
+              typeof m.id === 'string' &&
+              typeof m.name === 'string' &&
+              Array.isArray(m.fields),
           )
           .map((m) => ({
             id: m.id,
@@ -124,7 +153,9 @@ export default function FinanceExplorer({ code }: { code: string }) {
   const [renameDraft, setRenameDraft] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [compareCode, setCompareCode] = useState<string>('');
-  const [granularity, setGranularity] = useState<'annual' | 'semi' | 'quarter'>('annual');
+  const [granularity, setGranularity] = useState<'annual' | 'semi' | 'quarter'>(
+    'annual',
+  );
   const [years, setYears] = useState<5 | 10>(10);
   const [customData, setCustomData] = useState<CustomData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -146,7 +177,12 @@ export default function FinanceExplorer({ code }: { code: string }) {
   useEffect(() => {
     const dismiss = (event: PointerEvent) => {
       const menu = moduleMenuRef.current;
-      if (menu?.open && event.target instanceof Node && !menu.contains(event.target)) menu.open = false;
+      if (
+        menu?.open &&
+        event.target instanceof Node &&
+        !menu.contains(event.target)
+      )
+        menu.open = false;
     };
     const escape = (event: KeyboardEvent) => {
       const menu = moduleMenuRef.current;
@@ -180,7 +216,11 @@ export default function FinanceExplorer({ code }: { code: string }) {
       const savedActive = personalStorage.getItem(activeKey);
       const url = new URLSearchParams(window.location.search);
       if (url.get('picker') === '1') setPickerOpen(true);
-      setActiveId(savedActive && ms.some(m => m.id === savedActive) ? savedActive : ms[0].id);
+      setActiveId(
+        savedActive && ms.some((m) => m.id === savedActive)
+          ? savedActive
+          : ms[0].id,
+      );
       setFormulas(mergedFormulas());
     } catch {
       /* ignore */
@@ -244,7 +284,9 @@ export default function FinanceExplorer({ code }: { code: string }) {
   // 公式字段不直接请求：但其依赖字段必须一并请求，否则公式无数据可算
   const fetchFields = useMemo(() => {
     const base = active.fields.filter((k) => !k.startsWith('fx_'));
-    const allKeys = Array.from(fieldMetas.keys()).filter((k) => !k.startsWith('fx_'));
+    const allKeys = Array.from(fieldMetas.keys()).filter(
+      (k) => !k.startsWith('fx_'),
+    );
     const deps = new Set<string>();
     for (const key of active.fields) {
       if (!key.startsWith('fx_')) continue;
@@ -257,7 +299,10 @@ export default function FinanceExplorer({ code }: { code: string }) {
   }, [active.fields, fieldMetas, formulas]);
 
   // 数据加载：字段集合（无序）变化才重新抓取，拖拽排序不触发
-  const fieldsSig = useMemo(() => [...fetchFields].sort().join(','), [fetchFields]);
+  const fieldsSig = useMemo(
+    () => [...fetchFields].sort().join(','),
+    [fetchFields],
+  );
   useEffect(() => {
     if (active.fields.length === 0) {
       setCustomData(null);
@@ -296,7 +341,10 @@ export default function FinanceExplorer({ code }: { code: string }) {
   const primary = data?.companies?.[0];
   const compare = data?.companies?.[1] ?? null;
 
-  const toSeries = (c: CompanyFinancials | null, key: string): CompanySeries => {
+  const toSeries = (
+    c: CompanyFinancials | null,
+    key: string,
+  ): CompanySeries => {
     const labels = c?.periodLabels ?? [];
     let values: (number | null)[];
     if (key.startsWith('fx_')) {
@@ -312,9 +360,13 @@ export default function FinanceExplorer({ code }: { code: string }) {
     }
     return {
       code: c?.code ?? '',
-      name: `${c?.name ?? ''}${['wan','yuan'].includes(fieldMetas.get(key)?.unit ?? '') ? `（${c?.currency ?? 'CNY'}）` : ''}`,
+      periods: c?.periods ?? [],
+      name: `${c?.name ?? ''}${['wan', 'yuan'].includes(fieldMetas.get(key)?.unit ?? '') ? `（${c?.currency ?? 'CNY'}）` : ''}`,
       // 年报视图下把「2021H2」显示为「2021」
-      periodLabels: granularity === 'annual' ? labels.map((l) => l.replace(/H2$/, '')) : labels,
+      periodLabels:
+        granularity === 'annual'
+          ? labels.map((l) => l.replace(/H2$/, ''))
+          : labels,
       values,
     };
   };
@@ -324,7 +376,9 @@ export default function FinanceExplorer({ code }: { code: string }) {
     setRenaming(false);
     const name = renameDraft.trim();
     if (!name) return;
-    setModules((ms) => ms.map((m) => (m.id === active.id ? { ...m, name } : m)));
+    setModules((ms) =>
+      ms.map((m) => (m.id === active.id ? { ...m, name } : m)),
+    );
   };
 
   const renameStart = () => {
@@ -334,7 +388,10 @@ export default function FinanceExplorer({ code }: { code: string }) {
 
   const addModule = () => {
     const id = `m-${Date.now()}`;
-    setModules((ms) => [...ms, { id, name: `新模块 ${ms.length + 1}`, fields: [] }]);
+    setModules((ms) => [
+      ...ms,
+      { id, name: `新模块 ${ms.length + 1}`, fields: [] },
+    ]);
     setActiveId(id);
     setPickerOpen(true);
   };
@@ -358,7 +415,9 @@ export default function FinanceExplorer({ code }: { code: string }) {
 
   const confirmFields = (keys: string[]) => {
     setPickerOpen(false);
-    setModules((ms) => ms.map((m) => (m.id === active.id ? { ...m, fields: keys } : m)));
+    setModules((ms) =>
+      ms.map((m) => (m.id === active.id ? { ...m, fields: keys } : m)),
+    );
   };
 
   /* ---------- 左侧列表拖拽排序 ---------- */
@@ -371,42 +430,52 @@ export default function FinanceExplorer({ code }: { code: string }) {
         const [moved] = fields.splice(from, 1);
         fields.splice(to, 0, moved);
         return { ...m, fields };
-      })
+      }),
     );
   };
 
   const entries = active.fields.map((key) => {
     const meta = fieldMetas.get(key);
     // 自定义公式：悬停显示公式内容
-    const f = key.startsWith('fx_') ? formulas.find((x) => formulaKey(x.id) === key) : undefined;
+    const f = key.startsWith('fx_')
+      ? formulas.find((x) => formulaKey(x.id) === key)
+      : undefined;
     return {
       key,
       label: meta?.label ?? key,
       groupLabel: meta ? `${meta.group}` : '',
       unit: meta?.unit ?? '',
-      hover: f ? `${f.name} = ${f.expr}${f.description ? '\n' + f.description : ''}` : undefined,
+      hover: f
+        ? `${f.name} = ${f.expr}${f.description ? '\n' + f.description : ''}`
+        : undefined,
     };
   });
 
   const scrollTo = (key: string) => {
     setSelectedField(key);
     sectionRefs.current[key]?.scrollIntoView({
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 'auto'
+        : 'smooth',
       block: 'start',
     });
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* 顶栏：主/对比公司 + 报告期粒度（紧凑） */}
       <div className="card flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2">
         <div className="flex items-center gap-1.5 text-sm">
-          <span className="font-medium text-slate-800">{primary?.name ?? code}</span>
+          <span className="font-medium text-slate-800">
+            {primary?.name ?? code}
+          </span>
           <span className="font-mono text-xs text-slate-400">{code}</span>
         </div>
 
         <div className="flex items-center gap-1.5">
-          <span className="hidden text-xs text-slate-500 sm:inline">对比公司：</span>
+          <span className="hidden text-xs text-slate-500 sm:inline">
+            对比公司：
+          </span>
           <select
             aria-label="对比公司"
             className="input !w-44 text-sm md:!w-48"
@@ -420,7 +489,9 @@ export default function FinanceExplorer({ code }: { code: string }) {
               </option>
             ))}
           </select>
-          {compare && <span className="chip bg-orange-100 text-orange-700">对比公司</span>}
+          {compare && (
+            <span className="chip bg-orange-100 text-orange-700">对比公司</span>
+          )}
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-1 rounded-lg bg-slate-50 p-1">
@@ -442,7 +513,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
                     ? '半年报口径（H1 + H2）'
                     : '全部季度报告（Q1/H1/Q3/年报）'
               }
-              className={`min-h-9 rounded-md px-2.5 py-1 text-xs transition ${
+              className={`min-h-10 rounded-md px-2.5 py-1 text-xs transition sm:min-h-8 ${
                 granularity === k
                   ? 'bg-slate-200 font-medium text-slate-800'
                   : 'text-slate-500 hover:bg-slate-100'
@@ -463,7 +534,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
               onClick={() => setYears(k)}
               aria-pressed={years === k}
               title={`展示最近 ${k} 个自然年的报告期`}
-              className={`min-h-9 rounded-md px-2.5 py-1 text-xs transition ${
+              className={`min-h-10 rounded-md px-2.5 py-1 text-xs transition sm:min-h-8 ${
                 years === k
                   ? 'bg-brand-50 font-medium text-brand-700'
                   : 'text-slate-500 hover:bg-slate-100'
@@ -499,7 +570,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
                     setSelectedField(null);
                   }}
                   aria-pressed={m.id === active.id}
-                  className={`relative px-3.5 py-2 text-sm transition md:px-4 ${
+                  className={`relative min-h-10 px-3 py-1.5 text-[13px] transition sm:min-h-8 ${
                     m.id === active.id
                       ? 'font-semibold text-brand-700'
                       : 'text-slate-600 hover:text-brand-600'
@@ -518,13 +589,16 @@ export default function FinanceExplorer({ code }: { code: string }) {
           ))}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <button onClick={() => setPickerOpen(true)} className="btn !min-h-8 !py-1 !text-xs">
+          <button
+            onClick={() => setPickerOpen(true)}
+            className="btn !min-h-10 !py-1 !text-xs sm:!min-h-8"
+          >
             配置指标
           </button>
           <details ref={moduleMenuRef} className="relative">
             <summary
               aria-label="管理分析模块"
-              className="btn !min-h-8 list-none !px-2.5 !py-1 text-base [&::-webkit-details-marker]:hidden"
+              className="btn !min-h-10 list-none !px-2.5 !py-1 text-base sm:!min-h-8 [&::-webkit-details-marker]:hidden"
             >
               ···
             </summary>
@@ -563,8 +637,12 @@ export default function FinanceExplorer({ code }: { code: string }) {
         </div>
       </div>
 
-      {err && <div className="card-pad text-sm text-red-600">加载失败：{err}</div>}
-      {loading && !data && <div className="card-pad text-sm text-slate-400">财报数据加载中…</div>}
+      {err && (
+        <div className="card-pad text-sm text-red-600">加载失败：{err}</div>
+      )}
+      {loading && !data && (
+        <div className="card-pad text-sm text-slate-400">财报数据加载中…</div>
+      )}
 
       {data && (
         <div className="grid min-w-0 gap-4 lg:grid-cols-[172px_minmax(0,1fr)]">
@@ -589,20 +667,23 @@ export default function FinanceExplorer({ code }: { code: string }) {
                     onDragEnter={() => setOverIdx(index)}
                     onDragOver={(ev) => ev.preventDefault()}
                     onDragEnd={() => {
-                      if (dragIdx !== null && overIdx !== null) reorder(dragIdx, overIdx);
+                      if (dragIdx !== null && overIdx !== null)
+                        reorder(dragIdx, overIdx);
                       setDragIdx(null);
                       setOverIdx(null);
                     }}
                     onClick={() => scrollTo(e.key)}
                     aria-current={selected ? 'location' : undefined}
                     title={e.hover}
-                    className={`flex min-h-8 shrink-0 items-center gap-1.5 rounded-md border-l-[3px] px-2 py-1.5 text-left text-[13px] leading-snug transition lg:w-full ${selected ? 'border-brand-600 bg-brand-100 font-semibold text-brand-700' : 'border-transparent font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-950'} ${dragIdx === index ? 'opacity-40' : ''} ${overIdx === index && dragIdx !== null && dragIdx !== index ? 'ring-1 ring-brand-300' : ''}`}
+                    className={`flex min-h-10 shrink-0 items-center gap-1.5 rounded-md border-l-[3px] px-2 py-1.5 text-left text-[13px] leading-snug transition sm:min-h-8 lg:w-full ${selected ? 'border-brand-600 bg-brand-100 font-semibold text-brand-700' : 'border-transparent font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-950'} ${dragIdx === index ? 'opacity-40' : ''} ${overIdx === index && dragIdx !== null && dragIdx !== index ? 'ring-1 ring-brand-300' : ''}`}
                   >
                     <span
                       aria-hidden="true"
                       className={`h-1.5 w-1.5 shrink-0 rounded-full ${selected ? 'bg-brand-600' : 'bg-slate-400'}`}
                     />
-                    <span className="whitespace-nowrap lg:whitespace-normal">{e.label}</span>
+                    <span className="whitespace-nowrap lg:whitespace-normal">
+                      {e.label}
+                    </span>
                   </button>
                 );
               })}
@@ -613,7 +694,8 @@ export default function FinanceExplorer({ code }: { code: string }) {
           <div className="min-w-0 space-y-3">
             {!primary || primary.periods.length === 0 ? (
               <div className="card-pad text-sm text-slate-500">
-                未获取到 {primary?.name ?? code} 的财报数据。可能是非 A 股标的或数据源暂时不可用。
+                未获取到 {primary?.name ?? code} 的财报数据。可能是非 A
+                股标的或数据源暂时不可用。
               </div>
             ) : entries.length === 0 ? (
               <div className="card-pad text-sm text-slate-500">
@@ -624,27 +706,32 @@ export default function FinanceExplorer({ code }: { code: string }) {
                 const pS = toSeries(primary, e.key);
                 const cS = compare ? toSeries(compare, e.key) : null;
                 const hasData = pS.values.some((v) => v !== null);
-                const hasCompare = cS !== null && cS.values.some((v) => v !== null);
+                const hasCompare =
+                  cS !== null && cS.values.some((v) => v !== null);
                 return (
                   <div
                     key={e.key}
                     ref={(el) => {
                       sectionRefs.current[e.key] = el;
                     }}
-                    className="card scroll-mt-24 p-3 sm:p-4"
+                    className="card scroll-mt-24 p-3"
                   >
                     <div className="mb-2 flex flex-wrap items-baseline justify-between gap-1">
-                      <h3 className="text-sm font-semibold text-slate-900">{e.label}</h3>
-                      <div className="flex items-center gap-3">
-                        <span className="text-[11px] text-slate-400">
-                          {e.key === 'fx_p-interest-coverage' ? '倍 · 费用化利息口径（东方财富）' : `${unitText(e.unit)} · ${primary?.source.includes('hkf10') ? `东方财富（${primary.currency ?? '原币'}）` : '新浪财经（披露口径）'}`}
+                      <h3 className="text-sm font-semibold text-slate-900">
+                        {e.label}
+                      </h3>
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="min-w-0 break-words text-[11px] text-slate-500">
+                          {e.key === 'fx_p-interest-coverage'
+                            ? '倍 · 费用化利息口径（东方财富）'
+                            : `${unitText(e.unit)} · ${primary?.source.includes('hkf10') ? `东方财富（${primary.currency ?? '原币'}）` : '新浪财经（披露口径）'}`}
                         </span>
                         <button
                           type="button"
                           aria-label={`${visibleLabels ? '隐藏' : '显示'}所有图表的节点数据`}
                           aria-pressed={visibleLabels}
-                          onClick={() => setVisibleLabels(prev => !prev)}
-                          className={`shrink-0 rounded-md px-2 py-1 text-xs font-medium transition ${visibleLabels ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-100 hover:text-brand-700'}`}
+                          onClick={() => setVisibleLabels((prev) => !prev)}
+                          className={`min-h-10 shrink-0 rounded-md px-2 py-1 text-xs font-medium transition sm:min-h-8 ${visibleLabels ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-100 hover:text-brand-700'}`}
                         >
                           {visibleLabels ? '隐藏数据' : '显示数据'}
                         </button>
@@ -660,7 +747,9 @@ export default function FinanceExplorer({ code }: { code: string }) {
                         showLabels={visibleLabels}
                       />
                     ) : (
-                      <div className="py-10 text-center text-sm text-slate-400">该科目暂未披露</div>
+                      <div className="py-10 text-center text-sm text-slate-400">
+                        该科目暂未披露
+                      </div>
                     )}
                   </div>
                 );
@@ -675,7 +764,19 @@ export default function FinanceExplorer({ code }: { code: string }) {
         catalog={catalog}
         selected={active?.fields ?? []}
         defaultSelected={DEFAULT_MODULES[0].fields}
-        formulas={modulesKey.endsWith('.hk') ? formulas.filter(f => checkExpr(f.expr, Array.from(fieldMetas.keys()).filter(k => !k.startsWith('fx_'))).ok) : formulas}
+        formulas={
+          modulesKey.endsWith('.hk')
+            ? formulas.filter(
+                (f) =>
+                  checkExpr(
+                    f.expr,
+                    Array.from(fieldMetas.keys()).filter(
+                      (k) => !k.startsWith('fx_'),
+                    ),
+                  ).ok,
+              )
+            : formulas
+        }
         onAddFormula={(f) => {
           const next = [...formulas, f];
           setFormulas(next);
@@ -695,7 +796,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
             ms.map((m) => ({
               ...m,
               fields: m.fields.filter((k) => k !== formulaKey(id)),
-            }))
+            })),
           );
         }}
         formulaSourceFields={

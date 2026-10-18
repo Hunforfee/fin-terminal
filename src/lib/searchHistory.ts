@@ -3,7 +3,7 @@ import { personalStorage } from './personalStorage';
  * 全局搜索历史（localStorage）。
  *
  * 存放最近搜索过的标的，供搜索框在聚焦时直接展示。
- * 只存代码/名称/类型，最多 8 条，按最近访问倒序，同代码去重。
+ * 只存代码/名称/类型，最多 8 条，按最近访问倒序，同市场同类型代码去重。
  */
 
 export interface HistoryItem {
@@ -17,13 +17,26 @@ export interface HistoryItem {
 const KEY = 'ft.searchHistory.v1';
 export const MAX_HISTORY = 8;
 
+function historyIdentity(item: Pick<HistoryItem, 'code' | 'kind' | 'market'>) {
+  return `${item.market ?? ''}:${item.kind ?? ''}:${item.code}`;
+}
+
 function safeParse(raw: string | null): HistoryItem[] {
   if (!raw) return [];
   try {
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr)) return [];
     return arr
-      .filter((x): x is HistoryItem => !!x && typeof x.code === 'string' && typeof x.name === 'string')
+      .filter(
+        (x): x is HistoryItem =>
+          !!x && typeof x.code === 'string' && typeof x.name === 'string',
+      )
+      .map((x) => ({
+        ...x,
+        kind: typeof x.kind === 'string' ? x.kind : 'stock',
+        market: typeof x.market === 'string' ? x.market : '',
+        board: typeof x.board === 'string' ? x.board : '',
+      }))
       .slice(0, MAX_HISTORY);
   } catch {
     return [];
@@ -47,16 +60,27 @@ function write(list: HistoryItem[]): void {
   }
 }
 
-/** 记录一次搜索（同代码上移去重） */
+/** 记录一次搜索（同市场同类型代码上移去重） */
 export function pushHistory(item: HistoryItem): HistoryItem[] {
-  const list = readHistory().filter((x) => x.code !== item.code);
+  const list = readHistory().filter(
+    (x) => historyIdentity(x) !== historyIdentity(item),
+  );
   const next = [item, ...list].slice(0, MAX_HISTORY);
   write(next);
   return next;
 }
 
-export function removeHistory(code: string): HistoryItem[] {
-  const next = readHistory().filter((x) => x.code !== code);
+export function removeHistory(
+  code: string,
+  market?: string,
+  kind?: string,
+): HistoryItem[] {
+  const next = readHistory().filter(
+    (x) =>
+      x.code !== code ||
+      (market !== undefined && x.market !== market) ||
+      (kind !== undefined && x.kind !== kind),
+  );
   write(next);
   return next;
 }
@@ -68,4 +92,3 @@ export function clearHistory(): void {
     /* ignore */
   }
 }
-

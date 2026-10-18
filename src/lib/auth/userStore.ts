@@ -33,22 +33,60 @@ interface Store {
   accounts: Record<string, AccountRecord>;
 }
 
+export class AccountStoreError extends Error {}
+
 function readStore(): Store {
+  let raw: string;
   try {
-    const raw = fs.readFileSync(FILE, 'utf8');
-    const j = JSON.parse(raw) as Store;
-    if (j && typeof j.accounts === 'object') return j;
-  } catch {
-    /* 文件不存在或损坏时按空库处理 */
+    raw = fs.readFileSync(FILE, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+      return { accounts: {} };
+    throw new AccountStoreError('账号数据暂不可用');
   }
-  return { accounts: {} };
+  let store: Store;
+  try {
+    store = JSON.parse(raw) as Store;
+  } catch {
+    throw new AccountStoreError('账号数据暂不可用');
+  }
+  if (
+    !store ||
+    typeof store !== 'object' ||
+    Array.isArray(store) ||
+    !store.accounts ||
+    typeof store.accounts !== 'object' ||
+    Array.isArray(store.accounts) ||
+    Object.values(store.accounts).some(
+      (entry) =>
+        !entry ||
+        typeof entry !== 'object' ||
+        Array.isArray(entry) ||
+        typeof entry.id !== 'string' ||
+        !entry.id ||
+        typeof entry.salt !== 'string' ||
+        !/^[a-f0-9]{32}$/i.test(entry.salt) ||
+        typeof entry.hash !== 'string' ||
+        !/^[a-f0-9]{64}$/i.test(entry.hash) ||
+        !Number.isFinite(entry.createdAt),
+    )
+  )
+    throw new AccountStoreError('账号数据暂不可用');
+  return store;
 }
 
 function writeStore(store: Store): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
   const tmp = FILE + '.' + randomBytes(4).toString('hex') + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(store, null, 2));
-  fs.renameSync(tmp, FILE);
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(tmp, JSON.stringify(store, null, 2), { mode: 0o600 });
+    fs.renameSync(tmp, FILE);
+  } catch {
+    try {
+      fs.unlinkSync(tmp);
+    } catch {}
+    throw new AccountStoreError('账号数据暂不可用');
+  }
 }
 
 function hashPassword(password: string, salt: string): string {
@@ -56,29 +94,50 @@ function hashPassword(password: string, salt: string): string {
 }
 
 export function userIdOf(username: string): string {
-  return 'u' + createHash('sha256').update(`fin-user:${username.toLowerCase()}`).digest('hex').slice(0, 24);
+  return (
+    'u' +
+    createHash('sha256')
+      .update(`fin-user:${username.toLowerCase()}`)
+      .digest('hex')
+      .slice(0, 24)
+  );
 }
 
 export function normalizeUsername(input: unknown): string | null {
   if (typeof input !== 'string') return null;
   const value = input.trim();
   if (!USERNAME_RE.test(value)) return null;
-  if (/^1[3-9]\d{9}$/.test(value)) return null; // 避免与手机号身份混淆
+  if (/^\d{11}$/.test(value)) return null; // 与会话显示名规则一致，避免注册后无法登录
   return value;
 }
 
 export function checkPasswordStrength(password: unknown): string | null {
-  if (typeof password !== 'string' || password.length < 8 || password.length > 128) {
+  if (
+    typeof password !== 'string' ||
+    password.length < 8 ||
+    password.length > 128
+  ) {
     return '密码至少 8 位';
   }
   return null;
 }
 
 /** 注册；用户名已存在时抛错 */
-export function registerUser(username: string, password: string): { id: string; name: string } {
+export function registerUser(
+  username: string,
+  password: string,
+): { id: string; name: string } {
+  const normalized = normalizeUsername(username);
+  if (!normalized)
+    throw new Error(
+      '用户名需 3-24 位字母、数字、下划线、中文或连字符，不能是 11 位纯数字',
+    );
+  const weak = checkPasswordStrength(password);
+  if (weak) throw new Error(weak);
+  username = normalized;
   const key = username.toLowerCase();
   const store = readStore();
-  if (store.accounts[key]) throw new Error('用户名已被注册');
+  if (Object.hasOwn(store.accounts, key)) throw new Error('用户名已被注册');
   const salt = randomBytes(16).toString('hex');
   const record: AccountRecord = {
     id: userIdOf(username),
@@ -86,21 +145,40 @@ export function registerUser(username: string, password: string): { id: string; 
     hash: hashPassword(password, salt),
     createdAt: Date.now(),
   };
-  store.accounts[key] = record;
+  Object.defineProperty(store.accounts, key, {
+    value: record,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
   writeStore(store);
   return { id: record.id, name: username };
 }
 
 /** 登录校验；失败统一抛错（不区分用户名不存在/密码错误） */
-export function verifyUser(username: string, password: string): { id: string; name: string } {
+export function verifyUser(
+  username: string,
+  password: string,
+): { id: string; name: string } {
+  if (
+    !normalizeUsername(username) ||
+    typeof password !== 'string' ||
+    password.length > 128
+  )
+    throw new Error('用户名或密码错误');
   const key = username.toLowerCase();
-  const record = readStore().accounts[key];
+  const accounts = readStore().accounts;
+  const record = Object.hasOwn(accounts, key) ? accounts[key] : undefined;
   const fail = () => {
     throw new Error('用户名或密码错误');
   };
   if (!record) return fail();
   const expected = Buffer.from(record.hash, 'hex');
   const supplied = Buffer.from(hashPassword(password, record.salt), 'hex');
-  if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) return fail();
+  if (
+    expected.length !== supplied.length ||
+    !timingSafeEqual(expected, supplied)
+  )
+    return fail();
   return { id: record.id, name: username };
 }

@@ -41,7 +41,7 @@ export default async function RootLayout({
             </a>
             <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 backdrop-blur-xl">
               <div className="w-full px-3 sm:px-4">
-                <div className="flex min-h-12 items-center justify-between gap-3">
+                <div className="flex min-h-11 items-center justify-between gap-2.5">
                   <Link
                     href="/"
                     className="flex shrink-0 items-center gap-2.5"
@@ -74,7 +74,7 @@ export default async function RootLayout({
             </header>
             <main
               id="main-content"
-              className="min-h-[65vh] w-full px-3 py-3 sm:px-4 sm:py-4"
+              className="min-h-[65vh] w-full px-2.5 py-3 sm:px-3"
             >
               {children}
             </main>

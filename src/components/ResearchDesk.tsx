@@ -36,6 +36,8 @@ interface Note {
   name: string;
   text: string;
   date: string;
+  /** 手动设置的标题；缺省时从正文首行提取 */
+  title?: string;
 }
 const NOTE_KEY = 'fin.research.notes.v1';
 
@@ -100,6 +102,10 @@ export default function ResearchDesk({
   const [navOpen, setNavOpen] = useState(true);
   const [activeNoteId, setActiveNoteId] = useState<string>('new');
   const [noteMaximized, setNoteMaximized] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+  const [noteTitleDraft, setNoteTitleDraft] = useState('');
   const notesFor = (code: string) => notes.filter((n) => n.code === code);
   const addNoteFor = (
     code: string,
@@ -122,6 +128,14 @@ export default function ResearchDesk({
     ])
       ? id
       : null;
+  };
+  /** 更新一条已有笔记（正文 / 标题），返回是否成功 */
+  const updateNote = (id: string, patch: Partial<Note>) => {
+    const target = notes.find((n) => n.id === id);
+    if (!target) return false;
+    return saveNotes(
+      notes.map((n) => (n.id === id ? { ...n, ...patch } : n)),
+    );
   };
   const [filter, setFilter] = useState('');
   useEffect(() => {
@@ -765,6 +779,7 @@ export default function ResearchDesk({
                           // 有历史笔记就先看最新一条，没有则直接进入新建
                           const latest = notes.find((n) => n.code === q.code);
                           setActiveNoteId(latest ? latest.id : 'new');
+                          setEditingId(null);
                         }}
                         className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-opacity hover:bg-amber-50 focus-visible:text-amber-600 [@media(hover:none)]:opacity-100 ${
                           notesFor(q.code).length
@@ -980,7 +995,9 @@ export default function ResearchDesk({
                   className="btn !py-1.5 text-xs"
                   onClick={() => {
                     setNoteDraft('');
+                    setNoteTitleDraft('');
                     setNoteEditTab('edit');
+                    setEditingId(null);
                     setActiveNoteId('new');
                     setNavOpen(true);
                   }}
@@ -1023,7 +1040,11 @@ export default function ResearchDesk({
                   <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
                     <button
                       type="button"
-                      onClick={() => setActiveNoteId('new')}
+                      onClick={() => {
+                        setEditingId(null);
+                        setNoteTitleDraft('');
+                        setActiveNoteId('new');
+                      }}
                       className={`mb-1 flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm ${
                         activeNoteId === 'new'
                           ? 'bg-white font-medium text-brand-700 shadow-sm'
@@ -1034,32 +1055,85 @@ export default function ResearchDesk({
                       新建笔记
                     </button>
                     {notesFor(noteView.code).map((n, index) => {
-                      const title = noteTitle(n.text, index);
+                      const title = n.title?.trim() || noteTitle(n.text, index);
                       return (
-                        <button
+                        <div
                           key={n.id}
-                          type="button"
-                          onClick={() => setActiveNoteId(n.id)}
-                          title={title}
-                          className={`mb-0.5 flex w-full flex-col gap-0.5 rounded-md px-2.5 py-2 text-left ${
-                            activeNoteId === n.id
-                              ? 'bg-white shadow-sm'
-                              : 'hover:bg-white/70'
+                          className={`group/nav mb-0.5 rounded-md ${
+                            activeNoteId === n.id ? 'bg-white shadow-sm' : 'hover:bg-white/70'
                           }`}
                         >
-                          <span
-                            className={`truncate text-sm ${
-                              activeNoteId === n.id
-                                ? 'font-medium text-brand-700'
-                                : 'text-slate-700'
-                            }`}
-                          >
-                            {title}
-                          </span>
-                          <span className="text-[11px] text-slate-400">
-                            {n.date}
-                          </span>
-                        </button>
+                          {renamingId === n.id ? (
+                            <input
+                              autoFocus
+                              aria-label="重命名笔记"
+                              className="input mx-1 !py-1 text-sm"
+                              value={renameDraft}
+                              onChange={(e) => setRenameDraft(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  updateNote(n.id, { title: renameDraft.trim() });
+                                  setRenamingId(null);
+                                } else if (e.key === 'Escape') setRenamingId(null);
+                              }}
+                              onBlur={() => {
+                                updateNote(n.id, { title: renameDraft.trim() });
+                                setRenamingId(null);
+                              }}
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveNoteId(n.id);
+                                setEditingId(null);
+                              }}
+                              onDoubleClick={() => {
+                                setRenamingId(n.id);
+                                setRenameDraft(n.title ?? '');
+                              }}
+                              title={`${title}（双击重命名）`}
+                              className="flex w-full flex-col gap-0.5 rounded-md px-2.5 py-2 text-left"
+                            >
+                              <span
+                                className={`flex items-center gap-1 ${
+                                  activeNoteId === n.id
+                                    ? 'font-medium text-brand-700'
+                                    : 'text-slate-700'
+                                }`}
+                              >
+                                <span className="min-w-0 flex-1 truncate text-sm">
+                                  {title}
+                                </span>
+                                <span
+                                  role="button"
+                                  tabIndex={0}
+                                  aria-label="重命名笔记"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setRenamingId(n.id);
+                                    setRenameDraft(n.title ?? '');
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.stopPropagation();
+                                      setRenamingId(n.id);
+                                      setRenameDraft(n.title ?? '');
+                                    }
+                                  }}
+                                  className="shrink-0 rounded p-0.5 text-slate-300 opacity-0 hover:text-brand-600 group-hover/nav:opacity-100"
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                                    <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                                  </svg>
+                                </span>
+                              </span>
+                              <span className="text-[11px] text-slate-400">
+                                {n.date}
+                              </span>
+                            </button>
+                          )}
+                        </div>
                       );
                     })}
                     {notesFor(noteView.code).length === 0 && (
@@ -1073,11 +1147,11 @@ export default function ResearchDesk({
 
               {/* 右侧：内容区 */}
               <section className="min-w-0 flex-1 overflow-y-auto px-6 py-5">
-                {activeNoteId === 'new' ? (
+                {activeNoteId === 'new' || editingId ? (
                   <div className="mx-auto max-w-4xl space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <h3 className="text-sm font-semibold text-slate-700">
-                        新建笔记
+                        {editingId ? '编辑笔记' : '新建笔记'}
                       </h3>
                       <div className="flex items-center gap-1 rounded-md bg-slate-100 p-0.5">
                         <button
@@ -1104,6 +1178,21 @@ export default function ResearchDesk({
                         </button>
                       </div>
                     </div>
+                    {noteEditTab === 'edit' && (editingId ? notes.find((n) => n.id === editingId) : true) && (
+                      <input
+                        aria-label="笔记标题（可选）"
+                        className="input w-full"
+                        placeholder="标题（留空则取正文第一行）"
+                        value={
+                          editingId
+                            ? (noteTitleDraft ??
+                              notes.find((n) => n.id === editingId)?.title ??
+                              '')
+                            : noteTitleDraft
+                        }
+                        onChange={(e) => setNoteTitleDraft(e.target.value)}
+                      />
+                    )}
                     {noteEditTab === 'edit' ? (
                       <textarea
                         aria-label="新增笔记"
@@ -1132,7 +1221,13 @@ export default function ResearchDesk({
                         <button
                           type="button"
                           className="btn"
-                          onClick={() => setActiveNoteId(notesFor(noteView.code)[0]?.id ?? 'new')}
+                          onClick={() => {
+                            setEditingId(null);
+                            setNoteTitleDraft('');
+                            setActiveNoteId(
+                              editingId ?? notesFor(noteView.code)[0]?.id ?? 'new',
+                            );
+                          }}
                         >
                           取消
                         </button>
@@ -1141,6 +1236,19 @@ export default function ResearchDesk({
                           className="btn bg-brand-600 text-white hover:bg-brand-700"
                           disabled={!noteDraft.trim()}
                           onClick={() => {
+                            if (editingId) {
+                              if (updateNote(editingId, {
+                                text: noteDraft.trim(),
+                                title: noteTitleDraft.trim() || undefined,
+                              })) {
+                                setNoteDraft('');
+                                setNoteTitleDraft('');
+                                setNoteEditTab('edit');
+                                setActiveNoteId(editingId);
+                                setEditingId(null);
+                              }
+                              return;
+                            }
                             const created = addNoteFor(
                               noteView.code,
                               noteView.name,
@@ -1153,7 +1261,7 @@ export default function ResearchDesk({
                             }
                           }}
                         >
-                          保存笔记
+                          {editingId ? '保存修改' : '保存笔记'}
                         </button>
                       </div>
                     </div>
@@ -1188,11 +1296,12 @@ export default function ResearchDesk({
                               className="rounded px-1.5 py-0.5 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                               onClick={() => {
                                 setNoteDraft(current.text);
+                                setNoteTitleDraft(current.title ?? '');
                                 setNoteEditTab('edit');
-                                setActiveNoteId('new');
+                                setEditingId(current.id);
                               }}
                             >
-                              基于此再写
+                              编辑
                             </button>
                             <button
                               type="button"

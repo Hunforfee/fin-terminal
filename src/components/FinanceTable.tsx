@@ -73,17 +73,16 @@ function loadShowAll(): boolean {
 
 /** 万元 → 亿（统一折算，与行头「亿」标签保持一致） */
 function fmtWan(v: number | null): string {
-  if (v === null || !Number.isFinite(v)) return '--';
-  if (v === 0) return '0';
-  return (v / 1e4).toLocaleString('zh-CN', { maximumFractionDigits: 2 });
+  if (v === null || !Number.isFinite(v)) return '—';
+  return (v / 1e4).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function fmtVal(v: number | null, unit: string): string {
-  if (v === null || !Number.isFinite(v)) return '--';
+  if (v === null || !Number.isFinite(v)) return '—';
   if (unit === 'pct') return `${v.toFixed(2)}%`;
   if (unit === 'wan') return fmtWan(v);
   if (unit === 'yuan') return v.toFixed(2);
-  return v.toLocaleString('zh-CN', { maximumFractionDigits: 2 });
+  return v.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /** 百分比变动（同比/环比），null 安全 */
@@ -94,10 +93,19 @@ function pctChange(cur: number | null, prev: number | null): number | null {
 }
 
 function pctCls(v: number | null): string {
-  if (v === null) return 'text-slate-300';
+  if (v === null) return 'text-slate-400';
   if (v > 0) return 'text-slate-600';
-  if (v < 0) return 'text-slate-600';
-  return 'text-slate-400';
+  if (v < 0) return 'font-medium text-slate-700';
+  return 'text-slate-500';
+}
+
+type ReportKind = 'q1' | 'semi' | 'q3' | 'annual';
+function reportKindOf(period: string, kinds?: Record<string, string>): ReportKind | null {
+  if (kinds) {
+    const kind = kinds[period];
+    return ['q1', 'semi', 'q3', 'annual'].includes(kind) ? kind as ReportKind : null;
+  }
+  return ({ '03-31': 'q1', '06-30': 'semi', '09-30': 'q3', '12-31': 'annual' } as Record<string, ReportKind>)[period.slice(5, 10)] ?? null;
 }
 
 export default function FinanceTable({ code }: { code: string }) {
@@ -115,9 +123,26 @@ export default function FinanceTable({ code }: { code: string }) {
   const [catalog, setCatalog] = useState<PickerCatalog | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [onlyHasData, setOnlyHasData] = useState(true);
+  const [selectedReportKind, setSelectedReportKind] = useState<ReportKind | null>(null);
   const bootedRef = useRef(false);
   const tableRef = useRef<HTMLDivElement>(null);
   const [tableHeight, setTableHeight] = useState<number>();
+  const activeReportRef = useRef<string | null>(null);
+  const activeReportCells = useRef<HTMLElement[]>([]);
+
+  function highlightReport(target: EventTarget | null) {
+    const report = target instanceof Element
+      ? target.closest<HTMLElement>('[data-report]')?.dataset.report ?? null
+      : null;
+    if (report === activeReportRef.current) return;
+    for (const cell of activeReportCells.current) cell.removeAttribute('data-active-report');
+    activeReportRef.current = report;
+    activeReportCells.current = report
+      ? [...(tableRef.current?.querySelectorAll<HTMLElement>('[data-report]') ?? [])]
+          .filter((cell) => cell.dataset.report === report)
+      : [];
+    for (const cell of activeReportCells.current) cell.setAttribute('data-active-report', '');
+  }
 
   useEffect(() => {
     const table = tableRef.current;
@@ -274,10 +299,27 @@ export default function FinanceTable({ code }: { code: string }) {
     const idx = periodsAsc.map((p, i) => ({
       p,
       label: labelOf(p, labelsAsc[i] ?? p),
+      kind: reportKindOf(p, primary?.periodKinds),
       i,
     }));
     return idx.reverse();
-  }, [periodsAsc.join(','), labelsAsc.join(','), granularity]);
+  }, [periodsAsc.join(','), labelsAsc.join(','), granularity, JSON.stringify(primary?.periodKinds)]);
+
+  useEffect(() => {
+    setSelectedReportKind(null);
+  }, [code, granularity]);
+
+  useEffect(() => {
+    for (const cell of activeReportCells.current) cell.removeAttribute('data-active-report');
+    activeReportRef.current = null;
+    activeReportCells.current = [];
+  }, [data, view, granularity, years, kw, onlyHasData]);
+
+  const reportProps = (period: string, index: number) => ({
+    'data-report': period,
+    'data-matching-report': selectedReportKind !== null && colsDesc[index]?.kind === selectedReportKind ? '' : undefined,
+    'data-year-boundary': index > 0 && period.slice(0, 4) !== colsDesc[index - 1].p.slice(0, 4) ? '' : undefined,
+  });
 
   /** 值查找：按公司 + 字段 + 列序号 */
   const valOf = (c: CompanyFinancials, key: string, i: number): number | null => {
@@ -499,9 +541,13 @@ export default function FinanceTable({ code }: { code: string }) {
         <div
           ref={tableRef}
           style={{ height: tableHeight }}
+          onPointerOver={(event) => {
+            if (event.pointerType !== 'touch') highlightReport(event.target);
+          }}
+          onPointerLeave={() => highlightReport(null)}
           className="h-[calc(100dvh-21rem)] min-h-[320px] overflow-auto sm:h-[calc(100dvh-16rem)]"
         >
-          <table className="w-full border-collapse text-xs">
+          <table aria-label="财务报表" className="finance-data-table w-full border-collapse text-xs">
             <thead>
               <tr className="sticky top-0 z-20 bg-slate-50">
                 <th className="sticky left-0 z-30 min-w-[140px] border-b border-slate-200 bg-slate-50 px-3 py-2 text-left font-medium text-slate-600">
@@ -512,12 +558,22 @@ export default function FinanceTable({ code }: { code: string }) {
                     ）
                   </span>
                 </th>
-                {colsDesc.map((c) => (
+                {colsDesc.map((c, index) => (
                   <th
                     key={c.p}
-                    className="min-w-[92px] border-b border-l border-slate-200 bg-slate-50 px-2.5 py-2 text-center font-medium text-slate-700"
+                    scope="col"
+                    {...reportProps(c.p, index)}
+                    className="min-w-[92px] border-b border-l border-slate-200 bg-slate-50 px-2.5 py-2 text-center font-semibold text-slate-700"
                   >
-                    {c.label}
+                    <button
+                      type="button"
+                      disabled={c.kind === null}
+                      aria-pressed={c.kind !== null && selectedReportKind === c.kind}
+                      onClick={() => setSelectedReportKind((current) => current === c.kind ? null : c.kind)}
+                      className="block w-full rounded-sm text-center hover:text-brand-700 disabled:cursor-default disabled:hover:text-inherit"
+                    >
+                      {c.label}
+                    </button>
                   </th>
                 ))}
               </tr>
@@ -554,9 +610,9 @@ export default function FinanceTable({ code }: { code: string }) {
               rows.map((r) => {
                 const unit = r.meta?.unit ?? '';
                 const isPct = unit === 'pct';
-                const unitText = isPct ? '%' : unit === 'wan' ? '亿' : '';
+                const unitText = isPct ? '%' : unit === 'wan' ? '亿' : unit === 'yuan' ? '元' : '';
                 return (
-                  <tbody key={r.key} className="border-b-2 border-slate-200">
+                  <tbody key={r.key} className="finance-metric border-b-2 border-slate-200">
                     {companies.map((c, ci) => {
                       const showYoY = companies.length === 1;
                       // 「单季」只对流量类科目有意义（利润表/现金流量表、每股指标等）。
@@ -568,7 +624,7 @@ export default function FinanceTable({ code }: { code: string }) {
                       return (
                         <Fragment key={c.code}>
                           {/* 数值行 */}
-                          <tr key={`${r.key}-${c.code}-v`} className="hover:bg-slate-50">
+                          <tr key={`${r.key}-${c.code}-v`} className="finance-value-row">
                             <td
                               className={`sticky left-0 z-10 bg-white px-3 pb-1 ${ci === 0 ? 'pt-2.5' : 'pl-6 pt-2.5'}`}
                             >
@@ -577,17 +633,19 @@ export default function FinanceTable({ code }: { code: string }) {
                                   <span className="font-medium text-slate-800">
                                     {r.meta?.label ?? r.key}
                                   </span>
-                                  <span className="text-[10px] text-slate-400">{unitText}</span>
+                                  <span className="text-[11px] font-normal text-slate-500">{unitText}</span>
                                 </div>
                               )}
                               {ci > 0 && (
                                 <span className="text-[11px] text-orange-600">{c.name}</span>
                               )}
                             </td>
-                            {colsDesc.map((col) => (
+                            {colsDesc.map((col, index) => (
                               <td
                                 key={col.p}
-                                className="border-l border-slate-100 px-2.5 pb-1 pt-2.5 text-center tabular-nums text-slate-800"
+                                {...reportProps(col.p, index)}
+                                data-missing={valOf(c, r.key, col.i) === null ? '' : undefined}
+                                className="finance-main-value border-l border-slate-100 px-2.5 pb-1 pt-2.5 text-right tabular-nums text-slate-900"
                               >
                                 {fmtVal(valOf(c, r.key, col.i), unit)}
                               </td>
@@ -596,11 +654,11 @@ export default function FinanceTable({ code }: { code: string }) {
                           {/* 同比 / 环比（仅单公司时展开；与理杏仁一致：上行同比、下行环比） */}
                           {showYoY && (
                             <>
-                              <tr className="text-[11px] hover:bg-slate-50/60">
-                                <td className="sticky left-0 z-10 bg-white px-3 py-0.5 text-[10px] text-slate-400">
-                                  累积
+                              <tr className="finance-change-row text-[11px]">
+                                <td className="sticky left-0 z-10 bg-white px-3 py-0.5 text-[11px] text-slate-500">
+                                  {isStock || isRatio ? '同比' : '累计同比'}
                                 </td>
-                                {colsDesc.map((col) => {
+                                {colsDesc.map((col, index) => {
                                   const yi = yoyIndex(col.i);
                                   const v =
                                     yi >= 0
@@ -609,7 +667,9 @@ export default function FinanceTable({ code }: { code: string }) {
                                   return (
                                     <td
                                       key={col.p}
-                                      className={`border-l border-slate-100 px-2.5 py-0.5 text-center tabular-nums ${pctCls(v)}`}
+                                      {...reportProps(col.p, index)}
+                                      data-missing={v === null ? '' : undefined}
+                                      className={`border-l border-slate-100 px-2.5 py-0.5 text-right tabular-nums ${pctCls(v)}`}
                                     >
                                       {v === null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(1)}%`}
                                     </td>
@@ -617,16 +677,18 @@ export default function FinanceTable({ code }: { code: string }) {
                                 })}
                               </tr>
                               {hasSingle && (
-                                <tr className="text-[11px] hover:bg-slate-50/60">
-                                  <td className="sticky left-0 z-10 bg-white px-3 pb-2 pt-0.5 text-[10px] text-slate-400">
-                                    单季
+                                <tr className="finance-change-row text-[11px]">
+                                  <td className="sticky left-0 z-10 bg-white px-3 pb-2 pt-0.5 text-[11px] text-slate-500">
+                                    单季同比
                                   </td>
-                                  {colsDesc.map((col) => {
+                                  {colsDesc.map((col, index) => {
                                     const v = sqYoy(c, r.key, col.i);
                                     return (
                                       <td
                                         key={col.p}
-                                        className={`border-l border-slate-100 px-2.5 py-0.5 text-center tabular-nums ${pctCls(v)}`}
+                                        {...reportProps(col.p, index)}
+                                        data-missing={v === null ? '' : undefined}
+                                        className={`border-l border-slate-100 px-2.5 py-0.5 text-right tabular-nums ${pctCls(v)}`}
                                       >
                                         {v === null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(1)}%`}
                                       </td>

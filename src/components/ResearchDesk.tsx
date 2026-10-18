@@ -12,7 +12,7 @@ import { useWatchlist } from './WatchlistProvider';
 import WatchlistButton from './WatchlistButton';
 import WatchlistGroups from './WatchlistGroups';
 import StockName from './StockName';
-import XueqiuDialog from './XueqiuDialog';
+import XueqiuLink from './XueqiuLink';
 import ResearchColumns from './ResearchColumns';
 import CompanyWindow from './CompanyWindow';
 import {
@@ -869,10 +869,9 @@ export default function ResearchDesk({
                       />
                       {xueqiuUrl(q.symbol, q.market, q.kind) && (
                         <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover/stock:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
-                          <XueqiuDialog
+                          <XueqiuLink
                             url={xueqiuUrl(q.symbol, q.market, q.kind)!}
                             name={q.name}
-                            code={q.code}
                           />
                         </span>
                       )}

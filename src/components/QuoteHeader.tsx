@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import AiAnalysisDialog from '@/components/AiAnalysisDialog';
 import WatchlistButton from '@/components/WatchlistButton';
-import XueqiuDialog from '@/components/XueqiuDialog';
+import XueqiuLink from '@/components/XueqiuLink';
 import { fmtTime, price, signed, signedPct, toneClass } from '@/lib/format';
 import { xueqiuUrl } from '@/lib/xueqiu';
 import type { Quote } from '@/lib/datasource/types';
@@ -111,12 +111,7 @@ export default function QuoteHeader({ quote }: { quote: Quote }) {
           {isStock && (
             <>
               {xueqiu && (
-                <XueqiuDialog
-                  key={quote.symbol}
-                  url={xueqiu}
-                  name={quote.name}
-                  code={quote.code}
-                />
+                <XueqiuLink key={quote.symbol} url={xueqiu} name={quote.name} />
               )}
               <AiAnalysisDialog
                 key={quote.symbol}

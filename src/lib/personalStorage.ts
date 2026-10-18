@@ -2,6 +2,7 @@ import {
   migrateWatchlist,
   readWatchlist,
   UNGROUPED,
+  readWatchlist as normalizeWatchlist,
   type WatchState,
 } from './watchlist';
 
@@ -23,6 +24,7 @@ export function isCloudKey(key: string): boolean {
   return (
     key === 'fin-terminal.watchlist.v2' ||
     key === 'fin.research.notes.v1' ||
+    key === 'fin.research.table.v1' ||
     /^fin\.(?:financeModules|mergeTable|financeFormulas)(?:\.[\w-]+)*$/.test(
       key,
     ) ||
@@ -148,21 +150,32 @@ export function mergeGuestData(
       if (!sameName) groups.push({ id, name: group.name });
       mapping.set(group.id, id);
     }
-    const seen = new Set(destination.items.map((item) => item.symbol));
+    const seen = new Set(
+      destination.items.map((item) => `${item.symbol}:${item.groupId}`),
+    );
     const items = [...destination.items];
-    for (const item of incoming.items)
-      if (!seen.has(item.symbol)) {
-        seen.add(item.symbol);
+    for (const item of incoming.items) {
+      const groupId = mapping.get(item.groupId) ?? UNGROUPED;
+      const key = `${item.symbol}:${groupId}`;
+      if (!seen.has(key)) {
+        seen.add(key);
         items.push({
           ...item,
-          groupId: mapping.get(item.groupId) ?? UNGROUPED,
+          groupId,
         });
       }
-    result['fin-terminal.watchlist.v2'] = JSON.stringify({
-      version: 2,
-      groups,
-      items,
-    });
+    }
+    result['fin-terminal.watchlist.v2'] = JSON.stringify(
+      normalizeWatchlist({
+        version: 2,
+        groups,
+        items,
+        order: [
+          ...(destination.order ?? destination.items.map((i) => i.symbol)),
+          ...(incoming.order ?? incoming.items.map((i) => i.symbol)),
+        ],
+      }),
+    );
   }
   const notes = (raw: string | undefined): { id: string; text: string }[] => {
     try {

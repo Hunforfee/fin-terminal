@@ -64,11 +64,12 @@ test('reject unsupported, oversized and malformed files; never silently truncate
  await assert.rejects(readImportFile(file('bad.xlsx',Buffer.from('600519'))),/有效/);
  assert.throws(()=>parseImportTables([{source:'large',rows:Array.from({length:MAX_IMPORT_ROWS+1},()=>['600519'])}]),/最多导入/);
 });
-test('bulk import is atomic, default skips existing assignments and preserves global order', () => {
+test('bulk import allows cross-group overlaps, skips within-group duplicates and preserves global order', () => {
  let state=migrateWatchlist(['600519','00700']);
  state=changeWatchlist(state,{type:'import',codes:['600519','600415','600415','000858'],groupId:'new',moveExisting:false,newGroup:{id:'new',name:'导入分组'}});
- assert.deepEqual(state.items.map(item=>[item.symbol,item.groupId]),[['sh600519','ungrouped'],['hk00700','ungrouped'],['sh600415','new'],['sz000858','new']]);
- state=changeWatchlist(state,{type:'import',codes:['600519','600415'],groupId:'new',moveExisting:true});assert.equal(state.items[0].groupId,'new');assert.equal(state.items.length,4);
+ assert.deepEqual(state.items.map(item=>[item.symbol,item.groupId]),[['hk00700','ungrouped'],['sh600519','new'],['sh600415','new'],['sz000858','new']]);
+ state=changeWatchlist(state,{type:'import',codes:['600519','600415'],groupId:'new',moveExisting:true});assert.equal(state.items.length,4);
+ state=changeWatchlist(state,{type:'import',codes:['600519','600415'],groupId:'second',moveExisting:false,newGroup:{id:'second',name:'第二组'}});assert.equal(state.items.length,6);assert.equal(state.items.filter(i=>i.symbol==='sh600519').length,2);
  assert.strictEqual(changeWatchlist(state,{type:'import',codes:['600519'],groupId:'missing',moveExisting:true}),state);
  assert.strictEqual(changeWatchlist(state,{type:'import',codes:['600519'],groupId:'duplicate',moveExisting:true,newGroup:{id:'duplicate',name:'导入分组'}}),state);
 });

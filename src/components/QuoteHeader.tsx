@@ -116,7 +116,7 @@ export default function QuoteHeader({ quote }: { quote: Quote }) {
                 href={`/stock/${quote.market === "HK" ? quote.symbol : quote.code}/finance`}
                 className="chip border border-brand-300 bg-white text-brand-700 hover:bg-brand-50"
               >
-                财务体检 →
+                财务体检
               </Link>
               <WatchlistButton code={quote.symbol} name={quote.name} />
             </>

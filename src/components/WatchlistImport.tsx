@@ -37,13 +37,11 @@ export default function WatchlistImport({
   const [rows, setRows] = useState<CheckedRow[]>([]);
   const [rejected, setRejected] = useState<ImportRow[]>([]);
   const [duplicates, setDuplicates] = useState(0);
-  const [moveExisting, setMoveExisting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState('');
   const [error, setError] = useState('');
   const [receipt, setReceipt] = useState<{
     added: number;
-    moved: number;
     skipped: number;
     groupId: string;
   } | null>(null);
@@ -163,18 +161,16 @@ export default function WatchlistImport({
     ? target
     : UNGROUPED;
   const valid = rows.filter((row) => row.verified);
-  const added = valid.filter((row) => !wl.has(row.symbol!)).length;
+  const willAdd = (symbol: string) =>
+    newGroup ||
+    (destination === UNGROUPED
+      ? !wl.has(symbol)
+      : !wl.groupsOf(symbol).includes(destination));
+  const added = valid.filter((row) => willAdd(row.symbol!)).length;
   const existing = valid.length - added;
-  const moved = moveExisting
-    ? valid.filter(
-        (row) =>
-          wl.has(row.symbol!) &&
-          (newGroup || wl.groupOf(row.symbol!) !== destination),
-      ).length
-    : 0;
   const failed = [...rejected, ...rows.filter((row) => !row.verified)];
   function commit() {
-    if (busy || added + moved === 0) return;
+    if (busy || added === 0) return;
     if (newGroup) {
       const issue = groupNameError(newName, wl.groups);
       if (issue) {
@@ -185,7 +181,6 @@ export default function WatchlistImport({
     const result = wl.importMany(
       valid.map((row) => row.symbol!),
       destination,
-      moveExisting,
       newGroup ? newName : undefined,
     );
     if (!result) {
@@ -204,8 +199,7 @@ export default function WatchlistImport({
             role="status"
             className="rounded-lg bg-brand-50 p-4 text-sm text-brand-700"
           >
-            新增 {receipt.added} 只 · 移组 {receipt.moved} 只 · 已有跳过{' '}
-            {receipt.skipped} 只
+            加入分组 {receipt.added} 只 · 组内已有跳过 {receipt.skipped} 只
           </div>
           <div className="flex justify-end">
             <button type="button" className="btn-primary" onClick={onClose}>
@@ -359,7 +353,7 @@ export default function WatchlistImport({
                 <span>
                   可新增 <b className="text-brand-700">{added}</b>
                 </span>
-                <span>已有自选 {existing}</span>
+                <span>组内已有 {existing}</span>
                 <span>文件内重复 {duplicates}</span>
                 <span className={failed.length ? 'text-amber-700' : ''}>
                   未识别 {failed.length}
@@ -384,13 +378,11 @@ export default function WatchlistImport({
                           <td className="px-3 py-2">{row.name}</td>
                           <td className="px-3 py-2 font-mono">{row.symbol}</td>
                           <td className="px-3 py-2 text-slate-500">
-                            {!wl.has(row.symbol!)
-                              ? '新增'
-                              : moveExisting &&
-                                  (newGroup ||
-                                    wl.groupOf(row.symbol!) !== destination)
-                                ? '移入分组'
-                                : '已有跳过'}
+                            {willAdd(row.symbol!)
+                              ? wl.has(row.symbol!)
+                                ? '加入分组'
+                                : '新增'
+                              : '已有跳过'}
                           </td>
                         </tr>
                       ))}
@@ -416,18 +408,6 @@ export default function WatchlistImport({
                   </div>
                 </details>
               )}
-              {existing > 0 && (
-                <label className="flex items-start gap-2 text-xs text-slate-600">
-                  <input
-                    type="checkbox"
-                    aria-label="将已有自选移入目标分组"
-                    checked={moveExisting}
-                    onChange={(e) => setMoveExisting(e.target.checked)}
-                    className="mt-0.5 accent-blue-600"
-                  />
-                  将已有自选移入目标分组
-                </label>
-              )}
             </>
           )}
           {error && (
@@ -441,11 +421,11 @@ export default function WatchlistImport({
             </button>
             <button
               type="button"
-              disabled={busy || added + moved === 0}
+              disabled={busy || added === 0}
               onClick={commit}
               className="btn-primary"
             >
-              导入 {added + moved} 只
+              导入 {added} 只
             </button>
           </div>
         </div>

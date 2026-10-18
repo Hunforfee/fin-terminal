@@ -17,29 +17,24 @@ export default function WatchlistButton({
 }) {
   const wl = useWatchlist();
   const [open, setOpen] = useState(false);
-  const [group, setGroup] = useState(UNGROUPED);
+  const [groups, setGroups] = useState<string[]>([]);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
   const saved = wl.has(code);
   function save(event: React.FormEvent) {
     event.preventDefault();
-    let target = group;
     if (creating) {
       const problem = groupNameError(newName, wl.groups);
       if (problem) {
         setError(problem);
         return;
       }
-      const id = wl.createGroup(newName);
-      if (!id) return;
-      target = id;
     }
-    if (!creating && !wl.groups.some((g) => g.id === target)) {
-      setError('请选择分组');
+    if (!wl.setGroups(code, groups, creating ? newName : undefined)) {
+      setError('分组已变化，请重新选择');
       return;
     }
-    wl.add(code, target);
     setOpen(false);
   }
   return (
@@ -51,19 +46,22 @@ export default function WatchlistButton({
         aria-label={`${saved ? '调整' : '添加'}${name}${saved ? '的自选分组' : '到自选'}`}
         title={
           saved
-            ? `当前分组：${wl.groups.find((g) => g.id === wl.groupOf(code))?.name ?? '未分组'}`
+            ? `当前分组：${wl.groups
+                .filter((g) => wl.groupsOf(code).includes(g.id))
+                .map((g) => g.name)
+                .join('、')}`
             : undefined
         }
         className={`${compact ? 'rounded-md px-2 py-1 text-xs' : 'chip border'} ${saved ? 'border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'} disabled:opacity-50`}
         onClick={() => {
-          setGroup(wl.groupOf(code));
+          setGroups(saved ? wl.groupsOf(code) : [UNGROUPED]);
           setCreating(false);
           setNewName('');
           setError('');
           setOpen(true);
         }}
       >
-        {label ?? (saved ? '★ 已自选' : '☆ 加自选')}
+        {label ?? (saved ? '已自选' : '加自选')}
       </button>
       <Modal
         open={open}
@@ -72,20 +70,32 @@ export default function WatchlistButton({
       >
         <form onSubmit={save} className="space-y-4">
           <fieldset className="space-y-2">
-            <legend className="mb-2 text-xs text-slate-500">选择分组</legend>
+            <legend className="mb-2 text-xs text-slate-500">
+              选择分组（可多选）
+            </legend>
             {wl.groups.map((g) => (
               <label
                 key={g.id}
-                className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm ${!creating && group === g.id ? 'border-brand-300 bg-brand-50 text-brand-700' : 'border-slate-200 hover:bg-slate-50'}`}
+                className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm ${groups.includes(g.id) ? 'border-brand-300 bg-brand-50 text-brand-700' : 'border-slate-200 hover:bg-slate-50'}`}
               >
                 <input
-                  type="radio"
+                  type="checkbox"
                   name="watch-group"
                   value={g.id}
-                  checked={!creating && group === g.id}
+                  checked={
+                    g.id === UNGROUPED
+                      ? !creating && !groups.some((id) => id !== UNGROUPED)
+                      : groups.includes(g.id)
+                  }
                   onChange={() => {
-                    setGroup(g.id);
-                    setCreating(false);
+                    setGroups((prev) =>
+                      g.id === UNGROUPED
+                        ? [UNGROUPED]
+                        : prev.includes(g.id)
+                          ? prev.filter((id) => id !== g.id)
+                          : [...prev.filter((id) => id !== UNGROUPED), g.id],
+                    );
+                    if (g.id === UNGROUPED) setCreating(false);
                     setError('');
                   }}
                   className="accent-blue-600"

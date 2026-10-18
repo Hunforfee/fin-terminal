@@ -19,3 +19,4 @@ finance-*.png
 
 # TS 增量构建缓存
 *.tsbuildinfo
+data/

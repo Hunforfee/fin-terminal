@@ -4,8 +4,11 @@ export const SESSION_COOKIE = 'fin_session';
 export const SESSION_SECONDS = 30 * 24 * 60 * 60;
 export interface AccountUser {
   id: string;
+  /** 手机号脱敏（138****0000）或用户名注册的显示名 */
   phone: string;
 }
+/** 会话内身份展示名：脱敏手机 或 用户名（3-24 位字母/数字/下划线/中文/连字符） */
+const DISPLAY_RE = /^(1[3-9]\d\*{4}\d{4}|(?!\d{11}$)[\w\u4e00-\u9fa5-]{3,24})$/;
 export function normalizePhone(input: unknown): string | null {
   if (typeof input !== 'string') return null;
   const value = input.replace(/[\s-]/g, '').replace(/^(?:\+86|0086)/, '');
@@ -26,7 +29,7 @@ export function createSession(
   if (
     !user.id ||
     user.id.length > 200 ||
-    !/^1[3-9]\d\*{4}\d{4}$/.test(user.phone)
+    !DISPLAY_RE.test(user.phone)
   )
     throw new Error('无效用户');
   const payload = Buffer.from(
@@ -70,7 +73,7 @@ export function readSession(
       typeof payload.user?.id !== 'string' ||
       !payload.user.id ||
       payload.user.id.length > 200 ||
-      !/^1[3-9]\d\*{4}\d{4}$/.test(payload.user.phone)
+      !DISPLAY_RE.test(payload.user.phone)
     )
       return null;
     return { id: payload.user.id, phone: payload.user.phone };

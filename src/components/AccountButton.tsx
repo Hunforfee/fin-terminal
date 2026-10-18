@@ -4,26 +4,19 @@ import { useEffect, useRef, useState } from 'react';
 import { useAccount } from './AccountProvider';
 import Modal from './Modal';
 
+const USERNAME_RE = /^[\w\u4e00-\u9fa5-]{3,24}$/;
+
 export default function AccountButton() {
   const account = useAccount();
   const [open, setOpen] = useState(false);
-  const [phone, setPhone] = useState('');
-  const [code, setCode] = useState('');
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [sending, setSending] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [remaining, setRemaining] = useState(0);
-  const [sentPhone, setSentPhone] = useState('');
   const menu = useRef<HTMLDetailsElement>(null);
-  const validPhone = /^1[3-9]\d{9}$/.test(phone);
-  useEffect(() => {
-    if (!remaining) return;
-    const timer = setTimeout(
-      () => setRemaining((value) => Math.max(0, value - 1)),
-      1000,
-    );
-    return () => clearTimeout(timer);
-  }, [remaining]);
+  const validUsername = USERNAME_RE.test(username);
+  const validPassword = password.length >= 8;
   useEffect(() => {
     const outside = (event: PointerEvent) => {
       if (menu.current && !menu.current.contains(event.target as Node))
@@ -39,44 +32,21 @@ export default function AccountButton() {
       document.removeEventListener('keydown', escape);
     };
   }, []);
-  async function send() {
-    if (!account.phoneLoginReady || !validPhone || sending || remaining) return;
-    setSending(true);
-    setError('');
-    try {
-      const response = await fetch('/api/auth/send-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-fin-csrf': '1' },
-        body: JSON.stringify({ phone }),
-      });
-      const json = await response.json();
-      if (!response.ok || !json.ok) throw new Error(json.error ?? '发送失败');
-      setSentPhone(phone);
-      setRemaining(
-        Math.max(1, Math.min(120, Number(json.data?.retryAfter) || 60)),
-      );
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '发送失败');
-    } finally {
-      setSending(false);
-    }
-  }
-  async function signIn(event: React.FormEvent) {
+  async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (
-      !account.phoneLoginReady ||
-      !validPhone ||
-      !/^\d{4,8}$/.test(code) ||
-      submitting
-    )
-      return;
+    if (!validUsername || !validPassword || submitting) return;
     setSubmitting(true);
     setError('');
     try {
-      await account.login(phone, code);
+      if (mode === 'register') {
+        await account.register(username, password);
+      } else {
+        await account.login(username, password);
+      }
       setOpen(false);
+      setPassword('');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '登录失败');
+      setError(cause instanceof Error ? cause.message : '操作失败');
     } finally {
       setSubmitting(false);
     }
@@ -176,77 +146,66 @@ export default function AccountButton() {
           登录
         </button>
       )}
-      <Modal open={open} title="手机号登录" onClose={() => setOpen(false)}>
-        <form onSubmit={signIn} className="space-y-4">
-          <label className="block">
-            <span className="mb-2 block text-xs text-slate-500">手机号</span>
-            <div className="flex items-center rounded-lg border border-slate-200 focus-within:border-brand-500">
-              <span className="border-r border-slate-100 px-3 text-sm text-slate-400">
-                +86
-              </span>
-              <input
-                aria-label="登录手机号"
-                autoComplete="tel-national"
-                inputMode="tel"
-                type="tel"
-                value={phone}
-                maxLength={11}
-                onChange={(e) => {
-                  setPhone(e.target.value.replace(/\D/g, '').slice(0, 11));
-                  setCode('');
+      <Modal open={open} title="账号登录" onClose={() => setOpen(false)}>
+        <form onSubmit={submit} className="space-y-4">
+          <div className="flex gap-1.5" role="tablist" aria-label="登录或注册">
+            {(
+              [
+                ['login', '登录'],
+                ['register', '注册新账号'],
+              ] as const
+            ).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                role="tab"
+                aria-selected={mode === k}
+                onClick={() => {
+                  setMode(k);
                   setError('');
                 }}
-                placeholder="请输入手机号"
-                className="min-h-11 min-w-0 flex-1 rounded-lg px-3 text-sm outline-none"
-              />
-            </div>
+                className={`min-h-8 flex-1 rounded-lg px-3 text-xs font-medium transition ${
+                  mode === k
+                    ? 'bg-brand-600 text-white'
+                    : 'border border-slate-200 bg-white text-slate-600 hover:border-brand-300'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <label className="block">
+            <span className="mb-2 block text-xs text-slate-500">用户名</span>
+            <input
+              aria-label="用户名"
+              autoComplete="username"
+              value={username}
+              maxLength={24}
+              onChange={(e) => {
+                setUsername(e.target.value.trim());
+                setPassword('');
+                setError('');
+              }}
+              placeholder="3-24 位字母、数字、下划线或中文"
+              className="input min-h-11 w-full"
+            />
           </label>
           <label className="block">
-            <span className="mb-2 block text-xs text-slate-500">
-              短信验证码
-            </span>
-            <div className="flex gap-2">
-              <input
-                aria-label="短信验证码"
-                autoComplete="one-time-code"
-                inputMode="numeric"
-                value={code}
-                maxLength={8}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-                className="input min-w-0 flex-1"
-                placeholder="请输入验证码"
-              />
-              <button
-                type="button"
-                disabled={
-                  !account.phoneLoginReady ||
-                  !validPhone ||
-                  sending ||
-                  remaining > 0
-                }
-                onClick={() => {
-                  void send();
-                }}
-                className="btn shrink-0 !px-3 !text-xs"
-              >
-                {sending
-                  ? '发送中…'
-                  : remaining
-                    ? `${remaining}s 后重发`
-                    : '获取验证码'}
-              </button>
-            </div>
+            <span className="mb-2 block text-xs text-slate-500">密码</span>
+            <input
+              aria-label="密码"
+              autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+              type="password"
+              value={password}
+              maxLength={128}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setError('');
+              }}
+              placeholder="至少 8 位"
+              className="input min-h-11 w-full"
+            />
           </label>
-          {!account.phoneLoginReady && (
-            <p className="text-xs text-slate-500">
-              短信登录服务待 WorkBuddy 接入，当前可继续使用访客模式。
-            </p>
-          )}
-          {sentPhone === phone && remaining > 0 && (
-            <p role="status" className="text-xs text-slate-500">
-              验证码已发送至 {phone.slice(0, 3)}****{phone.slice(-4)}
-            </p>
-          )}
           {error && (
             <p role="alert" className="text-xs text-red-600">
               {error}
@@ -254,16 +213,14 @@ export default function AccountButton() {
           )}
           <button
             type="submit"
-            disabled={
-              !account.phoneLoginReady ||
-              !validPhone ||
-              !/^\d{4,8}$/.test(code) ||
-              submitting
-            }
+            disabled={!validUsername || !validPassword || submitting}
             className="btn-primary w-full"
           >
-            {submitting ? '登录中…' : '登录 / 注册'}
+            {submitting ? '提交中…' : mode === 'register' ? '注册并登录' : '登录'}
           </button>
+          <p className="text-center text-[11px] leading-4 text-slate-400">
+            登录后自选分组、研究笔记、财务配置与 AI 分析历史随账号保存。
+          </p>
         </form>
       </Modal>
     </>

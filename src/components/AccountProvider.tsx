@@ -36,7 +36,8 @@ interface AccountContext {
   phoneLoginReady: boolean;
   status: SyncStatus;
   conflict: boolean;
-  login: (phone: string, code: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
+  register: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   sync: () => Promise<void>;
   importGuest: () => void;
@@ -285,16 +286,22 @@ export default function AccountProvider({
     } catch {}
     router.refresh();
   }
-  async function login(phone: string, code: string) {
-    const response = await fetch('/api/auth/verify', {
+  async function authRequest(path: string, username: string, password: string) {
+    const response = await fetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-fin-csrf': '1' },
-      body: JSON.stringify({ phone, code }),
+      body: JSON.stringify({ username, password }),
     });
     const json = await response.json();
     if (!response.ok || !json.ok) throw new Error(json.error ?? '登录失败');
     changeUser(json.data.user);
     announceAuth();
+  }
+  function login(username: string, password: string) {
+    return authRequest('/api/auth/login', username, password);
+  }
+  function register(username: string, password: string) {
+    return authRequest('/api/auth/register', username, password);
   }
   async function logout() {
     await sync();
@@ -342,6 +349,7 @@ export default function AccountProvider({
         status,
         conflict: !!conflict,
         login,
+        register,
         logout,
         sync,
         importGuest,

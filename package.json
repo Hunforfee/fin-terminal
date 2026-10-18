@@ -12,8 +12,10 @@
     "test": "node --test scripts/tests/*.test.mjs"
   },
   "dependencies": {
+    "@types/nodemailer": "^8.0.2",
     "echarts": "^5.5.1",
     "next": "15.5.28",
+    "nodemailer": "^10.1.2",
     "pg": "8.23.1",
     "react": "19.2.5",
     "react-dom": "19.2.5",

@@ -93,6 +93,27 @@ test('long price histories paginate at 640 rows and deduplicate dates',async () 
  globalThis.fetch=async url=>{const args=new URL(url).searchParams.get('param').split(',');assert.equal(args[4],'640');const date=++calls===1?'2025-01-03':'2025-01-02';return new Response(JSON.stringify({data:{sh600415:{qfqday:[[date,'10','10','10','10','1']]}}}));};
  try {const result=await tencent.fetchKLine('sh600415','day','qfq',3200,'2025-01-02');assert.deepEqual(result.candles.map(c=>c.date),['2025-01-02','2025-01-03']);assert.equal(calls,2);}finally{globalThis.fetch=original;}
 });
+test('kline falls back to the next mirror when upstream WAF returns a 501 challenge page',async () => {
+ const original=globalThis.fetch;const seen=[];
+ globalThis.fetch=async url=>{
+  const u=String(url);seen.push(new URL(u).host);
+  if(u.includes('ifzq.gtimg.cn'))return new Response('<!DOCTYPE html><html><script>location.href="//waf"</script></html>',{status:501});
+  return new Response(JSON.stringify({data:{sh600415:{qfqday:[['2026-10-16','11','11.2','11.3','10.9','100']]}}}));
+ };
+ try {
+  const r=await tencent.fetchKLine('sh600415','day','qfq',320);
+  assert.deepEqual(r.candles.map(c=>c.date),['2026-10-16']);
+  assert.equal(r.candles[0].close,11.2);
+  assert.ok(seen.length>=2,'should have tried the fallback mirror');
+  assert.ok(seen.includes('proxy.finance.qq.com'));
+ }finally{globalThis.fetch=original;}
+});
+test('kline reports an explicit error when every mirror is blocked',async () => {
+ const original=globalThis.fetch;
+ globalThis.fetch=async()=>new Response('<!DOCTYPE html><html>waf</html>',{status:501});
+ try {await assert.rejects(tencent.fetchKLine('sh600415','day','qfq',320),/HTTP 501|invalid json/);}
+ finally{globalThis.fetch=original;}
+});
 test('snapshot identity never substitutes a Shenzhen bank for a Shanghai index', async () => {
  const snapshot=await load('datasource/snapshot');
  const bank=await snapshot.snapshotQuote('sz000001');

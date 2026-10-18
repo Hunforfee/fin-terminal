@@ -12,6 +12,8 @@ export interface FetchOpts {
   headers?: Record<string, string>;
   /** 响应编码，默认 utf-8 */
   encoding?: 'utf-8' | 'gbk';
+  /** 视为临时失败、可切下一数据源的状态码（默认不重试，保持原有行为） */
+  retryStatuses?: number[];
 }
 
 const DEFAULT_TIMEOUT = Number(process.env.UPSTREAM_TIMEOUT_MS ?? 8000);
@@ -28,7 +30,7 @@ export class UpstreamError extends Error {
 }
 
 export async function fetchText(url: string, opts: FetchOpts = {}): Promise<string> {
-  const { timeoutMs = DEFAULT_TIMEOUT, retries = 1, headers = {}, encoding = 'utf-8' } = opts;
+  const { timeoutMs = DEFAULT_TIMEOUT, retries = 1, headers = {}, encoding = 'utf-8', retryStatuses } = opts;
   let lastErr: unknown;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -45,6 +47,10 @@ export async function fetchText(url: string, opts: FetchOpts = {}): Promise<stri
         },
         cache: 'no-store',
       });
+      if (!res.ok && retryStatuses?.includes(res.status)) {
+        // 命中可重试状态（如 WAF 501）：抛普通错误以便重试 / 交由上层切换数据源
+        throw new Error(`HTTP ${res.status}`);
+      }
       if (!res.ok) throw new UpstreamError(`HTTP ${res.status}`, url, 'http');
       const buf = Buffer.from(await res.arrayBuffer());
       if (buf.length === 0) throw new UpstreamError('empty body', url, 'empty');

@@ -3,12 +3,12 @@
  *
  * 已实测可用端点（沙箱 2026-10）：
  *   实时行情  https://qt.gtimg.cn/q=sh600519,sz000001        (GBK)
- *   历史 K 线 https://proxy.finance.qq.com/ifzqgtimg/appstock/app/fqkline/get (JSON)
+ *   历史 K 线 ifzq.gtimg.cn / proxy.finance.qq.com 镜像（按序回退，JSON）
  *   分时      https://web.ifzq.gtimg.cn/appstock/app/minute/query
  *   搜索联想  https://smartbox.gtimg.cn/s3/?q=xxx&t=all      (GBK)
  *
- * 注意：ifzq.gtimg.cn（含 web 子域的 K 线端点）已被 WAF 拦截（返回 501 页面），
- * K 线必须走 proxy.finance.qq.com 反代域名。
+ * 注意：上游 WAF 会返回 501 挑战页（HTML 而非 JSON）且不同域名/节点策略不一致，
+ * 甚至 web 子域的 K 线端点会被拦截而分时正常。K 线因此走多镜像回退（见 KLINE_URLS）。
  */
 
 import { fetchJson, fetchText } from './http';
@@ -16,9 +16,15 @@ import { numOrNull, normalizeCode, buildHk, INDEX_WHITELIST } from './codes';
 import type { Candle, KLineSeries, MinutePoint, Period, Quote, SearchHit, Adjust } from './types';
 
 const QUOTE_URL = 'https://qt.gtimg.cn/q=';
-// ifzq.gtimg.cn 已被 WAF 整域拦截（501），改走 proxy.finance.qq.com 反代端点（数据格式一致）
-const KLINE_URL =
-  'https://proxy.finance.qq.com/ifzqgtimg/appstock/app/fqkline/get';
+/**
+ * 历史 K 线镜像列表（按优先级尝试）。
+ * 上游 WAF 会按域名节点下发拦截策略（实测同一时刻 web 子域 501、主域与 finance 反代 200），
+ * 因此逐个尝试，任何一个返回合法 JSON 即用。
+ */
+const KLINE_URLS = [
+  'https://ifzq.gtimg.cn/appstock/app/fqkline/get',
+  'https://proxy.finance.qq.com/ifzqgtimg/appstock/app/fqkline/get',
+];
 const MINUTE_URL = 'https://web.ifzq.gtimg.cn/appstock/app/minute/query';
 const SMARTBOX_URL = 'https://smartbox.gtimg.cn/s3/';
 
@@ -175,8 +181,26 @@ export async function fetchQuote(symbol: string): Promise<Quote | null> {
   return list[0] ?? null;
 }
 
-/**
- * 历史 K 线。
+/** 依次尝试 K 线镜像域名，直到拿到合法 JSON（WAF 常返回 501 挑战页） */
+async function fetchKLineJson(param: string): Promise<Record<string, unknown>> {
+  let lastErr: unknown;
+  for (const base of KLINE_URLS) {
+    const url = `${base}?param=${encodeURIComponent(param)}`;
+    try {
+      return await fetchJson<Record<string, unknown>>(url, {
+        timeoutMs: 10000,
+        retryStatuses: [403, 429, 500, 502, 503, 504],
+      });
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr instanceof Error
+    ? lastErr
+    : new Error('tencent kline: all mirrors failed');
+}
+
+/** 历史 K 线。
  * param: code,period,start,end,count,adjust
  * 返回体 key 随复权变化：day / qfqday / hfqday
  */
@@ -219,8 +243,7 @@ export async function fetchKLine(
   }
   const p = period === 'minute' ? 'day' : period;
   const param = [symbol, p, startDate ?? '', endDate ?? '', String(count), adjust === 'none' ? '' : adjust].join(',');
-  const url = `${KLINE_URL}?param=${encodeURIComponent(param)}`;
-  const json = await fetchJson<Record<string, unknown>>(url, { timeoutMs: 10000 });
+  const json = await fetchKLineJson(param);
 
   const data = json.data as Record<string, unknown> | undefined;
   const node = data?.[symbol] as Record<string, unknown> | undefined;

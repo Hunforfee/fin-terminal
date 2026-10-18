@@ -19,6 +19,7 @@ import {
   type ResearchSort,
 } from '@/lib/researchColumns';
 import { UNGROUPED } from '@/lib/watchlist';
+import Modal from './Modal';
 import { normalizeCode } from '@/lib/datasource/codes';
 import type { Quote } from '@/lib/datasource/types';
 
@@ -72,6 +73,26 @@ export default function ResearchDesk({
   const [noteError, setNoteError] = useState('');
   const [noteCode, setNoteCode] = useState('');
   const [draft, setDraft] = useState('');
+  const [noteView, setNoteView] = useState<{ code: string; name: string } | null>(
+    null,
+  );
+  const [noteDraft, setNoteDraft] = useState('');
+  const notesFor = (code: string) => notes.filter((n) => n.code === code);
+  const addNoteFor = (code: string, name: string, text: string) => {
+    if (!text.trim()) return false;
+    return saveNotes([
+      {
+        id: crypto.randomUUID(),
+        code,
+        name,
+        text: text.trim(),
+        date: new Date().toLocaleDateString('zh-CN', {
+          timeZone: 'Asia/Shanghai',
+        }),
+      },
+      ...notes,
+    ]);
+  };
   const [filter, setFilter] = useState('');
   useEffect(() => {
     setSelected([]);
@@ -700,6 +721,36 @@ export default function ResearchDesk({
                         groups={groupNames(q.symbol)}
                         href={`/stock/${q.symbol}`}
                       />
+                      <button
+                        type="button"
+                        aria-label={`${q.name}笔记`}
+                        title={
+                          notesFor(q.code).length
+                            ? `笔记 ${notesFor(q.code).length} 条`
+                            : '添加笔记'
+                        }
+                        onClick={() => {
+                          setNoteDraft('');
+                          setNoteView({ code: q.code, name: q.name });
+                        }}
+                        className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-opacity hover:bg-amber-50 focus-visible:text-amber-600 [@media(hover:none)]:opacity-100 ${
+                          notesFor(q.code).length
+                            ? 'text-amber-500'
+                            : 'text-slate-400 hover:text-amber-600 opacity-0 group-hover/stock:opacity-100 focus-within:opacity-100'
+                        }`}
+                      >
+                        <svg
+                          aria-hidden="true"
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                        >
+                          <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                        </svg>
+                      </button>
                       <span className="flex items-center opacity-0 transition-opacity group-hover/stock:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
                         <button
                           type="button"
@@ -846,6 +897,68 @@ export default function ResearchDesk({
           {noteError}
         </p>
       )}
+      <Modal
+        open={!!noteView}
+        title={noteView ? `${noteView.name} · 笔记` : '笔记'}
+        onClose={() => setNoteView(null)}
+      >
+        {noteView && (
+          <div className="space-y-4">
+            <div className="max-h-64 space-y-2 overflow-y-auto">
+              {notesFor(noteView.code).length === 0 ? (
+                <p className="text-sm text-slate-400">暂无笔记</p>
+              ) : (
+                notesFor(noteView.code).map((n) => (
+                  <div
+                    key={n.id}
+                    className="rounded-lg border border-slate-100 bg-slate-50 p-3"
+                  >
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <span className="text-xs text-slate-400">{n.date}</span>
+                      <button
+                        type="button"
+                        aria-label="删除笔记"
+                        className="text-xs text-slate-400 hover:text-red-600"
+                        onClick={() =>
+                          saveNotes(notes.filter((x) => x.id !== n.id))
+                        }
+                      >
+                        删除
+                      </button>
+                    </div>
+                    <p className="whitespace-pre-wrap text-sm text-slate-700">
+                      {n.text}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+            <textarea
+              aria-label="新增笔记"
+              className="input min-h-24 w-full resize-y"
+              placeholder="记录研究观点、买卖逻辑…"
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+            />
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn" onClick={() => setNoteView(null)}>
+                关闭
+              </button>
+              <button
+                type="button"
+                className="btn bg-brand-600 text-white hover:bg-brand-700"
+                disabled={!noteDraft.trim()}
+                onClick={() => {
+                  if (addNoteFor(noteView.code, noteView.name, noteDraft))
+                    setNoteDraft('');
+                }}
+              >
+                保存笔记
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
       {!management && (
         <div className="grid items-start gap-5 lg:grid-cols-[1fr_360px]">
           <section className="card p-5">

@@ -46,6 +46,41 @@ function parseBing(html: string): SearchHit[] {
   return hits;
 }
 
+/** 解析搜狗结果页（h3>a 块；链接多为 /link?url= 跳转，fetch 会自动跟随 302） */
+function parseSogou(html: string): SearchHit[] {
+  const hits: SearchHit[] = [];
+  const blocks = html.split(/<h3[^>]*>/).slice(1);
+  for (const block of blocks) {
+    const linkM = /<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/.exec(block);
+    if (!linkM) continue;
+    let url = decodeEntities(linkM[1]);
+    if (url.startsWith('/')) url = `https://www.sogou.com${url}`;
+    if (!/^https?:\/\//.test(url)) continue;
+    const title = stripTags(linkM[2]);
+    if (!url || !title) continue;
+    hits.push({ title, url, snippet: '' });
+  }
+  return hits;
+}
+
+async function sogouSearch(query: string, timeoutMs = 15000): Promise<SearchHit[]> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const url = `https://www.sogou.com/web?query=${encodeURIComponent(query)}`;
+    const r = await fetch(url, {
+      headers: { 'User-Agent': UA, 'Accept-Language': 'zh-CN,zh;q=0.9' },
+      signal: ctrl.signal,
+    });
+    if (!r.ok) return [];
+    return parseSogou(await r.text());
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function bingSearch(query: string, timeoutMs = 15000): Promise<SearchHit[]> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -65,6 +100,13 @@ async function bingSearch(query: string, timeoutMs = 15000): Promise<SearchHit[]
   }
 }
 
+/** 单查询检索：搜狗优先（中文结果质量好、不拆词），Bing 兜底 */
+async function webSearch(query: string): Promise<SearchHit[]> {
+  const sogou = await sogouSearch(query);
+  if (sogou.length > 0) return sogou;
+  return bingSearch(query);
+}
+
 /** 针对个股的多查询检索：合并去重，返回最多 max 条 */
 export async function searchStockContext(
   name: string,
@@ -76,7 +118,7 @@ export async function searchStockContext(
     `${name} 年报 营收 净利润`,
     `${name} 股票 分析 研报`,
   ];
-  const settled = await Promise.allSettled(queries.map((q) => bingSearch(q)));
+  const settled = await Promise.allSettled(queries.map((q) => webSearch(q)));
   const seen = new Set<string>();
   const hits: SearchHit[] = [];
   let anyOk = false;
@@ -84,17 +126,30 @@ export async function searchStockContext(
     if (s.status !== 'fulfilled') continue;
     if (s.value.length > 0) anyOk = true;
     for (const h of s.value) {
-      const key = new URL(h.url).hostname + new URL(h.url).pathname;
+      // 去重键：普通链接按 host+path；搜狗 /link?url= 跳转链接 path 都相同，改用完整 URL
+      const u = new URL(h.url);
+      const key = /^\/link\b/.test(u.pathname) ? h.url : u.hostname + u.pathname;
       if (seen.has(key)) continue;
       seen.add(key);
       hits.push(h);
     }
   }
+  // 相关性分级：标题命中公司名（含简称别名）/代码的排前，完全不相关的直接过滤
+  // 别名：去掉「控股/集团/股份」后缀；再去掉省市前缀（贵州茅台→茅台）
+  const PROVINCE = '北京|上海|天津|重庆|内蒙古|广西|西藏|新疆|宁夏|黑龙江|辽宁|吉林|河北|河南|山东|山西|江苏|浙江|安徽|福建|江西|湖北|湖南|广东|海南|四川|贵州|云南|陕西|甘肃|青海';
+  const base = name.replace(/(控股|集团|股份)$/, '');
+  const alias = [name, code, base];
+  const noProv = new RegExp(`^(?:${PROVINCE})`).test(base) ? base.replace(new RegExp(`^(?:${PROVINCE})`), '') : '';
+  if (noProv.length >= 2) alias.push(noProv);
+  const rel = (h: SearchHit) => (alias.some((a) => a.length >= 2 && h.title.includes(a)) ? 0 : 2);
+  const kept = hits.filter((h) => rel(h) < 2);
+  // 保底：相关结果不足 3 条（如搜索源限频）时，放宽补入低相关结果，避免空上下文
+  const ranked = kept.length >= 3 ? kept : [...kept, ...hits.filter((h) => rel(h) === 2)];
   // 优先保留巨潮/交易所/官方等权威来源
   const weight = (u: string) =>
     /cninfo|sse\.com\.cn|szse\.cn|eastmoney|sina|10jqka|cs\.com\.cn|stcn\.com/.test(u) ? 0 : 1;
-  hits.sort((a, b) => weight(a.url) - weight(b.url));
-  return { hits: hits.slice(0, max), ok: anyOk };
+  ranked.sort((a, b) => weight(a.url) - weight(b.url));
+  return { hits: ranked.slice(0, max), ok: anyOk };
 }
 
 /** 把检索结果拼成注入 prompt 的文本块（有全文的附全文节选） */

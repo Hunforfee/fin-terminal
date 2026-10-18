@@ -32,8 +32,8 @@ const PRESETS: { id: string; label: string; url: string; model: string; hint: st
     id: 'tokenhub',
     label: '腾讯 TokenHub',
     url: 'https://tokenhub.tencentmaas.com/v1/chat/completions',
-    model: 'deepseek-v4-flash',
-    hint: '腾讯云大模型平台（广州），OpenAI 兼容；模型也可换 deepseek-v4-pro、glm-5.1、kimi-k2.6 等',
+    model: 'deepseek-v4.1-flash',
+    hint: '腾讯云大模型平台（广州），OpenAI 兼容；模型也可换 deepseek-v4-pro、glm-5.3、kimi-k2.6 等（以控制台开通的模型为准）',
   },
   {
     id: 'deepseek',
@@ -120,7 +120,10 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
     setVersions(loadJson<Version[]>(histKey(code), []));
     setApiKey(localStorage.getItem(LS_KEY) || '');
     setApiUrl(localStorage.getItem(LS_URL) || '');
-    setApiModel(localStorage.getItem(LS_MODEL) || '');
+    // 旧版预设模型已下线：deepseek-v4-flash → deepseek-v4.1-flash
+    const savedModel = localStorage.getItem(LS_MODEL) || '';
+    setApiModel(savedModel === 'deepseek-v4-flash' ? 'deepseek-v4.1-flash' : savedModel);
+    if (savedModel === 'deepseek-v4-flash') localStorage.setItem(LS_MODEL, 'deepseek-v4.1-flash');
     booted.current = true;
   }, [code]);
 
@@ -345,7 +348,7 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
                   localStorage.setItem(LS_MODEL, apiModel);
                 } catch {}
               }}
-              placeholder="模型（如 deepseek-v4-flash）"
+              placeholder="模型（如 deepseek-v4.1-flash）"
               className="input !w-full py-1 text-xs sm:!w-40"
             />
           </div>

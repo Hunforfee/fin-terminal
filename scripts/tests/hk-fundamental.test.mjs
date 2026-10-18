@@ -26,7 +26,7 @@ test('hk quote snapshots must not carry pb or dividend yield from positional fie
 });
 
 test('dividend yield sums one fiscal year (interim + final), not a rolling 12-month slice', () => {
-  // 按除息日滚动 12 个月会得到 6.52 + 7.43 = 13.95（跨了两个财年，港交所真实值偏高 60%）
+  // 滚动 12 个月为 6.52 + 7.43 = 13.95，与 FY2025 的 6 + 6.52 = 12.52 是不同口径。
   const v = computeHkValuation(
     { reportDate: '2026-06-30', reportType: '', bps: 41.553, totalMarketCap: null },
     parseHkDividends(HKEX),
@@ -38,13 +38,15 @@ test('dividend yield sums one fiscal year (interim + final), not a rolling 12-mo
   assert.equal(v.dividendYield, 3.34);
 });
 
-test('duplicated disclosure of the same fiscal year slot is counted once', () => {
+test('ordinary final and special cash distributions with equal dates and amounts are distinct', () => {
   const rows = [
     { ASSIGN_PERIOD: '2025末期', EX_DIVIDEND_DATE: '2026-06-08', NOTICE_DATE: '2026-06-08', PLAN_EXPLAIN: '每股派人民币0.3992元(相当于港币0.46088元)', ASSIGN_PROGRESS: '实施分配' },
     { ASSIGN_PERIOD: '特别分配', EX_DIVIDEND_DATE: '2026-06-08', NOTICE_DATE: '2026-06-08', PLAN_EXPLAIN: '每股派人民币0.3992元(相当于港币0.46088元)', ASSIGN_PROGRESS: '实施分配' },
   ];
   const s = sumTtmDividend(parseHkDividends(rows));
-  assert.equal(s.ttmDps, 0.46088, '特别分配与末期同日同额时不能翻倍');
+  assert.equal(s.ttmDps, 0.92176, '同日普通末期和特别现金分配是真实两笔，均计入完整财年');
+  assert.equal(s.ordinaryDps, 0.46088);
+  assert.equal(s.specialDps, 0.46088);
 });
 
 test('hkd amount is taken from the converted quote, other currencies are not guessed', () => {
@@ -55,19 +57,20 @@ test('hkd amount is taken from the converted quote, other currencies are not gue
   assert.equal(parseHkDps('特殊说明:每10股分派1股美团B类普通股股份(相当于每股派18.13港元)'), null, '股份分派不是现金股息');
 });
 
-test('cancelled plans are excluded', () => {
+test('cancelled closing plans do not turn a lone interim into a complete fiscal year', () => {
   const rows = [
     { ASSIGN_PERIOD: '2025末期', EX_DIVIDEND_DATE: '2026-03-11', NOTICE_DATE: '2026-02-26', PLAN_EXPLAIN: '每股派港币6.52元', ASSIGN_PROGRESS: '取消分配' },
     { ASSIGN_PERIOD: '2025中期', EX_DIVIDEND_DATE: '2025-09-02', NOTICE_DATE: '2025-08-20', PLAN_EXPLAIN: '每股派港币6元', ASSIGN_PROGRESS: '实施分配' },
   ];
   const s = sumTtmDividend(parseHkDividends(rows));
-  assert.equal(s.ttmDps, 6);
+  assert.equal(s.ttmDps, null);
+  assert.equal(s.fiscalYear, null);
 });
 
 test('pb uses latest book value per share and price', () => {
-  const f = parseHkFundamental([{ REPORT_DATE: '2026-06-30 00:00:00', REPORT_TYPE: '2026年中报', BPS: 124.919978879778 }]);
+  const f = parseHkFundamental([{ REPORT_DATE: '2026-06-30 00:00:00', REPORT_TYPE: '2026年中报', BPS: 124.919978879778, CURRENCY: 'HKD', PB_TTM: 2.904901147552, TOTAL_MARKET_CAP: 3798907009556.2, ISSUED_COMMON_SHARES: 9092644829 }]);
   const v = computeHkValuation(f, [], 417.8);
-  assert.equal(v.pb, 3.345);
+  assert.equal(v.pb, 2.905);
   assert.equal(v.dividendYield, null, '没有派息记录时股息率留空，不填 0');
 });
 
@@ -91,7 +94,8 @@ test('eastmoney hk fundamental request uses securities report and reports upstre
   };
   try {
     const f = await fetchHkFundamental('00322');
-    assert.equal(f.bps, 2.2898);
+    assert.equal(f.bps, null, 'BPS 的币种不能由行情 CURRENCY 或缺失的换算字段猜测');
+    assert.equal(f.rawBps, 2.2898);
     assert.match(seen, /RPT_HKF10_FN_MAININDICATOR/);
     assert.match(seen, /SECURITY_CODE%3D%2200322%22/);
   } finally {

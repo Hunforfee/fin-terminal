@@ -441,6 +441,12 @@ export default function ValuationSection({ code }: { code: string }) {
       values,
     };
   }, [data, selected]);
+  const dividendLabel = data?.dividendYieldMethod === 'hk-static'
+    ? '股息率（静态）'
+    : data?.dividendYieldMethod === 'announced-forward' ? '预期股息率' : '股息率';
+  const dividendTitle = data?.dividendYieldMethod === 'hk-static'
+    ? `${data.dividendFiscalYear ?? '暂无完整'}财年已实施现金股息 ÷ 当前股价；每股 ${data.dividendPerShare?.total?.toFixed(6) ?? '—'} 港元，其中普通 ${data.dividendPerShare?.ordinary?.toFixed(6) ?? '—'}、特别 ${data.dividendPerShare?.special?.toFixed(6) ?? '—'} 港元。`
+    : '预期股息率：在该时间点买入后，未来一年预计税前股息收入占买入金额的比例。';
   return (
     <section aria-label="估值分析" aria-busy={loading}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -491,10 +497,7 @@ export default function ValuationSection({ code }: { code: string }) {
               >
                 <div className="flex items-center justify-between gap-1 text-xs font-medium text-slate-500 sm:text-sm">
                   <span>
-                    {p.key === 'dy' &&
-                    data.dividendYieldMethod !== 'announced-forward'
-                      ? '股息率（原口径）'
-                      : p.label}
+                    {p.key === 'dy' ? dividendLabel : p.label}
                   </span>
                   <span
                     className={`hidden h-1.5 w-1.5 rounded-full sm:block ${selected === p.key ? 'bg-brand-600' : 'bg-slate-200'}`}
@@ -504,10 +507,7 @@ export default function ValuationSection({ code }: { code: string }) {
                   <span
                     className={`inline-flex max-w-full flex-wrap items-baseline text-xl font-semibold tracking-tight sm:text-3xl ${p.key === 'dy' ? 'text-brand-600' : 'text-slate-900'}`}
                     title={
-                      p.key === 'dy' &&
-                      data.dividendYieldMethod === 'announced-forward'
-                        ? '预期股息率：在该时间点买入后，未来一年预计税前股息收入占买入金额的比例。'
-                        : undefined
+                      p.key === 'dy' ? dividendTitle : undefined
                     }
                   >
                     {(p.key === 'dy'
@@ -537,10 +537,11 @@ export default function ValuationSection({ code }: { code: string }) {
                     )}
                 </div>
                 <div className="mt-2 text-[11px] text-slate-500 sm:text-xs">
-                  历史分位{' '}
-                  <span className="font-medium tabular-nums text-brand-600">
-                    {p.stats?.pct == null ? '--' : p.stats.pct.toFixed(1) + '%'}
-                  </span>
+                  {p.key === 'dy' && data.dividendYieldMethod === 'hk-static'
+                    ? <span title={dividendTitle}>{data.dividendFiscalYear ? `${data.dividendFiscalYear}财年` : '暂无完整财年'}{(data.dividendPerShare?.special ?? 0) > 0 ? ' · 含特别现金息' : ''}</span>
+                    : <>历史分位{' '}<span className="font-medium tabular-nums text-brand-600">
+                      {p.stats?.pct == null ? '--' : p.stats.pct.toFixed(1) + '%'}
+                    </span></>}
                 </div>
               </button>
             ))}
@@ -550,9 +551,7 @@ export default function ValuationSection({ code }: { code: string }) {
               <div className="flex items-center gap-3">
                 <h3 className="font-semibold text-slate-900">
                   {current?.key === 'dy'
-                    ? data.dividendYieldMethod === 'announced-forward'
-                      ? '预期股息率'
-                      : '股息率（原口径）'
+                    ? dividendLabel
                     : current?.label}{' '}
                   历史走势
                 </h3>
@@ -585,9 +584,7 @@ export default function ValuationSection({ code }: { code: string }) {
                     history={data.history}
                     metric={current.key}
                     dividendLabel={
-                      data.dividendYieldMethod === 'announced-forward'
-                        ? '预期股息率'
-                        : '股息率（原口径）'
+                      dividendLabel
                     }
                     stats={current.stats}
                     picked={(() => {

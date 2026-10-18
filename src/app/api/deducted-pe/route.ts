@@ -19,7 +19,7 @@ export interface DeductedPeRow {
   symbol: string;
   /** 扣非 PE-TTM，null 表示不可得 */
   pe: number | null;
-  /** 参与计算的四个报告期（升序），便于核对口径 */
+  /** 已算出的单季报告期（升序）；完整 TTM 为四期 */
   quarters: string[];
 }
 
@@ -38,21 +38,24 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
 }
 
 async function one(symbol: string): Promise<DeductedPeRow> {
-  const row = await cached(`deducted-pe:${symbol}`, 3600e3, async () => {
-    const code = symbol.slice(2);
-    // 港股 / 基金不适用 A 股扣非口径
-    if (!/^(sh|sz|bj)\d{6}$/.test(symbol)) return { symbol, pe: null, quarters: [] };
+  // 港股 / 基金不适用 A 股扣非口径。
+  if (!/^(sh|sz|bj)\d{6}$/.test(symbol)) return { symbol, pe: null, quarters: [] };
+  try {
     const [periods, quote] = await Promise.all([
-      fetchDeductedPeriods(code),
+      // 只缓存更新较慢的财报；最终 PE 每次按行情层当前市值重新计算。
+      cached(`deducted-periods-v2:${symbol}`, 3600e3, () =>
+        fetchDeductedPeriods(symbol.slice(2)),
+      ),
       getQuote(symbol).catch(() => null),
     ]);
     // 总市值单位为亿元，折算成元与净利润口径一致
     const cap =
       quote?.totalMarketCap != null ? quote.totalMarketCap * 1e8 : null;
     const r = computeDeductedPe(periods, cap);
-    return { symbol, pe: r.pe, quarters: r.quarters.slice().reverse() };
-  }).catch(() => ({ symbol, pe: null, quarters: [] }));
-  return row;
+    return { symbol, pe: r.pe, quarters: r.quarters };
+  } catch {
+    return { symbol, pe: null, quarters: [] };
+  }
 }
 
 export async function GET(request: NextRequest) {

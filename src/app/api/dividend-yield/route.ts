@@ -3,9 +3,8 @@ import { ok, fail, sp } from '@/lib/api';
 import { normalizeStockCode } from '@/lib/datasource/codes';
 import { fetchDividendPlans } from '@/lib/datasource/dividendPlans';
 import { fetchDividends } from '@/lib/datasource/sinaBonus';
-import { getKLine } from '@/lib/datasource';
-import { fetchQuote } from '@/lib/datasource/tencent';
-import { fetchHkFundamental, fetchHkDividends, computeHkValuation } from '@/lib/datasource/hkFundamental';
+import { getKLine, getQuote, getHkCurrentValuation } from '@/lib/datasource';
+import type { Quote } from '@/lib/datasource/types';
 import { buildExpectedDividendYieldByDate } from '@/lib/dividends';
 import { cached } from '@/lib/datasource/cache';
 
@@ -26,6 +25,8 @@ export interface DividendYieldRow {
   dy: number | null;
   /** announced-forward：A股公告方案延续法（预期）；hk-static：港股最近年度静态 */
   method: 'announced-forward' | 'hk-static';
+  fiscalYear?: string | null;
+  perShare?: Quote['dividendPerShare'];
 }
 
 async function mapLimit<T, R>(
@@ -47,37 +48,39 @@ async function mapLimit<T, R>(
 }
 
 /**
- * 港股股息率 %：最近年度每股派息(DPS) / 现价。
- * 港股无 A 股口径的分红预案（无「预期股息率」概念），口径为静态股息率。
+ * 港股静态股息率 %：最新完整财年已实施现金派息（含特别现金息）/ 现价。
+ * 与港股列表和详情共用数据；它不是对未来一年派息的预测。
  */
 async function hkYield(
   symbol: string,
-): Promise<{ dy: number | null; method: DividendYieldRow['method'] }> {
-  return cached(`hk-dy:${symbol}`, 1800e3, async () => {
-    const code = symbol.slice(2);
-    const [f, dividends, q] = await Promise.all([
-      fetchHkFundamental(code).catch(() => null),
-      fetchHkDividends(code).catch(() => []),
-      fetchQuote(symbol).catch(() => null),
-    ]);
-    const v = computeHkValuation(f, dividends, q?.price ?? null);
-    return { dy: v.dividendYield, method: 'hk-static' as const };
-  }).catch(() => ({ dy: null, method: 'hk-static' as const }));
+): Promise<Omit<DividendYieldRow, 'symbol'>> {
+  try {
+    const quote = await getQuote(symbol);
+    const v = await getHkCurrentValuation(symbol, quote?.price ?? null);
+    return { dy: v.dividendYield, method: 'hk-static', fiscalYear: v.fiscalYear,
+      perShare: { ordinary: v.ordinaryDps, special: v.specialDps, total: v.ttmDps } };
+  } catch {
+    return { dy: null, method: 'hk-static', fiscalYear: null };
+  }
 }
 
-/** 单只股票的预期股息率（30 分钟缓存，分红方案按日更新） */
+/** 只缓存方案与派息记录，分母使用行情自身的短缓存。 */
 async function expectedYield(symbol: string): Promise<number | null> {
-  return cached(`expected-dy:${symbol}`, 1800e3, async () => {
+  try {
     const [plans, dividends, kline] = await Promise.all([
-      fetchDividendPlans(symbol.slice(2)).catch(() => null),
-      fetchDividends(symbol.slice(2)).catch(() => []),
+      cached(`expected-dividend-plans-v2:${symbol}`, 1800e3,
+        () => fetchDividendPlans(symbol.slice(2))).catch(() => null),
+      cached(`expected-dividend-events-v2:${symbol}`, 1800e3,
+        () => fetchDividends(symbol.slice(2))).catch(() => null),
       getKLine(symbol, 'day', 'none', 5),
     ]);
-    if (!plans || !kline.candles.length) return null;
+    if (!plans || !dividends || !kline.candles.length) return null;
     const map = buildExpectedDividendYieldByDate(plans, kline.candles, dividends);
     const latest = map.get(kline.candles.at(-1)!.date);
     return typeof latest === 'number' && Number.isFinite(latest) ? latest : null;
-  }).catch(() => null);
+  } catch {
+    return null;
+  }
 }
 
 export async function GET(request: NextRequest) {

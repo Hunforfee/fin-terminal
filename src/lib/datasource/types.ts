@@ -76,8 +76,12 @@ export interface Quote {
   /** 52 周高 / 低 */
   high52w: number | null;
   low52w: number | null;
-  /** 股息率 %（仅港股行情源提供，A股走 /api/dividend-yield 预期股息率） */
+  /** 股息率 %（港股由完整财年现金派息计算，A股走预期股息率接口） */
   dividendYield?: number | null;
+  dividendYieldMethod?: 'announced-forward' | 'hk-static';
+  dividendFiscalYear?: string | null;
+  /** 每股现金股息，港股以港元计，含普通与特别现金派息。 */
+  dividendPerShare?: { ordinary: number | null; special: number | null; total: number | null };
   /** 行情时间戳（ISO 字符串） */
   ts: string | null;
   /** 数据来源标识，用于页面上标注 */
@@ -127,11 +131,13 @@ export interface Valuation {
   /** 市盈率在历史区间中的百分位（0-100，越低越便宜） */
   pePercentile: number | null;
   pbPercentile: number | null;
-  /** 预期股息率 %：已公告方案延续法，未来一年的税前股息收入占买入价的估计。 */
+  /** 股息率 %：A股为公告方案延续法预期，港股为完整财年现金派息静态口径。 */
   dividendYield: number | null;
   /** 静态股息率 %：过去十二个月已实施税前现金分红 / 同日不复权股价。 */
   staticDividendYield?: number | null;
-  dividendYieldMethod?: 'announced-forward';
+  dividendYieldMethod?: 'announced-forward' | 'hk-static';
+  dividendFiscalYear?: string | null;
+  dividendPerShare?: { ordinary: number | null; special: number | null; total: number | null };
   dividendForecast?: { asOf: string; expectedPerShare: number | null; staticPerShare: number | null; rawClose: number };
   /** 股息率历史分位 % */
   dyPercentile?: number | null;

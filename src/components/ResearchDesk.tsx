@@ -6,7 +6,6 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useWatchlist } from './WatchlistProvider';
 import WatchlistGroups from './WatchlistGroups';
-import OrderButtons from './OrderButtons';
 import StockName from './StockName';
 import ResearchColumns from './ResearchColumns';
 import {
@@ -597,7 +596,7 @@ export default function ResearchDesk({
                   />
                 </th>
                 <th
-                  className="th"
+                  className="th !w-[260px] !min-w-[260px] !max-w-[260px]"
                   aria-sort={
                     sort?.column === 'name'
                       ? sort.direction === 'asc'
@@ -827,20 +826,6 @@ export default function ResearchDesk({
                             <path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6" />
                           </svg>
                         </button>
-                        {!sort && (
-                          <OrderButtons
-                            name={q.name}
-                            first={index === 0}
-                            last={index === rows.length - 1}
-                            onMove={(delta) =>
-                              wl.reorderStock(
-                                q.symbol,
-                                rows[index + delta].symbol,
-                                group,
-                              )
-                            }
-                          />
-                        )}
                       </span>
                     </div>
                   </td>

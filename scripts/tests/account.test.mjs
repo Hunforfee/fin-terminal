@@ -35,8 +35,8 @@ test('rate guards expire and fail closed at the attempt limit',()=>{
 });
 test('unintegrated phone service cannot send or verify any fixed OTP',async()=>{
  assert.equal(phoneLoginConfigured(),false);
- await assert.rejects(sendPhoneCode('13800000000'),/尚未接入/);
- for(const code of ['000000','123456','888888'])await assert.rejects(verifyPhoneCode('13800000000',code),/尚未接入/);
+ await assert.rejects(sendPhoneCode('13800000000'),/短信服务未配置/);
+ for(const code of ['000000','123456','888888'])await assert.rejects(verifyPhoneCode('13800000000',code),/短信服务未配置/);
 });
 test('guest and two accounts have independent cache keys; credentials never enter a cloud snapshot',()=>{
  const memory=new Map();globalThis.window={localStorage:{get length(){return memory.size},key:i=>[...memory.keys()][i]??null,getItem:k=>memory.get(k)??null,setItem:(k,v)=>memory.set(k,String(v)),removeItem:k=>memory.delete(k)},dispatchEvent:()=>{}};

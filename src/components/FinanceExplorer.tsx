@@ -24,6 +24,7 @@ import {
   saveFormulas,
   type Formula,
 } from '@/lib/financeFormulas';
+import type { SearchHit } from '@/lib/datasource/types';
 import { STOCKS } from '@/lib/universe';
 import { normalizeStockCode } from '@/lib/datasource/codes';
 import {
@@ -153,6 +154,12 @@ export default function FinanceExplorer({ code }: { code: string }) {
   const [renameDraft, setRenameDraft] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [compareCode, setCompareCode] = useState<string>('');
+  const [compareName, setCompareName] = useState<string | null>(null);
+  /** 对比公司搜索：关键词 / 候选列表 / 下拉展开 */
+  const [compareQuery, setCompareQuery] = useState('');
+  const [compareHits, setCompareHits] = useState<SearchHit[]>([]);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const compareBoxRef = useRef<HTMLDivElement>(null);
   const [granularity, setGranularity] = useState<'annual' | 'semi' | 'quarter'>(
     'annual',
   );
@@ -173,6 +180,48 @@ export default function FinanceExplorer({ code }: { code: string }) {
   const active = modules.find((m) => m.id === activeId) ?? modules[0];
 
   const peerList = useMemo(() => peersOf(code), [code]);
+  // 对比公司搜索：300ms 防抖调 /api/search，只保留股票
+  useEffect(() => {
+    if (!compareOpen) return;
+    const q = compareQuery.trim();
+    if (!q) {
+      setCompareHits([]);
+      return;
+    }
+    const ctrl = new AbortController();
+    const t = setTimeout(() => {
+      fetch(`/api/search?q=${encodeURIComponent(q)}`, { signal: ctrl.signal })
+        .then((r) => r.json())
+        .then((j) => {
+          if (j.ok && Array.isArray(j.data))
+            setCompareHits(j.data.filter((h: SearchHit) => h.kind === 'stock').slice(0, 8));
+        })
+        .catch(() => {});
+    }, 300);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [compareQuery, compareOpen]);
+
+  // 点击组件外部收起下拉
+  useEffect(() => {
+    if (!compareOpen) return;
+    const dismiss = (e: PointerEvent) => {
+      if (compareBoxRef.current && !compareBoxRef.current.contains(e.target as Node))
+        setCompareOpen(false);
+    };
+    document.addEventListener('pointerdown', dismiss, true);
+    return () => document.removeEventListener('pointerdown', dismiss, true);
+  }, [compareOpen]);
+
+  const pickCompare = (h: SearchHit) => {
+    setCompareCode(h.code);
+    setCompareName(h.name);
+    setCompareQuery('');
+    setCompareHits([]);
+    setCompareOpen(false);
+  };
 
   useEffect(() => {
     const dismiss = (event: PointerEvent) => {
@@ -476,19 +525,75 @@ export default function FinanceExplorer({ code }: { code: string }) {
           <span className="hidden text-xs text-slate-500 sm:inline">
             对比公司：
           </span>
-          <select
-            aria-label="对比公司"
-            className="input !w-44 text-sm md:!w-48"
-            value={compareCode}
-            onChange={(e) => setCompareCode(e.target.value)}
-          >
-            <option value="">不对比</option>
-            {peerList.map((p) => (
-              <option key={p.code} value={p.code}>
-                {p.name}（{p.code}）
-              </option>
-            ))}
-          </select>
+          <div ref={compareBoxRef} className="relative">
+            {compareCode ? (
+              // 已选：芯片 + 一键清除
+              <span className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 py-1 pl-2.5 pr-1 text-sm text-orange-700">
+                <span className="font-medium">{compareName ?? compareCode}</span>
+                <span className="font-mono text-xs text-orange-400">{compareCode}</span>
+                <button
+                  type="button"
+                  aria-label="清除对比公司"
+                  title="清除对比公司"
+                  onClick={() => {
+                    setCompareCode('');
+                    setCompareName(null);
+                  }}
+                  className="flex h-5 w-5 items-center justify-center rounded-md text-orange-500 transition hover:bg-orange-100 hover:text-orange-700"
+                >
+                  ✕
+                </button>
+              </span>
+            ) : (
+              <>
+                <input
+                  type="text"
+                  role="combobox"
+                  aria-expanded={compareOpen && compareHits.length > 0}
+                  aria-label="搜索对比公司"
+                  placeholder="搜索对比公司…"
+                  value={compareQuery}
+                  onChange={(e) => {
+                    setCompareQuery(e.target.value);
+                    setCompareOpen(true);
+                  }}
+                  onFocus={() => setCompareOpen(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') setCompareOpen(false);
+                    if (
+                      e.key === 'Enter' &&
+                      compareOpen &&
+                      compareHits[0]
+                    )
+                      pickCompare(compareHits[0]);
+                  }}
+                  className="input !w-44 text-sm md:!w-52"
+                />
+                {compareOpen && compareHits.length > 0 && (
+                  <ul
+                    role="listbox"
+                    className="absolute left-0 top-full z-30 mt-1 max-h-72 w-64 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+                  >
+                    {compareHits.map((h) => (
+                      <li key={h.symbol}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={false}
+                          onClick={() => pickCompare(h)}
+                          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition hover:bg-slate-50"
+                        >
+                          <span className="font-medium text-slate-800">{h.name}</span>
+                          <span className="font-mono text-xs text-slate-400">{h.code}</span>
+                          <span className="ml-auto text-xs text-slate-400">{h.market}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
+          </div>
           {compare && (
             <span className="chip bg-orange-100 text-orange-700">对比公司</span>
           )}

@@ -149,7 +149,10 @@ function parseHkQuoteLine(symbol: string, body: string): Quote | null {
     pe: numOrNull(f[39]),
     peForward: null,
     peStatic: null,
-    pb: null,
+    // 港股字段 72 为市净率（实测腾讯 5.315 / 康师傅 0.922 与真实值吻合）
+    pb: numOrNull(f[72]),
+    // 港股字段 58 为股息率（%）
+    dividendYield: numOrNull(f[58]),
     totalMarketCap: numOrNull(f[45]),
     floatMarketCap: numOrNull(f[44]),
     high52w: high52w !== null && price !== null && high52w >= price ? high52w : null,

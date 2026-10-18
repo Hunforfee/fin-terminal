@@ -4,6 +4,7 @@ import { normalizeStockCode } from '@/lib/datasource/codes';
 import { fetchDividendPlans } from '@/lib/datasource/dividendPlans';
 import { fetchDividends } from '@/lib/datasource/sinaBonus';
 import { getKLine } from '@/lib/datasource';
+import { fetchQuote } from '@/lib/datasource/tencent';
 import { buildExpectedDividendYieldByDate } from '@/lib/dividends';
 import { cached } from '@/lib/datasource/cache';
 
@@ -42,6 +43,14 @@ async function mapLimit<T, R>(
   return out;
 }
 
+/** 港股：腾讯行情自带股息率（%），无分红方案数据可用 */
+async function hkYield(symbol: string): Promise<number | null> {
+  return cached(`expected-dy:${symbol}`, 1800e3, async () => {
+    const q = await fetchQuote(symbol);
+    return q?.dividendYield ?? null;
+  }).catch(() => null);
+}
+
 /** 单只股票的预期股息率（30 分钟缓存，分红方案按日更新） */
 async function expectedYield(symbol: string): Promise<number | null> {
   return cached(`expected-dy:${symbol}`, 1800e3, async () => {
@@ -72,7 +81,7 @@ export async function GET(request: NextRequest) {
   try {
     const data = await mapLimit(symbols, 4, async (symbol) => ({
       symbol,
-      dy: await expectedYield(symbol),
+      dy: symbol.startsWith('hk') ? await hkYield(symbol) : await expectedYield(symbol),
     }));
     return ok(data satisfies DividendYieldRow[]);
   } catch (e) {

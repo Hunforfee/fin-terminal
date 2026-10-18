@@ -76,6 +76,8 @@ export interface Quote {
   /** 52 周高 / 低 */
   high52w: number | null;
   low52w: number | null;
+  /** 股息率 %（仅港股行情源提供，A股走 /api/dividend-yield 预期股息率） */
+  dividendYield?: number | null;
   /** 行情时间戳（ISO 字符串） */
   ts: string | null;
   /** 数据来源标识，用于页面上标注 */

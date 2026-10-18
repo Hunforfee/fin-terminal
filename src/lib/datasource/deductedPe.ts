@@ -4,8 +4,8 @@ import { fetchJson, UpstreamError } from './http';
  * 扣非市盈率（PE-TTM，扣除非经常性损益）。
  *
  * PE-TTM = 总市值 / 最近四个季度扣非归母净利润之和。
- * 口径要点（与同花顺 / 理杏仁「扣非 PE-TTM」一致）：
- * - 单季扣非净利润 = 本报告期累计值 − 上一年度同口径累计值，
+ * 口径要点：
+ * - 单季扣非净利润 = 本报告期累计值 − 同一年度上一季度累计值，
  *   一季报本身即为单季，无需相减；
  * - 只有四个单季齐全才给出结果，缺一期就留空，绝不用年报或预估数补位；
  * - 净利润 ≤ 0 时市盈率无经济含义，按惯例留空（显示「—」）。
@@ -17,8 +17,8 @@ import { fetchJson, UpstreamError } from './http';
 export interface DeductedPeriod {
   /** 报告期 YYYY-MM-DD */
   reportDate: string;
-  /** 累计扣非归母净利润（元） */
-  cumulative: number;
+  /** 累计扣非归母净利润（元）；未披露时保留报告期并置空 */
+  cumulative: number | null;
 }
 
 export interface DeductedPeResult {
@@ -26,7 +26,7 @@ export interface DeductedPeResult {
   pe: number | null;
   /** 参与计算的四个单季净利润之和（元） */
   ttmProfit: number | null;
-  /** 四个单季对应的报告期，按时间升序 */
+  /** 已算出的单季对应报告期，按时间升序；完整 TTM 包含四期 */
   quarters: string[];
   /** 不可用原因，便于排查（不对外展示原始金额） */
   reason?: 'no-data' | 'incomplete' | 'non-positive';
@@ -35,9 +35,8 @@ export interface DeductedPeResult {
 type Row = Record<string, unknown>;
 type Response = { success: boolean; result?: { pages: number; data: Row[] } | null };
 
-const MIN_TS = 0;
 const num = (v: unknown): number | null => {
-  if (v === null || v === undefined || v === '') return null;
+  if (v === null || v === undefined || (typeof v === 'string' && v.trim() === '')) return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
@@ -52,7 +51,8 @@ export function parseDeductedPeriods(rows: Row[]): DeductedPeriod[] {
   for (const row of rows) {
     const reportDate = dateOnly(row.REPORT_DATE);
     const cumulative = num(row.KCFJCXSYJLR);
-    if (!reportDate || cumulative === null) continue;
+    // 最新报告扣非值缺失也必须保留，避免估值静默回退到旧报告。
+    if (!reportDate) continue;
     out.push({ reportDate, cumulative });
   }
   return out.sort((a, b) => a.reportDate.localeCompare(b.reportDate));
@@ -68,7 +68,7 @@ export function parseDeductedPeriods(rows: Row[]): DeductedPeriod[] {
  */
 export function singleQuarter(periods: DeductedPeriod[], reportDate: string): number | null {
   const cur = periods.find((p) => p.reportDate === reportDate);
-  if (!cur) return null;
+  if (cur?.cumulative == null || !Number.isFinite(cur.cumulative)) return null;
   const md = reportDate.slice(5);
   const year = reportDate.slice(0, 4);
   // 本年内上一个累计口径的报告期
@@ -76,7 +76,9 @@ export function singleQuarter(periods: DeductedPeriod[], reportDate: string): nu
     md === '06-30' ? '03-31' : md === '09-30' ? '06-30' : md === '12-31' ? '09-30' : null;
   if (prevMd === null) return cur.cumulative; // 一季报直接就是单季
   const prev = periods.find((p) => p.reportDate === `${year}-${prevMd}`);
-  return prev ? cur.cumulative - prev.cumulative : null;
+  return prev?.cumulative != null && Number.isFinite(prev.cumulative)
+    ? cur.cumulative - prev.cumulative
+    : null;
 }
 
 /**
@@ -86,13 +88,13 @@ export function singleQuarter(periods: DeductedPeriod[], reportDate: string): nu
  */
 export function computeDeductedPe(periods: DeductedPeriod[], marketCap: number | null): DeductedPeResult {
   if (periods.length === 0) return { pe: null, ttmProfit: null, quarters: [], reason: 'no-data' };
-  // 从最新报告期往前找连续四个「单季可算」的报告期
+  // 锚定最新报告期，按时间升序计算连续四季；缺值时不回退旧季度。
   const sorted = [...periods].sort((a, b) => b.reportDate.localeCompare(a.reportDate));
   const latest = sorted[0].reportDate;
   const quarters: string[] = [];
   const values: number[] = [];
   for (let i = 0; i < 4; i++) {
-    const d = shiftQuarter(latest, -i);
+    const d = shiftQuarter(latest, i - 3);
     const v = singleQuarter(periods, d);
     if (v === null) return { pe: null, ttmProfit: null, quarters, reason: 'incomplete' };
     quarters.push(d);
@@ -100,8 +102,8 @@ export function computeDeductedPe(periods: DeductedPeriod[], marketCap: number |
   }
   const ttmProfit = Math.round(values.reduce((a, b) => a + b, 0) * 100) / 100;
   if (ttmProfit <= 0) return { pe: null, ttmProfit, quarters, reason: 'non-positive' };
-  const cap = marketCap !== null && marketCap > 0 ? marketCap : null;
-  if (cap === null || cap < MIN_TS) return { pe: null, ttmProfit, quarters, reason: 'no-data' };
+  const cap = marketCap !== null && Number.isFinite(marketCap) && marketCap > 0 ? marketCap : null;
+  if (cap === null) return { pe: null, ttmProfit, quarters, reason: 'no-data' };
   return { pe: Math.round((cap / ttmProfit) * 100) / 100, ttmProfit, quarters };
 }
 

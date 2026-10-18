@@ -4,16 +4,17 @@ import {load} from './load-modules.mjs';
 const hk=await load('datasource/hkFinance');
 const {financeStorageKey}=await load('financePreferences');
 const p=(date,kind,raw={},currency='HKD')=>({date,kind,label:kind,currency,raw});
-test('HK current valuation uses matching currency and latest financial EPS; quote PE cannot override a loss',()=>{
- const points=[p('2026-06-30','semi',{EPS_TTM:-1,BPS:20,DPS_HKD:2,DIVIDEND_RATE:99})];
+test('HK current valuation uses one verified source snapshot and never invents dividends from DPS_HKD',()=>{
+ const points=[p('2026-06-30','semi',{EPS_TTM:-1,BPS:20,DPS_HKD:2,DIVIDEND_RATE:99,PB_TTM:2,TOTAL_MARKET_CAP:4000,ISSUED_COMMON_SHARES:100})];
  const result=hk.summarizeHkSnapshot(points,'02714',{price:40,pe:12},'2026-10-16',5);
- assert.equal(result.pe,null);assert.equal(result.pb,2);assert.equal(result.dividendYield,5);
+ assert.equal(result.pe,null);assert.equal(result.pb,2);assert.equal(result.dividendYield,null);
  assert.equal(result.marketComparison.pe,12);assert.equal(result.pePercentile,null);assert.deepEqual(result.history,[]);
  assert.equal(result.stats.dy.count,0);assert.ok(result.historyUnavailableReason);
 });
-test('HK EPS already standardized to HKD is not converted with current FX; unknown currency is not guessed',()=>{
+test('HK trading currency alone cannot establish BPS or EPS currency; missing cross-currency metadata is not guessed',()=>{
  const points=[p('2026-06-30','semi',{EPS_TTM:10,BPS:50})];
- assert.equal(hk.summarizeHkSnapshot(points,'00700',{price:400,pe:99},'2026-10-16',5).pe,40);
+ assert.equal(hk.summarizeHkSnapshot(points,'00700',{price:400,pe:99},'2026-10-16',5).pe,null);
+ assert.equal(hk.summarizeHkSnapshot(points,'00700',{price:400,pe:99},'2026-10-16',5).pb,null);
  assert.equal(hk.summarizeHkSnapshot([{...points[0],currency:'CNY'}],'00700',{price:400,pe:99},'2026-10-16',5).pe,null);
 });
 test('HK fiscal year filtering retains March annual and September interim reports',()=>{

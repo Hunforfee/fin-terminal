@@ -8,7 +8,8 @@
  *   现金流量表 RPT_HKF10_FN_CASHFLOW_PC              （长表）
  *
  * 口径说明：
- *   - 保留数据源标准化口径及 CURRENCY 标识；金额折算到万，页面同时标注币种。
+ *   - 主要指标金额/每股值已标准化为 CNY；CURRENCY 为行情柜台币种，不能套用于 BPS/EPS。
+ *   - 三大长表保留既有取值与单位；不把主要指标的币种推定泛化到不同接口。
  *   - 指标（ROE / 增长率 / 每股等）直接取东财披露值或由披露值恒等式派生。
  *   - 报告类型取 REPORT_TYPE，原始报表期取 STD_REPORT_DATE，不按自然年猜测财年。
  */
@@ -18,6 +19,7 @@ import type { CompanyFinancials, Granularity } from './sinaFinancial';
 import type { StatementCatalog, CustomFinancials } from './sinaStatements';
 import type { Candle, Valuation, ValuationPoint, ValuationStats, SeriesStats } from './types';
 import { hkStatementValue, statementFieldUnit } from '../financeFieldSemantics';
+import { computeHkValuation, fetchHkFundamental, fetchHkDividends, parseHkFundamental, type HkValuation } from './hkFundamental';
 
 export const PROVIDER_NAME = 'eastmoney-hkf10';
 
@@ -67,6 +69,7 @@ function num(v: unknown): number | null {
 export interface IndicatorPoint {
   date: string;
   raw: Record<string, number | null>;
+  /** Raw CURRENCY is the trading counter, not the main indicators' value unit. */
   currency: string;
   kind: string;
   label: string;
@@ -185,7 +188,7 @@ export async function fetchHkFinancials(
     periods,
     periodLabels: kept.map(p => p.label),
     periodKinds: Object.fromEntries(kept.map(p => [p.date,p.kind])),
-    currency: kept.at(-1)?.currency,
+    currency: 'CNY',
     series,
     source: PROVIDER_NAME,
   };
@@ -380,30 +383,62 @@ export function filterHkPeriods<T extends {periods:string[];periodLabels:string[
   return {...f,periods:keep.map(k=>k.p),periodLabels:keep.map(k=>f.periodLabels[k.i]),series:Object.fromEntries(Object.entries(f.series).map(([k,v])=>[k,keep.map(x=>v[x.i])]))};
 }
 
-/** 当前值只使用最新已取到的快照；无可核验公告日时不伪造历史曲线/分位。 */
-export function summarizeHkSnapshot(points:IndicatorPoint[],code:string,quote:{price:number|null;pe:number|null;pb?:number|null;ts?:string|null},date:string,years:number):Valuation {
-  const latest=points.filter(p=>p.date<=date).at(-1);
-  if(!latest) throw new Error('港股财报指标不可用');
-  const comparable=latest.currency==='HKD';
-  const price=quote.price;
-  const eps=num(latest.raw.EPS_TTM),bps=num(latest.raw.BPS);
-  const pe=comparable && price!==null && price>0 && eps!==null && eps>0?price/eps:null;
-  const pb=comparable && price!==null && price>0 && bps!==null && bps>0?price/bps:null;
-  const dps=num(latest.raw.DPS_HKD);
-  const dy=price!==null && price>0 && dps!==null && dps>=0?dps/price*100:null;
-  const empty=(current:number|null):SeriesStats=>({current,percentile:null,p80:null,p50:null,p20:null,max:null,avg:null,min:null,count:0});
-  return {code,pe,pb,pePercentile:null,pbPercentile:null,dividendYield:dy,dyPercentile:null,
-    roe:num(latest.raw.ROE_YEARLY),netProfit:null,netAssets:null,history:[],basis:'real',years,
-    stats:{pe:empty(pe),pb:empty(pb),dy:empty(dy),from:date,to:date},method:'disclosure',source:PROVIDER_NAME,stale:false,
-    historyUnavailableReason:'港股财报接口未提供可核验的历史公告日及历史分红快照，暂不计算历史估值曲线和分位。',
-    marketComparison:{pe:quote.pe,pb:quote.pb??null,ts:quote.ts??null},
-    warnings:['港股当前 PE/PB 使用数据源声明为 HKD 的 EPS_TTM/每股净资产与港元行情匹配，不使用即时汇率回填历史。股息率按数据源最新年度每股股息（HKD）除以当前股价计算，不当作已验证的预期股息率。',
-      '数据源未提供完整历史公告日期、分红时点，已停止在报告期末提前引用财报和回填当前股息率。'],
-    fin:{report:latest.date,npTTM:null,shares:null,bps:comparable?bps:null,points:points.length,realDates:false,adjustGaps:0}};
+/** Current metrics share the list calculation; no unverified historical curves. */
+export function summarizeHkSnapshot(
+  points: IndicatorPoint[], code: string,
+  quote: { price: number | null; pe: number | null; pb?: number | null; ts?: string | null },
+  date: string, years: number, current?: HkValuation,
+): Valuation {
+  const latest = points.filter(p => p.date <= date).at(-1);
+  if (!latest) throw new Error('港股财报指标不可用');
+  const fundamental = parseHkFundamental([{
+    ...latest.raw, REPORT_DATE: latest.date, REPORT_TYPE: latest.label, CURRENCY: latest.currency,
+  }]);
+  // Without actual event records, DPS_HKD alone is not a verified fiscal year.
+  const metrics = current ?? computeHkValuation(fundamental, null, quote.price, date);
+  const pe = metrics.pe, pb = metrics.pb, dy = metrics.dividendYield;
+  const empty = (value: number | null): SeriesStats => ({
+    current: value, percentile: null, p80: null, p50: null, p20: null,
+    max: value, avg: value, min: value, count: 0,
+  });
+  return {
+    code, pe, pb, pePercentile: null, pbPercentile: null,
+    dividendYield: dy, dyPercentile: null,
+    dividendYieldMethod: 'hk-static',
+    dividendFiscalYear: metrics.fiscalYear,
+    dividendPerShare: { ordinary: metrics.ordinaryDps, special: metrics.specialDps, total: metrics.ttmDps },
+    roe: num(latest.raw.ROE_YEARLY), netProfit: null, netAssets: null,
+    history: [], basis: 'real', years,
+    stats: { pe: empty(pe), pb: empty(pb), dy: empty(dy), from: date, to: date },
+    method: 'disclosure', source: PROVIDER_NAME, stale: false,
+    historyUnavailableReason: '港股财报接口未提供可核验的历史公告日及历史分红快照，暂不计算历史估值曲线和分位。',
+    marketComparison: { pe: quote.pe, pb: quote.pb ?? null, ts: quote.ts ?? null },
+    warnings: [
+      '港股当前 PB 使用同一快照的港元市值、普通股数与 PB 恢复港元每股净资产，再按当前价计算。PE 保留上游 TTM 口径并按当前价更新，不将人民币 EPS_TTM 直接除以港元股价。',
+      '港股股息率为最新完整财年已实施现金分红（含特别现金股息）除以当前港元股价；未验证的历史公告日期、分红时点不回填历史曲线。',
+    ],
+    fin: {
+      report: metrics.reportDate ?? latest.date, npTTM: null, shares: null,
+      bps: metrics.bookValuePerShareHkd, points: points.length, realDates: false, adjustGaps: 0,
+    },
+  };
 }
 
-export async function buildHkValuation(secucode:string,code:string,candles:Candle[],quote:{price:number|null;pe:number|null;pb?:number|null;ts?:string|null},years=10):Promise<Valuation>{
-  const points=await fetchHkIndicatorPoints(secucode,years+3);
-  const date=quote.ts?.slice(0,10) ?? candles.at(-1)?.date ?? new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai'}).format(new Date());
-  return summarizeHkSnapshot(points,code,quote,date,years);
+export async function buildHkValuation(
+  secucode: string, code: string, candles: Candle[],
+  quote: { price: number | null; pe: number | null; pb?: number | null; ts?: string | null },
+  years = 10, current?: HkValuation,
+): Promise<Valuation> {
+  const points = await fetchHkIndicatorPoints(secucode, years + 3);
+  const date = quote.ts?.slice(0, 10) ?? candles.at(-1)?.date ??
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
+  let shared = current;
+  if (!shared) {
+    const [fundamental, dividends] = await Promise.all([
+      fetchHkFundamental(code).catch(() => null),
+      fetchHkDividends(code, date).catch(() => null),
+    ]);
+    shared = computeHkValuation(fundamental, dividends, quote.price, date);
+  }
+  return summarizeHkSnapshot(points, code, quote, date, years, shared);
 }

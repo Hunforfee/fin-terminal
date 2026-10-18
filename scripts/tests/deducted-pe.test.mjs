@@ -38,34 +38,77 @@ test('deducted pe uses four quarters of profit and total market cap', () => {
     { REPORT_DATE: '2024-09-30', KCFJCXSYJLR: 61000000000 },
   ]);
   const r = computeDeductedPe(periods, 1.86e12);
-  // 四个单季：Q3'25(65.0-61.0) + Q4'25(90.0-65.0) + Q1'26(27.0) + Q2'26(44.46-41.6)
   // 单季：Q3'25=(65-41.6)=23.4e9, Q4'25=(90-65)=25e9, Q1'26=27e9, Q2'26=(44.464-27)=17.464e9
   const ttm = 23400000000 + 25000000000 + 27000000000 + (44464207646.01 - 27000000000);
   assert.equal(r.ttmProfit, Math.round(ttm * 100) / 100);
   assert.equal(r.pe, Math.round((1.86e12 / ttm) * 100) / 100);
-  assert.deepEqual(r.quarters, ['2026-06-30', '2026-03-31', '2025-12-31', '2025-09-30']);
+  assert.deepEqual(r.quarters, ['2025-09-30', '2025-12-31', '2026-03-31', '2026-06-30']);
 });
 
 test('missing quarter yields no PE instead of substituting annual data', () => {
   const periods = parseDeductedPeriods([
     { REPORT_DATE: '2026-06-30', KCFJCXSYJLR: 100 },
     { REPORT_DATE: '2026-03-31', KCFJCXSYJLR: 50 },
-    // 缺 2025-12-31 及其上年同期
+    // 缺 2025-12-31，无法组成四个连续单季。
   ]);
   const r = computeDeductedPe(periods, 1e9);
   assert.equal(r.pe, null);
   assert.equal(r.reason, 'incomplete');
 });
 
-test('a data gap stops the TTM chain instead of reaching further back', () => {
-  // 2026-06-30 的最新数据齐全，但 2025-06-30 缺同期基数 → Q2 单季无法确定，必须留空
-  const periods = parseDeductedPeriods([
-    { REPORT_DATE: '2026-06-30', KCFJCXSYJLR: 100 },
-    { REPORT_DATE: '2026-03-31', KCFJCXSYJLR: 50 },
-  ]);
-  const r = computeDeductedPe(periods, 1e9);
-  assert.equal(r.pe, null);
-  assert.equal(r.reason, 'incomplete');
+const completeRows = [
+  ['2026-06-30', 100], ['2026-03-31', 40], ['2025-12-31', 200],
+  ['2025-09-30', 140], ['2025-06-30', 90], ['2025-03-31', 30],
+].map(([REPORT_DATE, KCFJCXSYJLR]) => ({ REPORT_DATE, KCFJCXSYJLR }));
+
+test('latest missing or invalid profit stays anchored to that report instead of falling back', () => {
+  for (const missing of [null, undefined, '', '  ', '-', NaN]) {
+    const periods = parseDeductedPeriods([
+      { REPORT_DATE: '2026-09-30', KCFJCXSYJLR: missing }, ...completeRows,
+    ]);
+    assert.equal(periods.at(-1).reportDate, '2026-09-30');
+    assert.equal(periods.at(-1).cumulative, null);
+    const r = computeDeductedPe(periods, 2100);
+    assert.equal(r.pe, null);
+    assert.equal(r.ttmProfit, null);
+    assert.equal(r.reason, 'incomplete');
+  }
+});
+
+test('a missing preceding cumulative value cannot be treated as zero for a single quarter', () => {
+  // 四个目标季报都存在，但最早单季 Q3 依赖的同年中报累计缺失。
+  for (const rows of [
+    completeRows.filter(row => row.REPORT_DATE !== '2025-06-30'),
+    completeRows.map(row => row.REPORT_DATE === '2025-06-30' ? { ...row, KCFJCXSYJLR: null } : row),
+  ]) {
+    const periods = parseDeductedPeriods(rows);
+    assert.equal(singleQuarter(periods, '2025-09-30'), null);
+    const r = computeDeductedPe(periods, 2100);
+    assert.equal(r.pe, null);
+    assert.equal(r.ttmProfit, null);
+    assert.equal(r.reason, 'incomplete');
+  }
+  // 实际披露为零仍是有效基数。
+  const zeroBase = parseDeductedPeriods(completeRows.map(row => row.REPORT_DATE === '2025-06-30' ? { ...row, KCFJCXSYJLR: 0 } : row));
+  assert.equal(singleQuarter(zeroBase, '2025-09-30'), 140);
+  assert.equal(computeDeductedPe(zeroBase, 2100).ttmProfit, 300);
+});
+
+test('all latest quarter positions reconcile to the annual plus current YTD minus prior YTD identity', () => {
+  const rows = [
+    ['2024-03-31', 10], ['2024-06-30', 30], ['2024-09-30', 60], ['2024-12-31', 100],
+    ['2025-03-31', 20], ['2025-06-30', 50], ['2025-09-30', 90], ['2025-12-31', 140],
+    ['2026-03-31', 30], ['2026-06-30', 70], ['2026-09-30', 120],
+  ].map(([REPORT_DATE, KCFJCXSYJLR]) => ({ REPORT_DATE, KCFJCXSYJLR }));
+  for (const [latest, expectedTtm] of [['2025-12-31', 140], ['2026-03-31', 150], ['2026-06-30', 160], ['2026-09-30', 170]]) {
+    const periods = parseDeductedPeriods(rows.filter(row => row.REPORT_DATE <= latest));
+    const r = computeDeductedPe(periods, expectedTtm * 10);
+    assert.equal(r.ttmProfit, expectedTtm);
+    assert.equal(r.pe, 10);
+    assert.equal(r.quarters.length, 4);
+    assert.equal(r.quarters.at(-1), latest);
+    assert.deepEqual(r.quarters, [...r.quarters].sort());
+  }
 });
 
 test('negative or zero deducted profit has no meaningful PE', () => {
@@ -101,4 +144,5 @@ test('empty data or missing market cap returns null', () => {
     { REPORT_DATE: '2023-09-30', KCFJCXSYJLR: 40 },
   ]);
   assert.equal(computeDeductedPe(periods, null).pe, null);
+  assert.equal(computeDeductedPe(periods, Infinity).pe, null);
 });

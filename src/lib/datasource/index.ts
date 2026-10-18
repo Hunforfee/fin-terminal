@@ -18,7 +18,7 @@ import * as ifind from './ifind';
 import * as snapshot from './snapshot';
 import * as hkFinance from './hkFinance';
 import * as profile from './profile';
-import { fetchHkFundamental, fetchHkDividends, computeHkValuation } from './hkFundamental';
+import { fetchHkFundamental, fetchHkDividends, computeHkValuation, type HkValuation } from './hkFundamental';
 import { cached, defaultTtl, putCache } from './cache';
 import { normalizeCode, normalizeStockCode } from './codes';
 import { computeValuation, buildFinancialSummary } from '../analytics';
@@ -128,7 +128,7 @@ function localSearch(kw: string): SearchHit[] {
 export async function getQuote(input: string): Promise<Quote | null> {
   const n = normalizeCode(input);
   if (!n) return null;
-  return cached(`quote:${n.symbol}`, defaultTtl(), async () => {
+  const quote = await cached(`quote:${n.symbol}`, defaultTtl(), async () => {
     try {
       const q = await tencent.fetchQuote(n.symbol);
       if (q) return q;
@@ -145,6 +145,7 @@ export async function getQuote(input: string): Promise<Quote | null> {
     if (snap) return snap;
     throw new Error(`无法获取 ${n.symbol} 行情：所有数据源均不可用`);
   });
+  return n.market === 'HK' ? (await withHkValuation([quote]))[0] : quote;
 }
 
 /** 批量行情：分块并发 + 逐块降级 */
@@ -191,28 +192,32 @@ async function fetchQuotesChunk(symbols: string[]): Promise<Quote[]> {
 }
 
 /**
- * 港股行情快照不含 PB：用 F10 主要财务指标的每股净资产（BPS）与现价计算。
- * 单只失败只留空，不影响整批行情；基本面按 6 小时缓存（报告期变化频率低）。
+ * 只缓存低频的财务与派息记录，PB/股息率始终结合调用方当前行情计算。
+ * 列表、单只行情、股息接口与详情页共用此入口，避免价格或股息口径不一致。
  */
+export async function getHkCurrentValuation(symbol: string, price: number | null, asOf?: string): Promise<HkValuation> {
+  const n = normalizeStockCode(symbol);
+  if (!n || n.market !== 'HK') throw new Error('港股代码无效');
+  const [fundamental, dividends] = await Promise.all([
+    cached(`hk-main-currency-v3:${n.symbol}`, 6 * 3600e3, () => fetchHkFundamental(n.code)).catch(() => null),
+    cached(`hk-dividend-events-v3:${n.symbol}`, 3600e3, () => fetchHkDividends(n.code)).catch(() => null),
+  ]);
+  return computeHkValuation(fundamental, dividends, price, asOf);
+}
+
 async function withHkValuation(quotes: Quote[]): Promise<Quote[]> {
-  const hk = quotes.filter((q) => q.symbol.startsWith('hk') && q.price !== null);
+  const hk = quotes.filter((q) => q.kind === 'stock' && /^hk\d{5}$/.test(q.symbol));
   if (hk.length === 0) return quotes;
-  const map = new Map<string, { pb: number | null; dividendYield: number | null }>();
+  const map = new Map<string, HkValuation>();
   await mapLimit(hk, 4, async (q) => {
-    const v = await cached(`hk-fund:${q.symbol}`, 6 * 3600e3, async () => {
-      const code = q.symbol.slice(2);
-      const [f, dividends] = await Promise.all([
-        fetchHkFundamental(code),
-        fetchHkDividends(code).catch(() => []),
-      ]);
-      return computeHkValuation(f, dividends, q.price);
-    }).catch(() => null);
-    if (v) map.set(q.symbol, { pb: v.pb, dividendYield: v.dividendYield });
+    const v = await getHkCurrentValuation(q.symbol, q.price);
+    map.set(q.symbol, v);
   });
-  if (map.size === 0) return quotes;
   return quotes.map((q) => {
     const v = map.get(q.symbol);
-    return v ? { ...q, pb: v.pb ?? q.pb, dividendYield: v.dividendYield } : q;
+    return v ? { ...q, pb: v.pb, dividendYield: v.dividendYield,
+      dividendYieldMethod: 'hk-static', dividendFiscalYear: v.fiscalYear,
+      dividendPerShare: { ordinary: v.ordinaryDps, special: v.specialDps, total: v.ttmDps } } : q;
   });
 }
 
@@ -296,12 +301,16 @@ export async function getValuation(input: string, years = 10, method: ValuationM
   if (!n || n.kind !== 'stock') throw new Error('真实财报估值仅支持 A 股 / 港股股票');
   if (n.market === 'HK') {
     const span = Math.min(Math.max(years, 1), 10);
-    return cached(`val-hk-verified-v2:${n.symbol}:${span}`, 60 * 60 * 1000, async () => {
-      const q = await getQuote(n.symbol);
-      if (!q) throw new Error('行情获取失败');
-      const result = await hkFinance.buildHkValuation(`${n.code}.HK`, n.code, [], q, span);
-      return {...result, stale:q.stale};
-    });
+    const [q, points] = await Promise.all([
+      getQuote(n.symbol),
+      cached(`hk-indicators-currency-v3:${n.symbol}:${span}`, 6 * 3600e3,
+        () => hkFinance.fetchHkIndicatorPoints(`${n.code}.HK`, span + 3)),
+    ]);
+    if (!q) throw new Error('行情获取失败');
+    const current = await getHkCurrentValuation(n.symbol, q.price);
+    const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
+    const result = hkFinance.summarizeHkSnapshot(points, n.code, q, date, span, current);
+    return { ...result, stale: q.stale };
   }
   const span = Math.min(Math.max(years, 1), 10);
   return cached(`val-qfq-forward-dy-v2:${n.symbol}:${span}:${method}`, defaultTtl(), async () => {

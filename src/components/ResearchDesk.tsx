@@ -82,7 +82,7 @@ export default function ResearchDesk({
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [otherAssets, setOtherAssets] = useState<Quote[]>([]);
   const [financials, setFinancials] = useState<Financial[]>([]);
-  /** 预期股息率 %（symbol → 值，null 表示数据不可用） */
+  /** 股息率 %：A股预期、港股完整财年静态；null 表示数据不可用。 */
   const [dividendYields, setDividendYields] = useState<
     Map<string, number | null>
   >(() => new Map());
@@ -324,7 +324,7 @@ export default function ResearchDesk({
           }
         }
         async function loadDividendYields() {
-          // 预期股息率（与估值分析同一算法），单独批量取，失败只置空不阻塞列表
+          // 与估值分析共用算法；A股预期、港股完整财年静态，失败留空。
           for (let i = 0; i < rows.length && alive; i += 20) {
             const batch = rows.slice(i, i + 20);
             try {
@@ -942,6 +942,13 @@ export default function ResearchDesk({
                     return (
                       <td
                         key={c.id}
+                        title={c.id === 'dy'
+                          ? q.dividendYieldMethod === 'hk-static'
+                            ? `${q.dividendFiscalYear ?? '暂无完整'}财年静态股息率；每股现金股息 ${value(q.dividendPerShare?.total)} 港元（普通 ${value(q.dividendPerShare?.ordinary)}，特别 ${value(q.dividendPerShare?.special)}），按当前港元股价计算。`
+                            : '预期股息率：按已公告方案估计未来一年的税前现金股息。'
+                          : c.id === 'pb' && q.market === 'HK'
+                            ? '港元股价 ÷ 同币种每股净资产，使用最新已披露财报。'
+                            : undefined}
                         className={`td !py-1 ${c.id === 'roe' ? 'font-semibold' : ''} ${c.id === 'dy' ? '!text-teal-700' : ''} ${typeof v === 'number' && v < 0 ? '!text-amber-700' : ''} ${c.id === 'period' ? '!text-xs !text-slate-500' : ''}`}
                       >
                         {c.id === 'period'

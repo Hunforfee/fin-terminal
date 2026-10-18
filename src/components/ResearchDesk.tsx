@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useWatchlist } from './WatchlistProvider';
+import WatchlistButton from './WatchlistButton';
+import WatchlistGroups from './WatchlistGroups';
+import { UNGROUPED } from '@/lib/watchlist';
+import { normalizeCode } from '@/lib/datasource/codes';
 import type { Quote } from '@/lib/datasource/types';
 import { industryOf } from '@/lib/universe';
 
@@ -23,8 +27,22 @@ const NOTE_KEY = 'fin.research.notes.v1';
 const value = (v: number | null | undefined, suffix = '') =>
   v == null || !Number.isFinite(v) ? '—' : v.toFixed(2) + suffix;
 
-export default function ResearchDesk({ management = false }: { management?: boolean }) {
-  const { codes, ready, remove } = useWatchlist();
+export default function ResearchDesk({
+  management = false,
+}: {
+  management?: boolean;
+}) {
+  const wl = useWatchlist();
+  const { codes, ready, remove } = wl;
+  const [activeGroup, setActiveGroup] = useState('all');
+  const [selected, setSelected] = useState<string[]>([]);
+  const [moveTarget, setMoveTarget] = useState(UNGROUPED);
+  const group =
+    activeGroup === 'all' || wl.groups.some((g) => g.id === activeGroup)
+      ? activeGroup
+      : 'all';
+  const inGroup = (symbol: string) =>
+    group === 'all' || wl.groupOf(symbol) === group;
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [otherAssets, setOtherAssets] = useState<Quote[]>([]);
   const [financials, setFinancials] = useState<Financial[]>([]);
@@ -37,22 +55,33 @@ export default function ResearchDesk({ management = false }: { management?: bool
   const [noteCode, setNoteCode] = useState('');
   const [draft, setDraft] = useState('');
   const [filter, setFilter] = useState('');
+  useEffect(() => {
+    setSelected([]);
+  }, [group, filter]);
   const [sort, setSort] = useState<'saved' | 'pe' | 'roe'>('saved');
 
   useEffect(() => {
     try {
       const n = JSON.parse(localStorage.getItem(NOTE_KEY) ?? '[]');
       if (Array.isArray(n))
-        setNotes(n.filter((x) => x && typeof x.text === 'string' && typeof x.id === 'string'));
+        setNotes(
+          n.filter(
+            (x) => x && typeof x.text === 'string' && typeof x.id === 'string',
+          ),
+        );
     } catch {}
   }, []);
   const signature = codes.join(',');
   useEffect(() => {
     if (!ready) return;
     let alive = true;
-    setQuotes([]);
-    setOtherAssets([]);
-    setFinancials([]);
+    setQuotes((prev) => prev.filter((q) => codes.includes(q.symbol)));
+    setOtherAssets((prev) => prev.filter((q) => codes.includes(q.symbol)));
+    setFinancials((prev) =>
+      prev.filter((f) =>
+        codes.some((code) => normalizeCode(code)?.code === f.code),
+      ),
+    );
     setError('');
     setFinErrors([]);
     setLoading(true);
@@ -63,9 +92,9 @@ export default function ResearchDesk({ management = false }: { management?: bool
         return;
       }
       try {
-        const q = await fetch(`/api/quote?codes=${encodeURIComponent(signature)}`).then((r) =>
-          r.json()
-        );
+        const q = await fetch(
+          `/api/quote?codes=${encodeURIComponent(signature)}`,
+        ).then((r) => r.json());
         if (!alive) return;
         if (!q.ok) throw Error(q.error ?? '行情获取失败');
         const rows: Quote[] = q.data.filter((x: Quote) => x.kind === 'stock');
@@ -81,7 +110,7 @@ export default function ResearchDesk({ management = false }: { management?: bool
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                codes: batch.map((r) => r.code),
+                codes: batch.map((r) => r.symbol),
                 years: 2,
                 granularity: 'quarter',
                 fields: ['roe', 'netMargin', 'ocfPerShare', 'debtRatio'],
@@ -89,9 +118,18 @@ export default function ResearchDesk({ management = false }: { management?: bool
             }).then((r) => r.json());
             if (!alive) return;
             if (!j.ok) throw Error(j.error ?? '财报获取失败');
-            setFinancials((prev) => [...prev, ...j.data.companies]);
+            setFinancials((prev) => [
+              ...prev.filter(
+                (f) =>
+                  !j.data.companies.some(
+                    (next: Financial) => next.code === f.code,
+                  ),
+              ),
+              ...j.data.companies,
+            ]);
           } catch {
-            if (alive) setFinErrors((prev) => [...prev, ...batch.map((r) => r.name)]);
+            if (alive)
+              setFinErrors((prev) => [...prev, ...batch.map((r) => r.name)]);
           }
         }
       } catch (e) {
@@ -109,22 +147,45 @@ export default function ResearchDesk({ management = false }: { management?: bool
     };
   }, [signature, ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const financialMap = useMemo(() => new Map(financials.map((f) => [f.code, f])), [financials]);
+  const financialMap = useMemo(
+    () => new Map(financials.map((f) => [f.code, f])),
+    [financials],
+  );
   const latest = (code: string, field: string) => {
     const f = financialMap.get(code);
     // An unavailable latest period stays empty; never substitute an older report.
     return f?.series[field]?.[f.periods.length - 1] ?? null;
   };
   const rows = quotes
-    .filter((q) => `${q.name}${q.code}`.includes(filter))
+    .filter(
+      (q) =>
+        codes.includes(q.symbol) &&
+        inGroup(q.symbol) &&
+        `${q.name}${q.code}`
+          .toLowerCase()
+          .includes(filter.trim().toLowerCase()),
+    )
     .sort((a, b) => {
-      if (sort === 'saved') return codes.indexOf(a.code) - codes.indexOf(b.code);
+      if (sort === 'saved')
+        return codes.indexOf(a.symbol) - codes.indexOf(b.symbol);
       const av = sort === 'pe' ? a.pe : latest(a.code, 'roe');
       const bv = sort === 'pe' ? b.pe : latest(b.code, 'roe');
       if (av == null) return bv == null ? 0 : 1;
       if (bv == null) return -1;
       return sort === 'pe' ? av - bv : bv - av;
     });
+  const visibleSelected = selected.filter((symbol) =>
+    rows.some((row) => row.symbol === symbol),
+  );
+  const filteredOtherAssets = otherAssets.filter(
+    (q) =>
+      codes.includes(q.symbol) &&
+      inGroup(q.symbol) &&
+      `${q.name}${q.code}`.toLowerCase().includes(filter.trim().toLowerCase()),
+  );
+  const destination = wl.groups.some((g) => g.id === moveTarget)
+    ? moveTarget
+    : UNGROUPED;
   const reports = [...financials]
     .filter((f) => f.periods.length)
     .sort((a, b) => b.periods.at(-1)!.localeCompare(a.periods.at(-1)!));
@@ -140,7 +201,9 @@ export default function ResearchDesk({ management = false }: { management?: bool
     }
   };
   const addNote = () => {
-    const company = quotes.find((q) => q.code === (noteCode || quotes[0]?.code));
+    const company = quotes.find(
+      (q) => q.code === (noteCode || quotes[0]?.code),
+    );
     if (!draft.trim() || !company) return;
     if (
       saveNotes([
@@ -178,7 +241,9 @@ export default function ResearchDesk({ management = false }: { management?: bool
             ['关注公司', loading ? '—' : quotes.length, '家'],
             [
               '财报覆盖',
-              finLoading ? '…' : financials.filter((f) => f.periods.length > 0).length,
+              finLoading
+                ? '…'
+                : financials.filter((f) => f.periods.length > 0).length,
               '家',
             ],
             ['最近报告期', reports[0]?.periods.at(-1) ?? '—', ''],
@@ -190,7 +255,9 @@ export default function ResearchDesk({ management = false }: { management?: bool
                 className={`mt-3 font-semibold tabular-nums tracking-tight text-slate-900 ${label === '最近报告期' ? 'text-xl' : 'text-3xl'}`}
               >
                 {count}
-                <span className="ml-1.5 text-xs font-normal text-slate-500">{unit}</span>
+                <span className="ml-1.5 text-xs font-normal text-slate-500">
+                  {unit}
+                </span>
               </div>
             </div>
           ))}
@@ -202,7 +269,8 @@ export default function ResearchDesk({ management = false }: { management?: bool
           <div className="flex items-center gap-3">
             <h2 className="section-title">基本面跟踪</h2>
             <span className="text-xs text-slate-500">
-              {finLoading ? '财报加载中…' : `${quotes.length} 家公司`}
+              {`${rows.length} 家公司`}
+              {finLoading ? ' · 财报加载中…' : ''}
             </span>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -225,15 +293,84 @@ export default function ResearchDesk({ management = false }: { management?: bool
             </select>
           </div>
         </div>
+        <WatchlistGroups active={group} onChange={setActiveGroup} />
+        {visibleSelected.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-brand-100 bg-brand-50/50 px-3 py-2 sm:px-5">
+            <span className="mr-1 text-xs font-medium text-brand-700">
+              已选 {visibleSelected.length} 家
+            </span>
+            <select
+              aria-label="批量移入分组"
+              value={destination}
+              onChange={(e) => setMoveTarget(e.target.value)}
+              className="min-h-8 max-w-full rounded-md border border-slate-200 bg-white px-2 text-xs"
+            >
+              {wl.groups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => {
+                wl.move(visibleSelected, destination);
+                setSelected([]);
+              }}
+              className="rounded-md bg-white px-2.5 py-1.5 text-xs text-brand-700 ring-1 ring-brand-200"
+            >
+              移入分组
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                wl.removeMany(visibleSelected);
+                setSelected([]);
+              }}
+              className="rounded-md px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50"
+            >
+              删除自选
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelected([])}
+              className="ml-auto text-xs text-slate-500"
+            >
+              取消选择
+            </button>
+          </div>
+        )}
         {error && (
           <p role="alert" className="px-5 py-4 text-sm text-red-600">
             {error}
           </p>
         )}
         <div className="overflow-x-auto">
-          <table className="w-full text-right">
+          <table className="w-full min-w-[960px] text-right">
             <thead>
               <tr>
+                <th className="th !w-10 !pr-0">
+                  <input
+                    type="checkbox"
+                    aria-label="选择当前列表全部公司"
+                    disabled={!rows.length}
+                    checked={
+                      rows.length > 0 && visibleSelected.length === rows.length
+                    }
+                    ref={(el) => {
+                      if (el)
+                        el.indeterminate =
+                          visibleSelected.length > 0 &&
+                          visibleSelected.length < rows.length;
+                    }}
+                    onChange={(e) =>
+                      setSelected(
+                        e.target.checked ? rows.map((q) => q.symbol) : [],
+                      )
+                    }
+                    className="h-3.5 w-3.5 accent-blue-600"
+                  />
+                </th>
                 <th className="th">公司</th>
                 <th className="th !text-right">PE-TTM</th>
                 <th className="th !text-right">PB</th>
@@ -246,57 +383,120 @@ export default function ResearchDesk({ management = false }: { management?: bool
             </thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map((q) => (
-                <tr key={q.code} className="transition hover:bg-slate-50/70">
+                <tr
+                  key={q.symbol}
+                  className={`transition hover:bg-slate-50/70 ${visibleSelected.includes(q.symbol) ? 'bg-brand-50/40' : ''}`}
+                >
+                  <td className="td !pr-0">
+                    <input
+                      type="checkbox"
+                      aria-label={`选择${q.name}`}
+                      checked={visibleSelected.includes(q.symbol)}
+                      onChange={(e) =>
+                        setSelected((prev) =>
+                          e.target.checked
+                            ? [...prev, q.symbol]
+                            : prev.filter((s) => s !== q.symbol),
+                        )
+                      }
+                      className="h-3.5 w-3.5 accent-blue-600"
+                    />
+                  </td>
                   <td className="td text-left">
-                    <Link
-                      prefetch={false}
-                      href={`/stock/${q.symbol}`}
-                      className="font-medium hover:text-brand-600"
-                    >
-                      {q.name}
-                    </Link>
+                    <div className="flex items-center gap-1.5">
+                      <Link
+                        prefetch={false}
+                        href={`/stock/${q.symbol}`}
+                        className="font-medium hover:text-brand-600"
+                      >
+                        {q.name}
+                      </Link>
+                      <button
+                        type="button"
+                        aria-label={`删除${q.name}自选`}
+                        title="删除自选"
+                        onClick={() => remove(q.symbol)}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600 focus-visible:text-red-600"
+                      >
+                        <svg
+                          aria-hidden="true"
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                        >
+                          <path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6" />
+                        </svg>
+                      </button>
+                    </div>
                     <div className="mt-1 text-xs text-slate-500">
                       {q.code} · {industryOf(q.code) ?? q.market}
+                      <span className="ml-2">
+                        <WatchlistButton
+                          code={q.symbol}
+                          name={q.name}
+                          compact
+                          label={
+                            wl.groups.find((g) => g.id === wl.groupOf(q.symbol))
+                              ?.name ?? '未分组'
+                          }
+                        />
+                      </span>
                     </div>
-                    {q.stale && <span className="text-xs text-amber-700">行情快照</span>}
+                    {q.stale && (
+                      <span className="text-xs text-amber-700">行情快照</span>
+                    )}
                   </td>
                   <td className="td">{value(q.pe)}</td>
                   <td className="td">{value(q.pb)}</td>
-                  <td className="td font-medium">{value(latest(q.code, 'roe'), '%')}</td>
-                  <td className="td">{value(latest(q.code, 'netMargin'), '%')}</td>
-                  <td className="td">{value(latest(q.code, 'ocfPerShare'), ' 元')}</td>
+                  <td className="td font-medium">
+                    {value(latest(q.code, 'roe'), '%')}
+                  </td>
+                  <td className="td">
+                    {value(latest(q.code, 'netMargin'), '%')}
+                  </td>
+                  <td className="td">
+                    {value(latest(q.code, 'ocfPerShare'), ' 元')}
+                  </td>
                   <td className="td text-left !text-xs !text-slate-500">
-                    {financialMap.get(q.code)?.periods.at(-1) ?? (finLoading ? '…' : '—')}
+                    {financialMap.get(q.code)?.periods.at(-1) ??
+                      (finLoading ? '…' : '—')}
                   </td>
                   <td className="td">
                     <div className="flex justify-end gap-4">
-                      <Link prefetch={false} href={`/stock/${q.symbol}`} className="text-brand-600">
+                      <Link
+                        prefetch={false}
+                        href={`/stock/${q.symbol}`}
+                        className="text-brand-600"
+                      >
                         估值
                       </Link>
                       <Link
                         prefetch={false}
-                        href={`/stock/${q.code}/finance`}
+                        href={`/stock/${q.symbol}/finance`}
                         className="text-brand-600"
                       >
                         财报
                       </Link>
-                      {management && (
-                        <button
-                          aria-label={`移除${q.name}`}
-                          onClick={() => remove(q.code)}
-                          className="text-slate-400 hover:text-red-600"
-                        >
-                          移除
-                        </button>
-                      )}
                     </div>
                   </td>
                 </tr>
               ))}
               {!rows.length && (
                 <tr>
-                  <td colSpan={8} className="py-14 text-center text-sm text-slate-500">
-                    {loading || !ready ? '加载中…' : '暂无关注公司'}
+                  <td
+                    colSpan={9}
+                    className="py-14 text-center text-sm text-slate-500"
+                  >
+                    {loading || !ready
+                      ? '加载中…'
+                      : filter.trim()
+                        ? '没有匹配的公司'
+                        : group !== 'all'
+                          ? '该分组暂无公司'
+                          : '暂无关注公司'}
                   </td>
                 </tr>
               )}
@@ -306,31 +506,48 @@ export default function ResearchDesk({ management = false }: { management?: bool
         <div className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
           PE / PB：行情口径　·　财务指标：各公司所列报告期累计口径
           {finErrors.length > 0 && (
-            <span className="ml-3 text-amber-700">财报暂不可用：{finErrors.join('、')}</span>
+            <span className="ml-3 text-amber-700">
+              财报暂不可用：{finErrors.join('、')}
+            </span>
           )}
         </div>
       </section>
 
-      {management && otherAssets.length > 0 && (
+      {management && filteredOtherAssets.length > 0 && (
         <details className="card px-5 py-4">
           <summary className="text-sm font-medium text-slate-600">
-            其他关注标的 · {otherAssets.length}
+            其他关注标的 · {filteredOtherAssets.length}
           </summary>
           <div className="mt-3 divide-y divide-slate-100">
-            {otherAssets.map((q) => (
-              <div key={q.symbol} className="flex items-center justify-between gap-4 py-3">
+            {filteredOtherAssets.map((q) => (
+              <div
+                key={q.symbol}
+                className="flex flex-wrap items-center justify-between gap-3 py-3"
+              >
                 <Link
-                  href={`/${q.kind === 'index' ? 'index' : 'fund'}/${q.code}`}
+                  href={`/${q.kind === 'index' ? 'index' : 'fund'}/${q.symbol}`}
                   className="text-sm text-slate-700"
                 >
-                  {q.name} <span className="ml-2 text-xs text-slate-400">{q.code}</span>
+                  {q.name}{' '}
+                  <span className="ml-2 text-xs text-slate-400">{q.code}</span>
                 </Link>
-                <button
-                  className="text-xs text-slate-500 hover:text-red-600"
-                  onClick={() => remove(q.code)}
-                >
-                  移除
-                </button>
+                <div className="flex shrink-0 items-center gap-3">
+                  <WatchlistButton
+                    code={q.symbol}
+                    name={q.name}
+                    compact
+                    label={
+                      wl.groups.find((g) => g.id === wl.groupOf(q.symbol))
+                        ?.name ?? '未分组'
+                    }
+                  />
+                  <button
+                    className="text-xs text-slate-500 hover:text-red-600"
+                    onClick={() => remove(q.symbol)}
+                  >
+                    移除
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -394,7 +611,9 @@ export default function ResearchDesk({ management = false }: { management?: bool
                         <time>{n.date}</time>
                         <button
                           aria-label={`删除${n.name}笔记`}
-                          onClick={() => saveNotes(notes.filter((x) => x.id !== n.id))}
+                          onClick={() =>
+                            saveNotes(notes.filter((x) => x.id !== n.id))
+                          }
                         >
                           删除
                         </button>
@@ -421,8 +640,12 @@ export default function ResearchDesk({ management = false }: { management?: bool
                   className="flex items-center justify-between gap-3 py-4"
                 >
                   <div>
-                    <div className="text-sm font-medium text-slate-800">{f.name}</div>
-                    <div className="mt-1 text-xs text-slate-500">报告期 {f.periods.at(-1)}</div>
+                    <div className="text-sm font-medium text-slate-800">
+                      {f.name}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      报告期 {f.periods.at(-1)}
+                    </div>
                   </div>
                   <span className="text-slate-400" aria-hidden="true">
                     ↗

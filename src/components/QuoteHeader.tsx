@@ -1,19 +1,19 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import AiAnalysisDialog from "@/components/AiAnalysisDialog";
-import { useWatchlist } from "@/components/WatchlistProvider";
-import { fmtTime, price, signed, signedPct, toneClass } from "@/lib/format";
-import type { Quote } from "@/lib/datasource/types";
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import AiAnalysisDialog from '@/components/AiAnalysisDialog';
+import WatchlistButton from '@/components/WatchlistButton';
+import { fmtTime, price, signed, signedPct, toneClass } from '@/lib/format';
+import type { Quote } from '@/lib/datasource/types';
 
 const KIND_TEXT: Record<string, string> = {
-  stock: "股票",
-  index: "指数",
-  fund: "基金",
-  etf: "ETF",
-  bond: "债券",
-  unknown: "—",
+  stock: '股票',
+  index: '指数',
+  fund: '基金',
+  etf: 'ETF',
+  bond: '债券',
+  unknown: '—',
 };
 
 interface Profile {
@@ -60,11 +60,9 @@ function ProfileItem({
 
 /** 标的报价头部：名称与操作按钮，下方靠左排列报价和公司资料。 */
 export default function QuoteHeader({ quote }: { quote: Quote }) {
-  const wl = useWatchlist();
-  const inList = wl.has(quote.code);
   const [profile, setProfile] = useState<Profile | null>(null);
 
-  const isStock = quote.kind === "stock";
+  const isStock = quote.kind === 'stock';
   useEffect(() => {
     setProfile(null);
     if (!isStock) return;
@@ -83,7 +81,7 @@ export default function QuoteHeader({ quote }: { quote: Quote }) {
   const cap = quote.totalMarketCap;
   const capText =
     cap == null
-      ? "--"
+      ? '--'
       : cap >= 10000
         ? `${(cap / 10000).toFixed(2)} 万亿`
         : `${cap.toFixed(cap >= 100 ? 0 : 2)} 亿`;
@@ -97,7 +95,7 @@ export default function QuoteHeader({ quote }: { quote: Quote }) {
           </h1>
           <span className="font-mono text-sm text-slate-500">{quote.code}</span>
           <span className="chip bg-slate-100 text-slate-500">
-            {KIND_TEXT[quote.kind] ?? "—"}
+            {KIND_TEXT[quote.kind] ?? '—'}
           </span>
           {quote.stale && (
             <span
@@ -115,19 +113,12 @@ export default function QuoteHeader({ quote }: { quote: Quote }) {
                 name={quote.name}
               />
               <Link
-                href={`/stock/${quote.market === "HK" ? quote.symbol : quote.code}/finance`}
+                href={`/stock/${quote.market === 'HK' ? quote.symbol : quote.code}/finance`}
                 className="chip border border-brand-300 bg-white text-brand-700 hover:bg-brand-50"
               >
                 财务体检 →
               </Link>
-              <button
-                onClick={() => wl.toggle(quote.code)}
-                className={`chip border ${inList ? "border-brand-300 bg-brand-50 text-brand-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
-                aria-pressed={inList}
-                title={inList ? "从自选移除" : "加入自选"}
-              >
-                {inList ? "★ 已自选" : "☆ 加自选"}
-              </button>
+              <WatchlistButton code={quote.symbol} name={quote.name} />
             </>
           )}
         </div>
@@ -147,7 +138,7 @@ export default function QuoteHeader({ quote }: { quote: Quote }) {
 
           <div className="mt-2 text-xs text-slate-500">
             {fmtTime(quote.ts)} · 数据源 {quote.source}
-            {quote.market ? ` · ${quote.market}` : ""}
+            {quote.market ? ` · ${quote.market}` : ''}
           </div>
         </div>
 
@@ -156,7 +147,7 @@ export default function QuoteHeader({ quote }: { quote: Quote }) {
             <ProfileItem label="总市值" value={capText} />
             <ProfileItem
               label="控股股东"
-              value={profile?.holder ?? "--"}
+              value={profile?.holder ?? '--'}
               title={
                 profile?.holder && profile?.holderRatio != null
                   ? `${profile.holder}（持股 ${profile.holderRatio.toFixed(2)}%）`
@@ -165,15 +156,15 @@ export default function QuoteHeader({ quote }: { quote: Quote }) {
             />
             <ProfileItem
               label="实控人"
-              value={profile?.controller ?? "--"}
+              value={profile?.controller ?? '--'}
               title={profile?.controller ?? undefined}
             />
             <ProfileItem
-              label={quote.market === "HK" ? "所属行业" : "所属三级行业"}
-              value={profile?.industry ?? "--"}
+              label={quote.market === 'HK' ? '所属行业' : '所属三级行业'}
+              value={profile?.industry ?? '--'}
               title={profile?.industryPath ?? undefined}
               href={
-                quote.market !== "HK" && profile?.industry
+                quote.market !== 'HK' && profile?.industry
                   ? `/industry?level=3&node=${encodeURIComponent(profile.industry)}`
                   : undefined
               }

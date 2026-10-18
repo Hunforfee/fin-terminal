@@ -2,6 +2,8 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
+import WatchlistButton from '@/components/WatchlistButton';
+import { normalizeStockCode } from '@/lib/datasource/codes';
 import { useSearchParams } from 'next/navigation';
 import { INDUSTRIES } from '@/lib/universe';
 import { pct, price, yi } from '@/lib/format';
@@ -98,7 +100,8 @@ function ScreenerInner() {
     };
   }, [query]);
 
-  const set = (k: keyof Criteria, v: string) => setCriteria((c) => ({ ...c, [k]: v }));
+  const set = (k: keyof Criteria, v: string) =>
+    setCriteria((c) => ({ ...c, [k]: v }));
 
   const sorted = [...rows].sort((a, b) => {
     const va = a[sort.key];
@@ -109,7 +112,17 @@ function ScreenerInner() {
   });
 
   const exportCsv = () => {
-    const head = ['代码', '名称', '行业', '最新价', '涨跌幅%', 'PE', 'PB', 'ROE%', '总市值(亿)'];
+    const head = [
+      '代码',
+      '名称',
+      '行业',
+      '最新价',
+      '涨跌幅%',
+      'PE',
+      'PB',
+      'ROE%',
+      '总市值(亿)',
+    ];
     const lines = sorted.map((r) =>
       [
         r.code,
@@ -121,7 +134,7 @@ function ScreenerInner() {
         r.pb ?? '',
         r.roe?.toFixed(2) ?? '',
         r.totalMarketCap ?? '',
-      ].join(',')
+      ].join(','),
     );
     const blob = new Blob([`\uFEFF${head.join(',')}\n${lines.join('\n')}`], {
       type: 'text/csv;charset=utf-8',
@@ -137,7 +150,9 @@ function ScreenerInner() {
   const head = (key: keyof Row, label: string) => (
     <th
       className="th cursor-pointer select-none hover:text-slate-800"
-      onClick={() => setSort((s) => ({ key, desc: s.key === key ? !s.desc : true }))}
+      onClick={() =>
+        setSort((s) => ({ key, desc: s.key === key ? !s.desc : true }))
+      }
     >
       {label}
       {sort.key === key ? (sort.desc ? ' ↓' : ' ↑') : ''}
@@ -149,8 +164,8 @@ function ScreenerInner() {
       <div>
         <h1 className="page-title">条件选股</h1>
         <p className="mt-1 text-xs text-slate-500">
-          候选池为 {INDUSTRIES.length} 个行业的龙头股样本，实时抓取行情后按条件过滤。ROE 由 PB ÷ PE
-          派生。
+          候选池为 {INDUSTRIES.length}{' '}
+          个行业的龙头股样本，实时抓取行情后按条件过滤。ROE 由 PB ÷ PE 派生。
         </p>
       </div>
 
@@ -260,9 +275,14 @@ function ScreenerInner() {
             {sorted.map((r) => (
               <tr key={r.code} className="hover:bg-slate-50/60">
                 <td className="td">
-                  <Link href={`/stock/${r.code}`} className="hover:text-brand-600">
+                  <Link
+                    href={`/stock/${r.code}`}
+                    className="hover:text-brand-600"
+                  >
                     <div className="font-medium text-slate-900">{r.name}</div>
-                    <div className="font-mono text-xs text-slate-400">{r.code}</div>
+                    <div className="font-mono text-xs text-slate-400">
+                      {r.code}
+                    </div>
                   </Link>
                 </td>
                 <td className="td text-xs text-slate-500">{r.industry}</td>
@@ -272,7 +292,11 @@ function ScreenerInner() {
                 <td className="td">{pct(r.roe)}</td>
                 <td className="td">{yi(r.totalMarketCap)}</td>
                 <td className="td text-right">
-                  <WatchButton code={r.code} />
+                  <WatchlistButton
+                    code={normalizeStockCode(r.code)?.symbol ?? r.code}
+                    name={r.name}
+                    compact
+                  />
                 </td>
               </tr>
             ))}
@@ -283,46 +307,13 @@ function ScreenerInner() {
   );
 }
 
-function WatchButton({ code }: { code: string }) {
-  const [inList, setInList] = useState(false);
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem('fin-terminal.watchlist.v1');
-      setInList(raw ? (JSON.parse(raw) as string[]).includes(code) : false);
-    } catch {
-      /* ignore */
-    }
-  }, [code]);
-
-  const toggle = () => {
-    try {
-      const raw = localStorage.getItem('fin-terminal.watchlist.v1');
-      const list: string[] = raw ? (JSON.parse(raw) as string[]) : [];
-      const next = list.includes(code) ? list.filter((x) => x !== code) : [...list, code];
-      localStorage.setItem('fin-terminal.watchlist.v1', JSON.stringify(next));
-      setInList(next.includes(code));
-      window.dispatchEvent(
-        new StorageEvent('storage', {
-          key: 'fin-terminal.watchlist.v1',
-          newValue: JSON.stringify(next),
-        })
-      );
-    } catch {
-      /* ignore */
-    }
-  };
-
-  return (
-    <button
-      onClick={toggle}
-      className="rounded px-2 py-1 text-xs text-slate-500 hover:bg-slate-100"
-    >
-      {inList ? '★ 已自选' : '☆ 自选'}
-    </button>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <label className="block">
       <span className="label mb-1 block">{label}</span>
@@ -370,7 +361,9 @@ function RangeField({
 
 export default function ScreenerPage() {
   return (
-    <Suspense fallback={<div className="card-pad text-sm text-slate-400">加载中…</div>}>
+    <Suspense
+      fallback={<div className="card-pad text-sm text-slate-400">加载中…</div>}
+    >
       <ScreenerInner />
     </Suspense>
   );

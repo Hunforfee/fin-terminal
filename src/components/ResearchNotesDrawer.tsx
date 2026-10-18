@@ -415,48 +415,70 @@ export default function ResearchNotesDrawer({
       className={`fixed inset-y-0 left-auto right-0 !m-0 h-[100dvh] max-h-none w-full ${maximized ? 'max-w-none' : 'max-w-[860px]'} overflow-hidden border-0 bg-white p-0 text-slate-800 shadow-2xl backdrop:bg-slate-900/25 [&[open]]:flex [&[open]]:flex-col`}
     >
       <div
-        className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-6"
+        className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-6"
         onDoubleClick={(event) => {
           if (!(event.target as HTMLElement).closest('button, input, select'))
             setMaximized(!maximized);
         }}
       >
         <div className="flex min-w-0 items-center gap-3">
-          <h2 id={titleId} className="truncate text-lg font-semibold">
+          <h2 id={titleId} className="text-lg font-semibold">
             研究笔记
           </h2>
-          <span className="shrink-0 text-xs text-slate-400">
-            {notes.length} 条
-          </span>
-        </div>
-        <div className="flex shrink-0 items-center gap-1 sm:gap-3">
-          {!editing && (
-            <button
-              type="button"
-              aria-expanded={directoryOpen}
-              aria-controls={`${titleId}-directory`}
-              aria-pressed={directoryOpen}
-              className="hidden rounded-md px-2 py-2 text-sm text-slate-500 hover:bg-slate-100 sm:block"
-              onClick={() => setDirectoryOpen(!directoryOpen)}
-            >
-              目录
-            </button>
-          )}
-          <button
-            type="button"
-            aria-label={maximized ? '退出全屏阅读' : '全屏阅读'}
-            aria-pressed={maximized}
-            className="hidden rounded-md px-2 py-2 text-sm text-slate-500 hover:bg-slate-100 sm:block"
-            onClick={() => setMaximized(!maximized)}
+          <div
+            role="tablist"
+            aria-label="笔记分类"
+            className="segmented"
           >
-            {maximized ? '退出全屏' : '全屏'}
-          </button>
+            {(['company', 'daily'] as const).map((kind) => (
+              <button
+                key={kind}
+                id={`${titleId}-tab-${kind}`}
+                type="button"
+                role="tab"
+                aria-label={kind === 'daily' ? '每日心得' : '公司笔记'}
+                aria-selected={category === kind}
+                aria-controls={`${titleId}-panel`}
+                tabIndex={category === kind ? 0 : -1}
+                className={`segment ${category === kind ? 'segment-active' : ''}`}
+                onClick={() => switchCategory(kind)}
+                onKeyDown={(event) => {
+                  if (
+                    !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(
+                      event.key,
+                    )
+                  )
+                    return;
+                  event.preventDefault();
+                  const next =
+                    event.key === 'Home'
+                      ? 'company'
+                      : event.key === 'End'
+                        ? 'daily'
+                        : kind === 'company'
+                          ? 'daily'
+                          : 'company';
+                  switchCategory(next);
+                  document
+                    .getElementById(`${titleId}-tab-${next}`)
+                    ?.focus();
+                }}
+              >
+                {kind === 'daily' ? '每日心得' : '公司笔记'}
+                <span aria-hidden="true" className="ml-1 text-xs text-slate-400">
+                  {categoryCounts[kind]}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
           {!editing && (
             <button
               ref={creating}
               type="button"
               disabled={!ready}
-              className="rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+              className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
               onClick={newNote}
             >
               {draft
@@ -469,57 +491,24 @@ export default function ResearchNotesDrawer({
           <button
             type="button"
             aria-label="关闭研究笔记"
-            className="rounded-md px-2 py-2 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+            title="关闭"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
             onClick={onClose}
           >
-            关闭
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-5 w-5"
+            >
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
           </button>
         </div>
-      </div>
-      <div
-        role="tablist"
-        aria-label="笔记分类"
-        className="flex shrink-0 gap-6 border-b border-slate-100 px-4 sm:px-6"
-      >
-        {(['company', 'daily'] as const).map((kind) => (
-          <button
-            key={kind}
-            id={`${titleId}-tab-${kind}`}
-            type="button"
-            role="tab"
-            aria-label={kind === 'daily' ? '每日心得' : '公司笔记'}
-            aria-selected={category === kind}
-            aria-controls={`${titleId}-panel`}
-            tabIndex={category === kind ? 0 : -1}
-            className={`flex items-center gap-2 border-b-2 px-1 py-3 text-sm ${category === kind ? 'border-brand-600 font-semibold text-brand-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-            onClick={() => switchCategory(kind)}
-            onKeyDown={(event) => {
-              if (
-                !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)
-              )
-                return;
-              event.preventDefault();
-              const next =
-                event.key === 'Home'
-                  ? 'company'
-                  : event.key === 'End'
-                    ? 'daily'
-                    : kind === 'company'
-                      ? 'daily'
-                      : 'company';
-              switchCategory(next);
-              document.getElementById(`${titleId}-tab-${next}`)?.focus();
-            }}
-          >
-            {kind === 'daily' ? '每日心得' : '公司笔记'}
-            <span
-              aria-hidden="true"
-              className="text-xs font-normal text-slate-400"
-            >
-              {categoryCounts[kind]}
-            </span>
-          </button>
-        ))}
       </div>
       <div
         id={`${titleId}-panel`}

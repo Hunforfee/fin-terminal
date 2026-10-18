@@ -12,7 +12,7 @@
  */
 
 import { fetchJson, fetchText } from './http';
-import { numOrNull, normalizeCode, INDEX_WHITELIST } from './codes';
+import { numOrNull, normalizeCode, buildHk, INDEX_WHITELIST } from './codes';
 import type { Candle, KLineSeries, MinutePoint, Period, Quote, SearchHit, Adjust } from './types';
 
 const QUOTE_URL = 'https://qt.gtimg.cn/q=';
@@ -33,6 +33,8 @@ export const PROVIDER_NAME = 'tencent';
  */
 function parseQuoteLine(symbol: string, body: string): Quote | null {
   const f = body.split('~');
+  // 港股（v_hk00700=...）字段布局不同，走专用解析
+  if (symbol.startsWith('hk')) return parseHkQuoteLine(symbol, body);
   if (f.length < 50) return null;
 
   const code = f[2] || symbol.slice(2);
@@ -91,10 +93,63 @@ function cleanName(s: string): string {
 }
 
 function parseTs(raw: string): string | null {
-  // 形如 20261016161447
+  // A 股形如 20261016161447；港股形如 2026/10/16 16:08:22
   const m = raw.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/);
-  if (!m) return null;
-  return `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}+08:00`;
+  if (m) return `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}+08:00`;
+  const hk = raw.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2}):(\d{2})$/);
+  if (hk) {
+    const p = (n: string) => n.padStart(2, '0');
+    return `${hk[1]}-${p(hk[2])}-${p(hk[3])}T${p(hk[4])}:${hk[5]}:${hk[6]}+08:00`;
+  }
+  return null;
+}
+
+/**
+ * 港股行情行解析。港股字段位与 A 股不同（实测 2026-10）：
+ *  1 名称 2 代码 3 现价 4 昨收 5 今开 6 成交量(股)
+ *  30 时间(2026/10/16 16:08:22) 31 涨跌额 32 涨跌幅 33 最高 34 最低
+ *  36 成交量(股) 37 成交额(港元) 39 PE(TTM) 43 振幅
+ *  44/45 总市值(亿港元) 48 52周高 49 52周低
+ */
+function parseHkQuoteLine(symbol: string, body: string): Quote | null {
+  const f = body.split('~');
+  if (f.length < 40) return null;
+  const code = f[2] || symbol.slice(2);
+  const price = numOrNull(f[3]);
+  const high52w = numOrNull(f[48]);
+  const low52w = numOrNull(f[49]);
+  // 港股成交量单位为股，统一折算成手
+  const volShare = numOrNull(f[36]) ?? numOrNull(f[6]);
+  return {
+    code,
+    symbol,
+    name: cleanName(f[1] || code),
+    market: 'HK',
+    kind: 'stock',
+    price,
+    prevClose: numOrNull(f[4]),
+    open: numOrNull(f[5]),
+    high: numOrNull(f[33]),
+    low: numOrNull(f[34]),
+    change: numOrNull(f[31]),
+    changePct: numOrNull(f[32]),
+    volume: volShare === null ? null : Math.round(volShare / 100),
+    amount: numOrNull(f[37]),
+    turnoverRate: null,
+    volumeRatio: null,
+    amplitude: numOrNull(f[43]),
+    pe: numOrNull(f[39]),
+    peForward: null,
+    peStatic: null,
+    pb: null,
+    totalMarketCap: numOrNull(f[45]),
+    floatMarketCap: numOrNull(f[44]),
+    high52w: high52w !== null && price !== null && high52w >= price ? high52w : null,
+    low52w: low52w !== null && price !== null && low52w <= price ? low52w : null,
+    ts: parseTs(f[30] || ''),
+    source: PROVIDER_NAME,
+    stale: false,
+  };
 }
 
 /** 批量取实时行情，一次最多 60 个代码 */
@@ -102,8 +157,8 @@ export async function fetchQuotes(symbols: string[]): Promise<Quote[]> {
   if (symbols.length === 0) return [];
   const text = await fetchText(QUOTE_URL + symbols.join(','), { encoding: 'gbk', timeoutMs: 8000 });
   const out: Quote[] = [];
-  // 形如 v_sh600519="...";
-  const re = /v_([a-z]{2}\d{6})="([^"]*)"/g;
+  // 形如 v_sh600519="..."；港股为 v_hk00700="..."（5 位代码）
+  const re = /v_([a-z]{2}\d{4,6})="([^"]*)"/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
     const q = parseQuoteLine(m[1], m[2]);
@@ -158,7 +213,10 @@ export async function fetchKLine(
   if (!node) throw new Error(`tencent kline: no data node for ${symbol}`);
 
   const key = adjust === 'qfq' ? `qfq${p}` : adjust === 'hfq' ? `hfq${p}` : p;
-  const raw = (adjust === 'none' ? node[p] : node[key]) as unknown[] | undefined;
+  // 港股 K 线上游不提供复权序列（实测只返回 day），此时兜底用不复权数据；
+  // A 股必须严格按复权 key 取数，禁止静默降级（见 valuation.test.mjs 契约）
+  let raw = (adjust === 'none' ? node[p] : node[key]) as unknown[] | undefined;
+  if ((!raw || raw.length === 0) && symbol.startsWith('hk')) raw = node[p] as unknown[] | undefined;
   if (!raw || raw.length === 0) throw new Error(`tencent kline: empty series (${key})`);
 
   // 腾讯行序： [date, open, close, high, low, volume]
@@ -189,19 +247,21 @@ export async function fetchKLine(
   };
 }
 
-/** 分时（当日逐分钟） */
+/** 分时（当日逐分钟）。港股返回量纲为股，统一折算成手 */
 export async function fetchMinute(symbol: string): Promise<MinutePoint[]> {
   const url = `${MINUTE_URL}?code=${symbol}`;
   const json = await fetchJson<{ data?: Record<string, { data?: { data?: string[] } }> }>(url, { timeoutMs: 8000 });
   const rows = json?.data?.[symbol]?.data?.data;
   if (!rows) throw new Error('tencent minute: empty');
+  const isHk = symbol.startsWith('hk');
   // 行格式："0930 1311.57 335 43937595.00"
   return rows.map((r) => {
     const [time, price, vol, amt] = r.split(' ');
+    const v = Number(vol);
     return {
       time: `${time.slice(0, 2)}:${time.slice(2)}`,
       price: Number(price),
-      volume: Number(vol),
+      volume: isHk ? Math.round(v / 100) : v,
       amount: Number(amt),
     };
   });
@@ -223,6 +283,24 @@ export async function fetchSearch(keyword: string): Promise<SearchHit[]> {
   for (const item of m[1].split('^')) {
     const p = item.split('~');
     if (p.length < 3) continue;
+    const mk = p[0].toLowerCase();
+    // 港股：hk~00700~腾讯控股~txkg~GP
+    if (mk === 'hk') {
+      const n = buildHk(p[1]);
+      hits.push({
+        code: n.code,
+        symbol: n.symbol,
+        name: unescapeUnicode(p[2]),
+        market: 'HK',
+        kind: p[4] === 'GP' ? 'stock' : 'unknown',
+        pinyin: p[3],
+        board: '港股',
+        secid: n.secid,
+      });
+      continue;
+    }
+    // 暂只支持 A 股 + 港股，跳过美股 / 基金等其它市场行
+    if (mk !== 'sh' && mk !== 'sz' && mk !== 'bj') continue;
     const market = p[0].toUpperCase() as 'SH' | 'SZ' | 'BJ';
     const code = p[1];
     const norm = normalizeCode(`${market.toLowerCase()}${code}`);

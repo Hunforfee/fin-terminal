@@ -56,6 +56,11 @@ export { numOrNull };
 export function normalizeCode(input: string): NormalizedCode | null {
   if (!input) return null;
   let raw = String(input).trim().toLowerCase();
+  // 港股：hk00700 / 00700.hk / 700.hk / 裸 4-5 位数字（A 股固定 6 位，无冲突）
+  const hkSuffixed = raw.match(/^(?:hk)?(\d{1,5})\.hk$/);
+  if (hkSuffixed) return buildHk(hkSuffixed[1]);
+  const hkPrefixed = raw.match(/^hk(\d{1,5})$/);
+  if (hkPrefixed) return buildHk(hkPrefixed[1]);
   // 去掉 .SH / .SZ 之类的后缀
   const suffix = raw.match(/^(\d{6})\.(sh|sz|bj|ss)$/);
   if (suffix) return build(suffix[1], (suffix[2] === 'ss' ? 'SH' : suffix[2].toUpperCase()) as Market);
@@ -65,7 +70,12 @@ export function normalizeCode(input: string): NormalizedCode | null {
     return build(prefixed[2], prefixed[1].toUpperCase() as Market);
   }
   const digits = raw.match(/^(\d{6})$/);
-  if (!digits) return null;
+  if (!digits) {
+    // 裸 4-5 位数字视为港股代码（如 700 / 0700 / 00700）
+    const hk = raw.match(/^(\d{4,5})$/);
+    if (hk) return buildHk(hk[1]);
+    return null;
+  }
   const code = digits[1];
 
   // 指数优先（解决 000001 歧义：默认返回指数，股票由搜索另行给出）
@@ -86,8 +96,20 @@ export function normalizeCode(input: string): NormalizedCode | null {
   return build(code, 'SH');
 }
 
-function build(code: string, market: Market): NormalizedCode {
-  const symbol = `${market.toLowerCase()}${code}`;
+/** 港股代码标准化：不足 5 位左侧补零，symbol 形如 hk00700 */
+export function buildHk(raw: string): NormalizedCode {
+  const code = raw.padStart(5, '0');
+  return {
+    code,
+    symbol: `hk${code}`,
+    market: 'HK',
+    kind: 'stock',
+    board: '港股',
+    secid: `116.${code}`,
+  };
+}
+
+function build(code: string, market: Market): NormalizedCode {  const symbol = `${market.toLowerCase()}${code}`;
   const idx = INDEX_WHITELIST[code];
   let kind: AssetKind = 'stock';
   let board = 'A股';
@@ -117,6 +139,8 @@ function build(code: string, market: Market): NormalizedCode {
 /** Use the stock context to disambiguate bare codes shared with indices. */
 export function normalizeStockCode(input: string): NormalizedCode | null {
   const raw = input.trim();
+  const hk = raw.match(/^(?:hk)?(\d{1,5})(?:\.hk)?$/i);
+  if (hk && !/^\d{6}$/.test(raw)) return buildHk(hk[1]);
   const symbol = /^\d{6}$/.test(raw)
     ? `${/^[03]/.test(raw) ? 'sz' : /^(4|8|92)/.test(raw) ? 'bj' : 'sh'}${raw}` : raw;
   const n = normalizeCode(symbol);

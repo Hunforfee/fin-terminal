@@ -28,7 +28,6 @@ export default async function FinancePage({ params }: { params: Promise<{ code: 
             {quote?.name ?? nameOf(code) ?? code}
           </h1>
           <span className="text-xs tabular-nums text-slate-400">{code}</span>
-          <span className="text-sm text-slate-500">财务分析</span>
         </div>
       }
     />

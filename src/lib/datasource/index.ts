@@ -18,7 +18,7 @@ import * as ifind from './ifind';
 import * as snapshot from './snapshot';
 import * as hkFinance from './hkFinance';
 import * as profile from './profile';
-import { fetchHkFundamental, computeHkValuation } from './hkFundamental';
+import { fetchHkFundamental, fetchHkDividends, computeHkValuation } from './hkFundamental';
 import { cached, defaultTtl, putCache } from './cache';
 import { normalizeCode, normalizeStockCode } from './codes';
 import { computeValuation, buildFinancialSummary } from '../analytics';
@@ -200,8 +200,12 @@ async function withHkValuation(quotes: Quote[]): Promise<Quote[]> {
   const map = new Map<string, { pb: number | null; dividendYield: number | null }>();
   await mapLimit(hk, 4, async (q) => {
     const v = await cached(`hk-fund:${q.symbol}`, 6 * 3600e3, async () => {
-      const f = await fetchHkFundamental(q.symbol.slice(2));
-      return computeHkValuation(f, q.price);
+      const code = q.symbol.slice(2);
+      const [f, dividends] = await Promise.all([
+        fetchHkFundamental(code),
+        fetchHkDividends(code).catch(() => []),
+      ]);
+      return computeHkValuation(f, dividends, q.price);
     }).catch(() => null);
     if (v) map.set(q.symbol, { pb: v.pb, dividendYield: v.dividendYield });
   });

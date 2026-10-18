@@ -5,7 +5,7 @@ import { fetchDividendPlans } from '@/lib/datasource/dividendPlans';
 import { fetchDividends } from '@/lib/datasource/sinaBonus';
 import { getKLine } from '@/lib/datasource';
 import { fetchQuote } from '@/lib/datasource/tencent';
-import { fetchHkFundamental, computeHkValuation } from '@/lib/datasource/hkFundamental';
+import { fetchHkFundamental, fetchHkDividends, computeHkValuation } from '@/lib/datasource/hkFundamental';
 import { buildExpectedDividendYieldByDate } from '@/lib/dividends';
 import { cached } from '@/lib/datasource/cache';
 
@@ -54,11 +54,13 @@ async function hkYield(
   symbol: string,
 ): Promise<{ dy: number | null; method: DividendYieldRow['method'] }> {
   return cached(`hk-dy:${symbol}`, 1800e3, async () => {
-    const [f, q] = await Promise.all([
-      fetchHkFundamental(symbol.slice(2)).catch(() => null),
+    const code = symbol.slice(2);
+    const [f, dividends, q] = await Promise.all([
+      fetchHkFundamental(code).catch(() => null),
+      fetchHkDividends(code).catch(() => []),
       fetchQuote(symbol).catch(() => null),
     ]);
-    const v = computeHkValuation(f, q?.price ?? null);
+    const v = computeHkValuation(f, dividends, q?.price ?? null);
     return { dy: v.dividendYield, method: 'hk-static' as const };
   }).catch(() => ({ dy: null, method: 'hk-static' as const }));
 }

@@ -106,7 +106,6 @@ export default function ResearchNotesDrawer({
   const [draftError, setDraftError] = useState('');
   const [editing, setEditing] = useState(false);
   const [preview, setPreview] = useState(false);
-  const [expanded, setExpanded] = useState(false);
   const [maximized, setMaximized] = useState(false);
   const [directoryOpen, setDirectoryOpen] = useState(true);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
@@ -413,7 +412,7 @@ export default function ResearchNotesDrawer({
         )
           onClose();
       }}
-      className={`fixed inset-y-0 left-auto right-0 !m-0 h-[100dvh] max-h-none w-full ${maximized ? 'max-w-none' : expanded ? 'max-w-[1600px]' : 'max-w-[860px]'} overflow-hidden border-0 bg-white p-0 text-slate-800 shadow-2xl backdrop:bg-slate-900/25 [&[open]]:flex [&[open]]:flex-col`}
+      className={`fixed inset-y-0 left-auto right-0 !m-0 h-[100dvh] max-h-none w-full ${maximized ? 'max-w-none' : 'max-w-[860px]'} overflow-hidden border-0 bg-white p-0 text-slate-800 shadow-2xl backdrop:bg-slate-900/25 [&[open]]:flex [&[open]]:flex-col`}
     >
       <div
         className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-6"
@@ -431,29 +430,18 @@ export default function ResearchNotesDrawer({
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-1 sm:gap-3">
-          {!editing && (expanded || maximized) && (
+          {!editing && (
             <button
               type="button"
               aria-expanded={directoryOpen}
               aria-controls={`${titleId}-directory`}
+              aria-pressed={directoryOpen}
               className="hidden rounded-md px-2 py-2 text-sm text-slate-500 hover:bg-slate-100 sm:block"
               onClick={() => setDirectoryOpen(!directoryOpen)}
             >
               目录
             </button>
           )}
-          <button
-            type="button"
-            aria-label={expanded ? '收起阅读面板' : '展开阅读面板'}
-            aria-pressed={expanded}
-            className="hidden rounded-md px-2 py-2 text-sm text-slate-500 hover:bg-slate-100 sm:block"
-            onClick={() => {
-              setExpanded(!expanded);
-              setMaximized(false);
-            }}
-          >
-            {expanded ? '收起' : '展开'}
-          </button>
           <button
             type="button"
             aria-label={maximized ? '退出全屏阅读' : '全屏阅读'}
@@ -739,7 +727,7 @@ export default function ResearchNotesDrawer({
               </p>
             )}
             <div className="flex min-h-0 flex-1">
-              {(expanded || maximized) && directoryOpen && (
+              {directoryOpen && (
                 <aside
                   id={`${titleId}-directory`}
                   aria-label="笔记目录"

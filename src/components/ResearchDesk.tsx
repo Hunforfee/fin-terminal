@@ -6,13 +6,12 @@ import ResearchNotesDrawer from './ResearchNotesDrawer';
 import type { NoteCompany } from './NoteCompanyPicker';
 import { researchNoteSymbol } from '@/lib/researchNotes';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useWatchlist } from './WatchlistProvider';
 import WatchlistButton from './WatchlistButton';
 import WatchlistGroups from './WatchlistGroups';
 import StockName from './StockName';
-import StockListViewport from './StockListViewport';
 import ResearchColumns from './ResearchColumns';
 import CompanyWindow from './CompanyWindow';
 import {
@@ -107,6 +106,8 @@ export default function ResearchDesk({
   );
   const [filter, setFilter] = useState('');
   const [page, setPage] = useState(1);
+  const tableRef = useRef<HTMLDivElement>(null);
+  const [jumpTo, setJumpTo] = useState('');
   const PAGE_SIZE = 50;
   useEffect(() => {
     setSelected([]);
@@ -342,6 +343,16 @@ export default function ResearchDesk({
   const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
   const pageRows = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  // 翻页后列表不再有内部滚动条，把整个表格滚回视口顶部
+  const goToPage = (p: number) => {
+    const next = Math.min(Math.max(1, p), pageCount);
+    setPage(next);
+    requestAnimationFrame(() => {
+      const top = tableRef.current?.getBoundingClientRect().top ?? 0;
+      if (top < 0)
+        window.scrollTo({ top: window.scrollY + top - 8, behavior: 'smooth' });
+    });
+  };
   const visibleSelected = selected.filter((symbol) =>
     rows.some((row) => row.symbol === symbol),
   );
@@ -511,15 +522,7 @@ export default function ResearchDesk({
             {error}
           </p>
         )}
-        <StockListViewport
-          resetKey={JSON.stringify([
-            group,
-            filter,
-            sort,
-            table.columns,
-            safePage,
-          ])}
-        >
+        <div ref={tableRef} className="overflow-x-auto">
           <table
             aria-label="基本面股票列表"
             className="w-full text-right"
@@ -865,7 +868,7 @@ export default function ResearchDesk({
               )}
             </tbody>
           </table>
-        </StockListViewport>
+        </div>
 
         <div className="flex items-center gap-3 border-t border-slate-100 px-5 py-2.5 text-xs text-slate-500">
           {finErrors.length > 0 && (
@@ -882,7 +885,7 @@ export default function ResearchDesk({
                 type="button"
                 aria-label="上一页"
                 disabled={safePage <= 1}
-                onClick={() => setPage(Math.max(1, safePage - 1))}
+                onClick={() => goToPage(safePage - 1)}
                 className="rounded-md border border-slate-200 px-2 py-1 text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 上一页
@@ -891,11 +894,49 @@ export default function ResearchDesk({
                 type="button"
                 aria-label="下一页"
                 disabled={safePage >= pageCount}
-                onClick={() => setPage(Math.min(pageCount, safePage + 1))}
+                onClick={() => goToPage(safePage + 1)}
                 className="rounded-md border border-slate-200 px-2 py-1 text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 下一页
               </button>
+              {pageCount > 2 && (
+                <span className="flex items-center gap-1">
+                  <span>跳至</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={pageCount}
+                    value={jumpTo}
+                    placeholder={String(safePage)}
+                    aria-label="跳转到指定页"
+                    onChange={(e) => setJumpTo(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const n = Number(jumpTo);
+                        if (Number.isInteger(n) && n >= 1) {
+                          goToPage(n);
+                          setJumpTo('');
+                        }
+                      }
+                    }}
+                    className="w-14 rounded-md border border-slate-200 px-1.5 py-1 text-right tabular focus:border-brand-400 focus:outline-none"
+                  />
+                  <span>页</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const n = Number(jumpTo);
+                      if (Number.isInteger(n) && n >= 1) {
+                        goToPage(n);
+                        setJumpTo('');
+                      }
+                    }}
+                    className="rounded-md border border-slate-200 px-2 py-1 text-slate-600 hover:bg-slate-50"
+                  >
+                    跳转
+                  </button>
+                </span>
+              )}
             </div>
           )}
         </div>

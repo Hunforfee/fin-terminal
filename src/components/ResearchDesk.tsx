@@ -5,7 +5,6 @@ import { personalStorage } from '@/lib/personalStorage';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useWatchlist } from './WatchlistProvider';
-import WatchlistButton from './WatchlistButton';
 import WatchlistGroups from './WatchlistGroups';
 import OrderButtons from './OrderButtons';
 import StockName from './StockName';
@@ -702,12 +701,6 @@ export default function ResearchDesk({
                         href={`/stock/${q.symbol}`}
                       />
                       <span className="flex items-center opacity-0 transition-opacity group-hover/stock:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
-                        <WatchlistButton
-                          code={q.symbol}
-                          name={q.name}
-                          compact
-                          label="分组"
-                        />
                         <button
                           type="button"
                           aria-label={
@@ -836,12 +829,6 @@ export default function ResearchDesk({
                   {q.name}{' '}
                 </Link>
                 <div className="flex shrink-0 items-center gap-3">
-                  <WatchlistButton
-                    code={q.symbol}
-                    name={q.name}
-                    compact
-                    label={'分组'}
-                  />
                   <button
                     className="text-xs text-slate-500 hover:text-red-600"
                     onClick={() => removeFromView(q.symbol)}

@@ -26,6 +26,24 @@ const histKey = (code: string) => `fin.ai.history.${code}`;
 const DEFAULT_PROMPT =
   '深入分析该股票，包括但不限于公司的业务结构、核心竞争力、行业格局与竞争地位、财务质量（收入/利润/现金流/资产负债）、主要风险，并推测未来 1-3 年的利润区间及关键驱动因素。要求使用最新数据，反复核对数据，确保信息来源真实可靠；引用数据注明来源与日期，无法核实的明确标注。';
 
+/** 服务商预设：一键填入接口地址与模型（Key 仍需用户自行填写） */
+const PRESETS: { id: string; label: string; url: string; model: string; hint: string }[] = [
+  {
+    id: 'tokenhub',
+    label: '腾讯 TokenHub',
+    url: 'https://tokenhub.tencentmaas.com/v1/chat/completions',
+    model: 'deepseek-v4-flash',
+    hint: '腾讯云大模型平台（广州），OpenAI 兼容；模型也可换 deepseek-v4-pro、glm-5.1、kimi-k2.6 等',
+  },
+  {
+    id: 'deepseek',
+    label: 'DeepSeek 官方',
+    url: 'https://api.deepseek.com/v1/chat/completions',
+    model: 'deepseek-chat',
+    hint: 'DeepSeek 官方 API',
+  },
+];
+
 function loadJson<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
@@ -160,6 +178,15 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
     setEditingPrompt(false);
   };
 
+  const applyPreset = (p: (typeof PRESETS)[number]) => {
+    setApiUrl(p.url);
+    setApiModel(p.model);
+    try {
+      localStorage.setItem(LS_URL, p.url);
+      localStorage.setItem(LS_MODEL, p.model);
+    } catch {}
+  };
+
   return (
     <section className="card px-3 py-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -258,6 +285,31 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
       {/* 设置 */}
       {settingsOpen && (
         <div className="mt-2 space-y-1.5 rounded border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] text-slate-500">服务商：</span>
+            {PRESETS.map((p) => {
+              const activePreset = apiUrl === p.url;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => applyPreset(p)}
+                  title={p.hint}
+                  className={`min-h-6 rounded-md px-2 text-[11px] font-medium transition ${
+                    activePreset
+                      ? 'bg-brand-600 text-white'
+                      : 'border border-slate-300 bg-white text-slate-600 hover:border-brand-400 hover:text-brand-600'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+            {apiUrl && !PRESETS.some((p) => p.url === apiUrl) && (
+              <span className="rounded-md border border-slate-300 bg-white px-2 py-0.5 text-[11px] text-slate-500">
+                自定义
+              </span>
+            )}
+          </div>
           <input
             aria-label="AI API Key"
             value={apiKey}
@@ -281,7 +333,7 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
                   localStorage.setItem(LS_URL, apiUrl);
                 } catch {}
               }}
-              placeholder="接口地址（默认 DeepSeek）"
+              placeholder="接口地址（点击上方服务商一键填入）"
               className="input min-w-0 flex-1 py-1 text-xs"
             />
             <input
@@ -293,7 +345,7 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
                   localStorage.setItem(LS_MODEL, apiModel);
                 } catch {}
               }}
-              placeholder="模型（默认 deepseek-chat）"
+              placeholder="模型（如 deepseek-v4-flash）"
               className="input !w-full py-1 text-xs sm:!w-40"
             />
           </div>

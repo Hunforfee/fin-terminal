@@ -3,12 +3,12 @@
  *
  * 已实测可用端点（沙箱 2026-10）：
  *   实时行情  https://qt.gtimg.cn/q=sh600519,sz000001        (GBK)
- *   历史 K 线 https://ifzq.gtimg.cn/appstock/app/fqkline/get (JSON)
+ *   历史 K 线 https://proxy.finance.qq.com/ifzqgtimg/appstock/app/fqkline/get (JSON)
  *   分时      https://web.ifzq.gtimg.cn/appstock/app/minute/query
  *   搜索联想  https://smartbox.gtimg.cn/s3/?q=xxx&t=all      (GBK)
  *
- * 注意：web.ifzq.gtimg.cn 的 K 线端点已被 WAF 拦截（返回 501 页面），
- * 必须走 ifzq.gtimg.cn 这个域名。
+ * 注意：ifzq.gtimg.cn（含 web 子域的 K 线端点）已被 WAF 拦截（返回 501 页面），
+ * K 线必须走 proxy.finance.qq.com 反代域名。
  */
 
 import { fetchJson, fetchText } from './http';
@@ -16,7 +16,9 @@ import { numOrNull, normalizeCode, buildHk, INDEX_WHITELIST } from './codes';
 import type { Candle, KLineSeries, MinutePoint, Period, Quote, SearchHit, Adjust } from './types';
 
 const QUOTE_URL = 'https://qt.gtimg.cn/q=';
-const KLINE_URL = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get';
+// ifzq.gtimg.cn 已被 WAF 整域拦截（501），改走 proxy.finance.qq.com 反代端点（数据格式一致）
+const KLINE_URL =
+  'https://proxy.finance.qq.com/ifzqgtimg/appstock/app/fqkline/get';
 const MINUTE_URL = 'https://web.ifzq.gtimg.cn/appstock/app/minute/query';
 const SMARTBOX_URL = 'https://smartbox.gtimg.cn/s3/';
 

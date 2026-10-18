@@ -136,7 +136,7 @@ async function fetchQuotes(symbols) {
 }
 
 async function fetchKLine(symbol, count = 320) {
-  const url = `https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=${symbol},day,,,${count},qfq`;
+  const url = `https://proxy.finance.qq.com/ifzqgtimg/appstock/app/fqkline/get?param=${symbol},day,,,${count},qfq`;
   const j = JSON.parse(await getText(url));
   const node = j?.data?.[symbol];
   const raw = node?.qfqday ?? node?.day;

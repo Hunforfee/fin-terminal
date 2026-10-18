@@ -18,7 +18,7 @@ import {
   type Formula,
 } from '@/lib/financeFormulas';
 import { STOCKS } from '@/lib/universe';
-import { financeStorageKey } from '@/lib/financePreferences';
+import { financeStorageKey, sanitizeFields, takeLegacyHkModules } from '@/lib/financePreferences';
 
 interface CompanyFinancials {
   currency?: string;
@@ -164,7 +164,16 @@ export default function FinanceExplorer({ code }: { code: string }) {
   // 初始化：localStorage + URL 参数
   useEffect(() => {
     try {
-      const ms = loadModules(modulesKey);
+      const isHk = modulesKey.endsWith('.hk');
+      let ms = loadModules(modulesKey);
+      if (isHk && !localStorage.getItem(modulesKey)) {
+        // 旧全局键里可能存有港股配置（PR#6 之前 A股/港股共用一个键），搬迁过来
+        const legacy = takeLegacyHkModules(LS_MODULES);
+        if (legacy) ms = legacy as unknown as typeof ms;
+      } else if (!isHk) {
+        // 清洗残留的港股科目 key（旧全局键污染），否则显示裸 key 且无数据
+        ms = ms.map((m) => ({ ...m, fields: sanitizeFields(m.fields, false) }));
+      }
       setModules(ms);
       const savedActive = localStorage.getItem(activeKey);
       const url = new URLSearchParams(window.location.search);

@@ -5,7 +5,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import FieldPicker, { allFieldMetas, type PickerCatalog } from '@/components/FieldPicker';
 import { INDICATORS } from '@/lib/datasource/sinaFinancial';
-import { financeStorageKey } from '@/lib/financePreferences';
+import { financeStorageKey, sanitizeFields, takeLegacyHkMergeFields } from '@/lib/financePreferences';
 
 interface CompanyFinancials {
   periodKinds?: Record<string,string>;
@@ -139,7 +139,17 @@ export default function FinanceTable({ code }: { code: string }) {
   }, []);
 
   useEffect(() => {
-    setFields(loadFields(fieldsKey));
+    const isHk = fieldsKey.endsWith('.hk');
+    let loaded = loadFields(fieldsKey);
+    if (isHk && !localStorage.getItem(fieldsKey)) {
+      // 旧全局键里可能存有港股配置，搬迁过来
+      const legacy = takeLegacyHkMergeFields(LS_FIELDS);
+      if (legacy) loaded = legacy;
+    } else {
+      // 清洗残留的异市场科目 key（旧全局键污染）
+      loaded = sanitizeFields(loaded, isHk);
+    }
+    setFields(loaded);
     setShowAll(loadShowAll());
     bootedRef.current = true;
     setLoadedFieldsKey(fieldsKey);

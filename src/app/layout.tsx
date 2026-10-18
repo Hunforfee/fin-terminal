@@ -11,6 +11,15 @@ import { readSession, SESSION_COOKIE } from '@/lib/auth/session';
 export const metadata: Metadata = {
   title: 'FinTerminal · 金融数据终端',
   description: '股票 / 指数 / 基金的行情、估值、财务与条件选股分析平台',
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: '16x16 32x32 48x48', type: 'image/x-icon' },
+      { url: '/brand-icon.svg', sizes: 'any', type: 'image/svg+xml' },
+    ],
+    apple: [
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
+  },
 };
 export default async function RootLayout({
   children,
@@ -38,9 +47,14 @@ export default async function RootLayout({
                     className="flex shrink-0 items-center gap-2.5"
                     aria-label="FinTerminal 首页"
                   >
-                    <span className="grid h-7 w-7 place-items-center rounded-xl bg-slate-900 text-lg font-semibold text-white">
-                      F
-                    </span>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="/brand-icon.svg"
+                      alt=""
+                      width={28}
+                      height={28}
+                      className="h-7 w-7 shrink-0"
+                    />
                     <span className="hidden text-lg font-semibold tracking-tight sm:inline">
                       FinTerminal
                     </span>

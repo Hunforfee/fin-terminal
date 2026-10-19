@@ -19,4 +19,7 @@ finance-*.png
 
 # TS 增量构建缓存
 *.tsbuildinfo
-data/
+/data/
+
+# 预生成综述的抓取中间数据（可由 scripts/fetch-analysis-raw.mjs 重新生成）
+src/data/analyses/_raw/

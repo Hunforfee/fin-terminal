@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useWatchlist } from './WatchlistProvider';
 import Modal from './Modal';
 import WatchlistImport from './WatchlistImport';
@@ -78,11 +78,21 @@ function GroupRow({ group, count }: { group: WatchGroup; count: number }) {
 export default function WatchlistGroups({
   active,
   onChange,
+  toolbar,
+  onConfigureColumns,
 }: {
   active: string;
   onChange: (id: string) => void;
+  toolbar?: ReactNode;
+  onConfigureColumns?: () => void;
 }) {
   const wl = useWatchlist();
+  const menuId = useId();
+  const menuRoot = useRef<HTMLDivElement>(null);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const menuPanel = useRef<HTMLDivElement>(null);
+  const groupStrip = useRef<HTMLDivElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [name, setName] = useState('');
@@ -91,16 +101,62 @@ export default function WatchlistGroups({
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const count = (id: string) =>
     wl.items.filter((item) => item.groupId === id).length;
+  function closeMenu() {
+    setMenuOpen(false);
+    menuButton.current?.focus({ preventScroll: true });
+  }
+  function revealGroup(button: HTMLButtonElement) {
+    const strip = groupStrip.current;
+    if (!strip) return;
+    const bounds = strip.getBoundingClientRect(), item = button.getBoundingClientRect();
+    if (item.left < bounds.left) strip.scrollLeft -= bounds.left - item.left;
+    else if (item.right > bounds.right) strip.scrollLeft += item.right - bounds.right;
+  }
+  useEffect(() => {
+    const button = Array.from(groupStrip.current?.querySelectorAll('button') ?? [])
+      .find((item) => item.dataset.groupId === active);
+    if (button) revealGroup(button);
+  }, [active]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const focus = requestAnimationFrame(() => menuPanel.current?.querySelector('button')?.focus());
+    const outside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !menuRoot.current?.contains(event.target)) setMenuOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      closeMenu();
+    };
+    document.addEventListener('pointerdown', outside, true);
+    document.addEventListener('keydown', escape);
+    return () => {
+      cancelAnimationFrame(focus);
+      document.removeEventListener('pointerdown', outside, true);
+      document.removeEventListener('keydown', escape);
+    };
+  }, [menuOpen]);
   return (
     <>
       <div
         aria-label="自选分组"
-        className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 px-3 py-2.5 sm:px-5"
+        className="flex min-w-0 items-center gap-2 border-b border-slate-100 px-3 py-1.5 sm:px-4"
       >
+        <div
+          ref={groupStrip}
+          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          onDragOver={(event) => {
+            if (!event.dataTransfer.types.includes('application/x-fin-group')) return;
+            const strip = event.currentTarget, bounds = strip.getBoundingClientRect();
+            if (event.clientX < bounds.left + 28) strip.scrollLeft -= 20;
+            else if (event.clientX > bounds.right - 28) strip.scrollLeft += 20;
+          }}
+        >
         {[{ id: 'all', name: '全部自选' }, ...wl.groups].map((group) => (
           <button
             type="button"
             key={group.id}
+            data-group-id={group.id}
             aria-pressed={active === group.id}
             draggable={group.id !== 'all'}
             title={
@@ -147,10 +203,18 @@ export default function WatchlistGroups({
               const index = wl.groups.findIndex((g) => g.id === group.id);
               const target =
                 wl.groups[index + (e.key === 'ArrowLeft' ? -1 : 1)];
-              if (target) wl.reorderGroup(group.id, target.id);
+              if (target) {
+                const button = e.currentTarget;
+                wl.reorderGroup(group.id, target.id);
+                requestAnimationFrame(() => {
+                  button.focus({ preventScroll: true });
+                  revealGroup(button);
+                });
+              }
             }}
+            onFocus={(event) => revealGroup(event.currentTarget)}
             onClick={() => onChange(group.id)}
-            className={`max-w-full break-words rounded-md px-3 py-1.5 text-xs font-medium transition ${group.id !== 'all' ? 'cursor-grab active:cursor-grabbing' : ''} ${dragging === group.id ? 'opacity-40' : ''} ${dropTarget === group.id && dragging !== group.id ? 'ring-2 ring-brand-300' : ''} ${active === group.id ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+            className={`min-h-8 shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-300 ${group.id !== 'all' ? 'cursor-grab active:cursor-grabbing' : ''} ${dragging === group.id ? 'opacity-40' : ''} ${dropTarget === group.id && dragging !== group.id ? 'ring-2 ring-inset ring-brand-300' : ''} ${active === group.id ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
           >
             {group.name}
             <span
@@ -160,27 +224,61 @@ export default function WatchlistGroups({
             </span>
           </button>
         ))}
-        <div className="ml-auto flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            disabled={!wl.ready}
-            onClick={() => setImportOpen(true)}
-            className="rounded-md border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-100"
-          >
-            批量导入
-          </button>
-          <button
-            type="button"
-            disabled={!wl.ready}
-            onClick={() => {
-              setName('');
-              setError('');
-              setOpen(true);
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {toolbar}
+          <div
+            ref={menuRoot}
+            className="relative shrink-0"
+            onBlur={(event) => {
+              if (event.relatedTarget instanceof Node && !event.currentTarget.contains(event.relatedTarget))
+                setMenuOpen(false);
             }}
-            className="shrink-0 rounded-md px-2 py-1.5 text-xs text-slate-500 hover:bg-slate-100"
           >
-            管理分组
+          <button
+            ref={menuButton}
+            type="button"
+            disabled={!wl.ready}
+            aria-expanded={menuOpen}
+            aria-controls={menuOpen ? menuId : undefined}
+            onClick={() => setMenuOpen((previous) => !previous)}
+            className="min-h-8 whitespace-nowrap rounded-md px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-100"
+          >
+            管理
           </button>
+          {menuOpen && (
+            <div
+              ref={menuPanel}
+              id={menuId}
+              role="group"
+              aria-label="自选管理"
+              className="absolute right-0 top-[calc(100%+4px)] z-40 w-36 max-w-[calc(100vw-24px)] rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+            >
+              {onConfigureColumns && (
+                <button
+                  type="button"
+                  onClick={() => { closeMenu(); onConfigureColumns(); }}
+                  className="block min-h-8 w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50"
+                >自定义表头</button>
+              )}
+              <button
+                type="button"
+                onClick={() => { closeMenu(); setImportOpen(true); }}
+                className="block min-h-8 w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50"
+              >批量导入</button>
+              <button
+                type="button"
+                onClick={() => {
+                  closeMenu();
+                  setName('');
+                  setError('');
+                  setOpen(true);
+                }}
+                className="block min-h-8 w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50"
+              >管理分组</button>
+            </div>
+          )}
+          </div>
         </div>
       </div>
       {importOpen && (

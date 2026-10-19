@@ -27,9 +27,16 @@ interface Draft {
   text: string;
   expected?: ResearchNote;
 }
+export interface ResearchNotesOpenRequest {
+  token: number;
+  kind?: NoteKind;
+  noteId?: string;
+  mode?: 'read' | 'create';
+}
 interface Props {
   open: boolean;
   initialCompany: NoteCompany | null;
+  openRequest?: ResearchNotesOpenRequest | null;
   onClose: () => void;
   companies: NoteCompany[];
   notes: ResearchNote[];
@@ -83,6 +90,7 @@ function entryDateLabel(value?: string) {
 export default function ResearchNotesDrawer({
   open,
   initialCompany,
+  openRequest,
   onClose,
   companies,
   notes,
@@ -101,14 +109,17 @@ export default function ResearchNotesDrawer({
     company: null,
     daily: null,
   });
+  const [draftsReady, setDraftsReady] = useState(false);
   const draft = drafts[category];
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [draftError, setDraftError] = useState('');
   const [editing, setEditing] = useState(false);
+  const [resumingDraft, setResumingDraft] = useState(false);
   const [preview, setPreview] = useState(false);
   const [maximized, setMaximized] = useState(false);
   const [directoryOpen, setDirectoryOpen] = useState(true);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
+  const [unavailableNote, setUnavailableNote] = useState(false);
   const [renaming, setRenaming] = useState<ResearchNote | null>(null);
   const [renameTitle, setRenameTitle] = useState('');
   const renamingInput = useRef<HTMLInputElement>(null);
@@ -142,39 +153,88 @@ export default function ResearchNotesDrawer({
             [kind]: { ...saved, kind },
           }));
       } catch {}
+    setDraftsReady(true);
   }, []);
   useEffect(() => {
-    if (!open || !ready) return;
+    // Do not let a fresh create request overwrite a draft still being restored.
+    if (!open || !ready || !draftsReady) return;
     setQuery('');
     setPendingDelete(null);
     setRenaming(null);
     setPreview(false);
-    const nextCategory = initialCompany ? 'company' : category;
+    setResumingDraft(false);
+    setUnavailableNote(false);
+    const requestedNote = openRequest?.noteId
+      ? notes.find((note) => note.id === openRequest.noteId)
+      : undefined;
+    const nextCategory = requestedNote
+      ? researchNoteKind(requestedNote)
+      : (openRequest?.kind ??
+        (initialCompany
+          ? 'company'
+          : category));
+    const targetNote = requestedNote;
+    const company = nextCategory === 'company' ? initialCompany : null;
+    const targetSymbol = targetNote ? researchNoteSymbol(targetNote) : '';
     setCategory(nextCategory);
-    setCompanyFilter(initialCompany?.symbol ?? 'all');
-    const latest = notes.find(
-      (note) =>
-        researchNoteKind(note) === nextCategory &&
-        (!initialCompany || researchNoteSymbol(note) === initialCompany.symbol),
-    );
+    setCompanyFilter(targetSymbol || company?.symbol || 'all');
+    if (openRequest?.noteId !== undefined && !targetNote) {
+      setActiveNoteId(null);
+      setUnavailableNote(true);
+      setEditing(false);
+      return;
+    }
+    const latest =
+      targetNote ??
+      notes.find(
+        (note) =>
+          researchNoteKind(note) === nextCategory &&
+          (!company || researchNoteSymbol(note) === company.symbol),
+      );
     setActiveNoteId(latest?.id ?? null);
     const pending = drafts[nextCategory];
-    if (initialCompany && !latest && !pending) {
+    const mode = openRequest?.mode ?? (openRequest?.noteId ? 'read' : undefined);
+    if (mode === 'read') {
+      // Reading another note never consumes or opens an unrelated draft.
+      setEditing(false);
+      return;
+    }
+    if (mode === 'create') {
+      if (pending) {
+        // Preserve the single draft per category and make its owner explicit.
+        setCompanyFilter(pending.company?.symbol ?? 'all');
+        setResumingDraft(true);
+      } else {
+        changeDraft(
+          {
+            kind: nextCategory,
+            entryDate:
+              nextCategory === 'daily' ? todayResearchDate() : undefined,
+            company,
+            text: '',
+            title: '',
+          },
+          nextCategory,
+        );
+      }
+      setEditing(true);
+      return;
+    }
+    if (company && !latest && !pending) {
       changeDraft(
-        { company: initialCompany, text: '', kind: 'company' },
+        { company, text: '', kind: 'company' },
         'company',
       );
       setEditing(true);
     } else {
       setEditing(
         !!pending &&
-          (!initialCompany ||
-            pending.company?.symbol === initialCompany.symbol),
+          (!company || pending.company?.symbol === company.symbol),
       );
     }
     // Opening from a company changes context without replacing an unsaved draft.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialCompany, ready]);
+  }, [open, initialCompany, ready, draftsReady, openRequest]);
   useEffect(() => {
     const element = dialog.current;
     if (!element) return;
@@ -203,7 +263,7 @@ export default function ResearchNotesDrawer({
     }
     // Focus moves only when entering/leaving the editor, not while typing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, editing, preview, category]);
+  }, [open, editing, preview, category, openRequest?.token]);
   useEffect(() => {
     if (!open || editing || !activeNoteId) return;
     const frame = requestAnimationFrame(() => {
@@ -212,7 +272,7 @@ export default function ResearchNotesDrawer({
         ?.scrollIntoView({ block: 'start' });
     });
     return () => cancelAnimationFrame(frame);
-  }, [open, editing, activeNoteId, titleId]);
+  }, [open, editing, activeNoteId, titleId, openRequest?.token]);
   useEffect(() => {
     if (renaming) {
       renamingInput.current?.focus();
@@ -248,6 +308,7 @@ export default function ResearchNotesDrawer({
   const noteCompanies = allCompanies.filter(
     (c) =>
       c.symbol === initialCompany?.symbol ||
+      c.symbol === draft?.company?.symbol ||
       notes.some((note) => researchNoteSymbol(note) === c.symbol),
   );
   const activeFilter =
@@ -261,7 +322,7 @@ export default function ResearchNotesDrawer({
       .length,
     daily: notes.filter((note) => researchNoteKind(note) === 'daily').length,
   };
-  const filtered = notes
+  const filtered = (unavailableNote ? [] : notes)
     .filter(
       (note) =>
         researchNoteKind(note) === category &&
@@ -278,7 +339,15 @@ export default function ResearchNotesDrawer({
           (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')
         : 0,
     );
+  const createLabel = draft
+    ? category === 'company' && draft.company
+      ? `继续${draft.company.name}草稿`
+      : '继续草稿'
+    : category === 'daily'
+      ? '写心得'
+      : '新建笔记';
   function switchCategory(next: NoteKind) {
+    setUnavailableNote(false);
     if (next === category) return;
     setCategory(next);
     setQuery('');
@@ -288,17 +357,24 @@ export default function ResearchNotesDrawer({
     setDraftError('');
     onClearError();
     setEditing(!!drafts[next]);
+    setResumingDraft(!!drafts[next]);
     setActiveNoteId(
       notes.find((note) => researchNoteKind(note) === next)?.id ?? null,
     );
   }
   function newNote() {
+    setUnavailableNote(false);
     onClearError();
     setPendingDelete(null);
     setRenaming(null);
     setPreview(false);
     setEditing(true);
-    if (draft) return;
+    setResumingDraft(!!draft);
+    if (draft) {
+      if (category === 'company' && draft.company)
+        setCompanyFilter(draft.company.symbol);
+      return;
+    }
     changeDraft({
       kind: category,
       entryDate: category === 'daily' ? todayResearchDate() : undefined,
@@ -311,10 +387,12 @@ export default function ResearchNotesDrawer({
     });
   }
   function edit(note: ResearchNote) {
+    setUnavailableNote(false);
     onClearError();
     setPendingDelete(null);
     setRenaming(null);
     setEditing(true);
+    setResumingDraft(!!draft);
     setPreview(false);
     if (draft) return;
     changeDraft({
@@ -396,7 +474,7 @@ export default function ResearchNotesDrawer({
   return (
     <dialog
       ref={dialog}
-      aria-labelledby={titleId}
+      aria-label="研究笔记"
       onCancel={(event) => {
         event.preventDefault();
         onClose();
@@ -415,13 +493,13 @@ export default function ResearchNotesDrawer({
       className={`fixed inset-y-0 left-auto right-0 !m-0 h-[100dvh] max-h-none w-full ${maximized ? 'max-w-none' : 'max-w-[860px]'} overflow-hidden border-0 bg-white p-0 text-slate-800 shadow-2xl backdrop:bg-slate-900/25 [&[open]]:flex [&[open]]:flex-col`}
     >
       <div
-        className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-6"
+        className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-100 px-4 py-3 sm:px-6"
         onDoubleClick={(event) => {
           if (!(event.target as HTMLElement).closest('button, input, select'))
             setMaximized(!maximized);
         }}
       >
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="mr-auto flex min-w-0 items-center gap-3">
           <div
             role="tablist"
             aria-label="笔记分类"
@@ -469,12 +547,12 @@ export default function ResearchNotesDrawer({
             ))}
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="contents sm:flex sm:shrink-0 sm:items-center sm:gap-2">
           {!editing && (
-            <>
+            <div className="order-last flex w-full min-w-0 items-center gap-2 sm:order-none sm:w-auto">
               <input
                 aria-label="搜索研究笔记"
-                className="input !h-8 w-44"
+                className="input !h-8 !w-auto min-w-0 flex-1 sm:!w-44"
                 placeholder={
                   category === 'daily'
                     ? '搜索日期、标题或正文'
@@ -483,6 +561,7 @@ export default function ResearchNotesDrawer({
                 value={query}
                 onChange={(event) => {
                   setQuery(event.target.value);
+                  setUnavailableNote(false);
                   setPendingDelete(null);
                 }}
               />
@@ -493,6 +572,7 @@ export default function ResearchNotesDrawer({
                   value={activeFilter}
                   onChange={(event) => {
                     setCompanyFilter(event.target.value);
+                    setUnavailableNote(false);
                     setPendingDelete(null);
                   }}
                 >
@@ -504,16 +584,16 @@ export default function ResearchNotesDrawer({
                   ))}
                 </select>
               )}
-            </>
+            </div>
           )}
           {!editing && (
             <button
               ref={creating}
               type="button"
               disabled={!ready}
-              aria-label={draft ? '继续草稿' : category === 'daily' ? '写心得' : '新建笔记'}
-              title={draft ? '继续草稿' : category === 'daily' ? '写心得' : '新建笔记'}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-brand-600 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+              aria-label={createLabel}
+              title={createLabel}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-600 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
               onClick={newNote}
             >
               <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
@@ -526,7 +606,7 @@ export default function ResearchNotesDrawer({
               type="button"
               aria-label={directoryOpen ? '收起目录' : '展开目录'}
               title={directoryOpen ? '收起目录' : '展开目录'}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+              className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-700 sm:inline-flex"
               onClick={() => setDirectoryOpen((open) => !open)}
             >
               {directoryOpen ? (
@@ -544,7 +624,7 @@ export default function ResearchNotesDrawer({
             type="button"
             aria-label="关闭研究笔记"
             title="关闭"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
             onClick={onClose}
           >
             <svg
@@ -573,7 +653,13 @@ export default function ResearchNotesDrawer({
             <div className="mx-auto min-h-0 w-full max-w-[944px] flex-1 overflow-y-auto px-4 py-5 sm:px-6">
               <div className="mb-6 flex items-center justify-between gap-3">
                 <h3 className="font-medium text-slate-900">
-                  {draft.id
+                  {resumingDraft
+                    ? category === 'company' && draft.company
+                      ? `继续${draft.company.name}草稿`
+                      : category === 'daily'
+                        ? `继续${entryDateLabel(draft.entryDate)}心得草稿`
+                        : '继续草稿'
+                    : draft.id
                     ? category === 'daily'
                       ? '编辑心得'
                       : '编辑笔记'
@@ -734,7 +820,7 @@ export default function ResearchNotesDrawer({
               </p>
             )}
             <div className="flex min-h-0 flex-1">
-              {directoryOpen && (
+              {directoryOpen && !unavailableNote && (
                 <aside
                   id={`${titleId}-directory`}
                   aria-label="笔记目录"
@@ -769,7 +855,25 @@ export default function ResearchNotesDrawer({
                 </aside>
               )}
               <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 sm:px-6">
-                {filtered.length ? (
+                {unavailableNote ? (
+                  <div className="space-y-3 py-16 text-center text-sm">
+                    <p role="status" className="text-slate-500">
+                      该笔记已不可用
+                    </p>
+                    <button
+                      type="button"
+                      className="text-brand-700 hover:underline"
+                      onClick={() => {
+                        setUnavailableNote(false);
+                        setCompanyFilter('all');
+                        setQuery('');
+                        setActiveNoteId(null);
+                      }}
+                    >
+                      查看全部笔记
+                    </button>
+                  </div>
+                ) : filtered.length ? (
                   filtered.map((note) => (
                     <article
                       key={note.id}
@@ -788,6 +892,7 @@ export default function ResearchNotesDrawer({
                           <Link
                             href={`/stock/${researchNoteSymbol(note) || note.code}`}
                             prefetch={false}
+                            onClick={onClose}
                             className="font-medium hover:text-brand-700"
                           >
                             {note.name}

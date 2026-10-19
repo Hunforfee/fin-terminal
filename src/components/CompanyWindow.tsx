@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Modal from './Modal';
+import HeaderToolButton from './HeaderToolButton';
 import { personalStorage } from '@/lib/personalStorage';
 
 interface Entry {
@@ -55,14 +56,19 @@ const fmtDate = (date: string) => {
   return `${Number(m)}月${Number(d)}日`;
 };
 
-export default function CompanyWindow({ codes }: { codes: string[] }) {
+export default function CompanyWindow({
+  codes,
+  variant = 'default',
+}: {
+  codes: string[];
+  variant?: 'default' | 'nav';
+}) {
   const [open, setOpen] = useState(false);
   const [entries, setEntries] = useState<Entry[] | null>(null);
   const [error, setError] = useState('');
   const [readAt, setReadAt] = useState(0);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [maximized, setMaximized] = useState(false);
-  const openedRef = useRef(false);
   const requestRef = useRef(0);
   const requestController = useRef<AbortController | null>(null);
 
@@ -111,19 +117,19 @@ export default function CompanyWindow({ codes }: { codes: string[] }) {
 
   const openWindow = () => {
     setOpen(true);
-    if (!openedRef.current) {
-      openedRef.current = true;
-    }
   };
 
-  // 挂载即加载公告，保证入口能显示未读重要公告红字提醒
+  // The icon utility needs no counts before the window is opened.
+  // The default entry keeps its initial unread-count request.
+  const shouldLoad = variant === 'default' || open;
   useEffect(() => {
+    if (!shouldLoad) return;
     load();
     return () => {
       ++requestRef.current;
       requestController.current?.abort();
     };
-  }, [load]);
+  }, [load, shouldLoad]);
 
   const markAllRead = () => {
     const now = Date.now();
@@ -143,6 +149,20 @@ export default function CompanyWindow({ codes }: { codes: string[] }) {
 
   return (
     <>
+      {variant === 'nav' ? (
+        <HeaderToolButton
+          label="公司窗口"
+          aria-label="打开公司窗口"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          onClick={openWindow}
+        >
+          <svg aria-hidden="true" focusable="false" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <path d="M3 9h18M8 13h8M8 16h6" />
+          </svg>
+        </HeaderToolButton>
+      ) : (
       <button
         type="button"
         onClick={openWindow}
@@ -150,23 +170,24 @@ export default function CompanyWindow({ codes }: { codes: string[] }) {
         aria-expanded={open}
         aria-label={
           unreadImportant > 0
-            ? `打开公司窗口，${unreadImportant}条重要公告`
-            : `打开公司窗口${entries ? `，${entries.length}条动态` : ''}`
+              ? `打开公司窗口，${unreadImportant}条重要公告`
+              : `打开公司窗口${entries ? `，${entries.length}条动态` : ''}`
         }
         className="inline-flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-md border border-brand-100 bg-brand-50 px-2.5 text-[13px] font-medium text-brand-700 transition-colors hover:bg-brand-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 [@media(pointer:coarse)]:min-h-10"
         title="查看自选公司公告与重大事项"
       >
         <span>公司窗口</span>
         {unreadImportant > 0 ? (
-          <span className="text-xs font-medium tabular-nums text-red-600">
-            {unreadImportant} 条重要公告
-          </span>
-        ) : (
-          <span className="text-xs font-normal tabular-nums text-slate-500">
-            {entries ? entries.length : '—'} 条动态
-          </span>
-        )}
+            <span className="text-xs font-medium tabular-nums text-red-600">
+              {unreadImportant} 条重要公告
+            </span>
+          ) : (
+            <span className="text-xs font-normal tabular-nums text-slate-500">
+              {entries ? entries.length : '—'} 条动态
+            </span>
+          )}
       </button>
+      )}
 
       <Modal
         open={open}
@@ -183,12 +204,17 @@ export default function CompanyWindow({ codes }: { codes: string[] }) {
               有 {unreadImportant} 条未读重要公告，红字标出，请留意。
             </p>
           )}
-          {entries === null ? (
+          {error ? (
+            <div className="space-y-3 py-10 text-center">
+              <p className="text-sm text-red-600">{error}</p>
+              <button type="button" className="btn" onClick={load}>
+                重试
+              </button>
+            </div>
+          ) : entries === null ? (
             <p className="py-10 text-center text-sm text-slate-400">
               正在加载公司动态…
             </p>
-          ) : error ? (
-            <p className="py-10 text-center text-sm text-red-600">{error}</p>
           ) : entries.length === 0 ? (
             <p className="py-10 text-center text-sm text-slate-400">
               暂无公告动态（港股公司暂不支持公告抓取）

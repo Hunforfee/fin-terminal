@@ -6,6 +6,7 @@ import AppNav from '@/components/AppNav';
 import { WatchlistProvider } from '@/components/WatchlistProvider';
 import AccountProvider from '@/components/AccountProvider';
 import AccountButton from '@/components/AccountButton';
+import ResearchWorkspaceProvider from '@/components/ResearchWorkspaceProvider';
 import { cookies } from 'next/headers';
 import { readSession, SESSION_COOKIE } from '@/lib/auth/session';
 export const metadata: Metadata = {
@@ -33,51 +34,52 @@ export default async function RootLayout({
       <body>
         <AccountProvider initialUser={user}>
           <WatchlistProvider>
-            <a
-              href="#main-content"
-              className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-white focus:p-3"
-            >
-              跳到主要内容
-            </a>
-            <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 backdrop-blur-xl">
-              <div className="w-full px-3 sm:px-4">
-                <div className="flex min-h-11 items-center justify-between gap-2.5">
-                  <Link
-                    href="/"
-                    className="flex shrink-0 items-center gap-2.5"
-                    aria-label="FinTerminal 首页"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src="/brand-icon.svg"
-                      alt=""
-                      width={28}
-                      height={28}
-                      className="h-7 w-7 shrink-0"
-                    />
-                    <span className="hidden text-lg font-semibold tracking-tight sm:inline">
-                      FinTerminal
-                    </span>
-                  </Link>
-                  <div className="hidden xl:block">
-                    <AppNav />
+            <ResearchWorkspaceProvider>
+              <a
+                href="#main-content"
+                className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-white focus:p-3"
+              >
+                跳到主要内容
+              </a>
+              <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 backdrop-blur-xl">
+                <div className="w-full px-3 sm:px-4">
+                  <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 xl:grid-cols-[auto_auto_minmax(0,1fr)_auto]">
+                    <Link
+                      href="/"
+                      className="flex min-h-11 shrink-0 items-center gap-2.5"
+                      aria-label="FinTerminal 首页"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src="/brand-icon.svg"
+                        alt=""
+                        width={28}
+                        height={28}
+                        className="h-7 w-7 shrink-0"
+                      />
+                      <span className="hidden text-lg font-semibold tracking-tight sm:inline">
+                        FinTerminal
+                      </span>
+                    </Link>
+                    <div className="col-span-3 col-start-1 row-start-2 min-w-0 xl:col-span-1 xl:col-start-2 xl:row-start-1">
+                      <AppNav />
+                    </div>
+                    <div className="col-start-2 row-start-1 ml-auto w-full min-w-0 max-w-[420px] xl:col-start-3">
+                      <SearchBox placeholder="搜索股票、指数或基金" />
+                    </div>
+                    <div className="col-start-3 row-start-1 xl:col-start-4">
+                      <AccountButton />
+                    </div>
                   </div>
-                  <div className="ml-auto min-w-0 w-full max-w-[420px]">
-                    <SearchBox placeholder="搜索股票、指数或基金" />
-                  </div>
-                  <AccountButton />
                 </div>
-                <div className="xl:hidden">
-                  <AppNav />
-                </div>
-              </div>
-            </header>
-            <main
-              id="main-content"
-              className="min-h-[65vh] w-full px-2.5 py-3 sm:px-3"
-            >
-              {children}
-            </main>
+              </header>
+              <main
+                id="main-content"
+                className="min-h-[65vh] w-full px-2.5 py-3 sm:px-3"
+              >
+                {children}
+              </main>
+            </ResearchWorkspaceProvider>
           </WatchlistProvider>
         </AccountProvider>
       </body>

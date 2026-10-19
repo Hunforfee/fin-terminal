@@ -4,6 +4,7 @@
  * 覆盖 universe.ts 全部 A 股个股；未覆盖的标的回退到实时 F10 数据展示。
  */
 import c601398 from './601398.json';
+import c600415 from './600415.json';
 import c601288 from './601288.json';
 import c601939 from './601939.json';
 import c601988 from './601988.json';
@@ -264,6 +265,7 @@ export const ANALYSES: Record<string, PreAnalysis> = {
   '002271': c002271 as PreAnalysis,
   '603605': c603605 as PreAnalysis,
   '600398': c600398 as PreAnalysis,
+  '600415': c600415 as PreAnalysis,
 };
 
 export function getPreAnalysis(code: string): PreAnalysis | undefined {

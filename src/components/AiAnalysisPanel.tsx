@@ -151,7 +151,6 @@ export default function AiAnalysisPanel({
   const [report, setReport] = useState<Report | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [reviewExpanded, setReviewExpanded] = useState(false);
-  const [compTab, setCompTab] = useState(0);
   const nonce = useRef(0);
 
   useEffect(() => {
@@ -213,7 +212,6 @@ export default function AiAnalysisPanel({
           setReport(null);
           setExpanded(false);
           setReviewExpanded(false);
-          setCompTab(0);
         }}
         size="lg"
         maximizable
@@ -363,62 +361,70 @@ export default function AiAnalysisPanel({
 
               {biz?.groups && biz?.groups.length > 0 && (
                 <section>
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-slate-900">
-                      营收构成
-                    </h3>
-                    {biz?.groups[compTab]?.date && (
-                      <span className="text-[11px] text-slate-400">
-                        {biz?.groups[compTab].date} 口径
-                      </span>
-                    )}
-                  </div>
-                  <div className="mb-2 flex flex-wrap gap-1">
-                    {biz?.groups.map((g, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => setCompTab(i)}
-                        className={
-                          compTab === i
-                            ? 'rounded px-2 py-0.5 text-[11px] font-medium bg-brand-50 text-brand-700'
-                            : 'rounded px-2 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100'
-                        }
+                  <h3 className="mb-2 text-sm font-semibold text-slate-900">
+                    营收构成
+                  </h3>
+                  <div
+                    className={
+                      biz.groups.length >= 3
+                        ? 'grid gap-2.5 md:grid-cols-3'
+                        : biz.groups.length === 2
+                          ? 'grid gap-2.5 sm:grid-cols-2'
+                          : ''
+                    }
+                  >
+                    {biz.groups.map((g, gi) => (
+                      <div
+                        key={gi}
+                        className="rounded-lg border border-slate-100 bg-slate-50/60 p-2.5"
                       >
-                        {g.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="space-y-1.5">
-                    {biz?.groups[compTab]?.items.map((s, i) => {
-                      const w = Math.max(
-                        0,
-                        Math.min(100, (s.incomeRatio ?? 0) * 100),
-                      );
-                      return (
-                        <div key={i}>
-                          <div className="flex items-baseline justify-between gap-2 text-[12px] leading-5">
-                            <span className="truncate text-slate-700">
-                              {s.name}
+                        <div className="mb-2 flex items-center justify-between gap-1">
+                          <span className="text-[12px] font-semibold text-slate-800">
+                            {g.label}
+                          </span>
+                          {g.date && (
+                            <span className="shrink-0 text-[10px] text-slate-400">
+                              {g.date}
                             </span>
-                            <span className="shrink-0 tabular-nums text-slate-500">
-                              {s.incomeRatio != null
-                                ? `${(s.incomeRatio * 100).toFixed(1)}%`
-                                : '—'}
-                              {s.grossMargin != null
-                                ? ` · 毛利${(s.grossMargin * 100).toFixed(0)}%`
-                                : ''}
-                            </span>
-                          </div>
-                          <div className="mt-1 h-1.5 w-full overflow-hidden rounded bg-slate-100">
-                            <div
-                              className="h-1.5 rounded bg-brand-500"
-                              style={{ width: `${w}%` }}
-                            />
-                          </div>
+                          )}
                         </div>
-                      );
-                    })}
+                        <div className="space-y-1.5">
+                          {g.items.map((s, i) => {
+                            const w = Math.max(
+                              0,
+                              Math.min(100, (s.incomeRatio ?? 0) * 100),
+                            );
+                            return (
+                              <div key={i}>
+                                <div className="flex items-baseline justify-between gap-1.5 text-[11px] leading-4">
+                                  <span className="truncate text-slate-600">
+                                    {s.name}
+                                  </span>
+                                  <span className="shrink-0 tabular-nums text-slate-500">
+                                    {s.incomeRatio != null
+                                      ? `${(s.incomeRatio * 100).toFixed(1)}%`
+                                      : '—'}
+                                    {s.grossMargin != null && (
+                                      <span className="text-slate-400">
+                                        {' '}
+                                        毛
+                                        {(s.grossMargin * 100).toFixed(0)}%
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
+                                <div className="mt-0.5 h-1 w-full overflow-hidden rounded bg-slate-200/70">
+                                  <div
+                                    className="h-1 rounded bg-brand-500"
+                                    style={{ width: `${w}%` }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </section>
               )}

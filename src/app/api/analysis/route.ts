@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { fetchCompanyProfile } from '@/lib/datasource/profile';
 import { fetchBusiness } from '@/lib/datasource/business';
 import { fetchReports } from '@/lib/datasource/research';
+import { getPreAnalysis } from '@/data/analyses';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -17,6 +18,9 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    // 预生成深度解析（服务端持有，避免把 100+ 份 JSON 打进客户端包）
+    const pre = getPreAnalysis(code) ?? null;
+
     const [profile, business, reports] = await Promise.all([
       fetchCompanyProfile(code, market).catch(() => null),
       fetchBusiness(code, market).catch(() => null),
@@ -27,6 +31,7 @@ export async function GET(req: NextRequest) {
       name,
       code,
       market,
+      pre,
       profile: profile
         ? {
             holder: profile.holder,

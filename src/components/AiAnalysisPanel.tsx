@@ -2,7 +2,32 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Modal from './Modal';
-import { getPreAnalysis, type ViewPoint } from '@/data/analyses';
+
+/** 预生成深度解析的数据结构（由 /api/analysis 下发，避免打进客户端包） */
+interface ViewPoint {
+  point: string;
+  detail: string;
+}
+interface Competitor {
+  name: string;
+  code?: string;
+  note: string;
+}
+interface PreAnalysis {
+  code: string;
+  fullName?: string;
+  industry: string;
+  position?: string;
+  summary: string;
+  moat?: ViewPoint[];
+  competitors?: Competitor[];
+  bullCase?: ViewPoint[];
+  bearCase?: ViewPoint[];
+  ratingSummary?: { buy: number; hold: number; sell: number };
+  targetPriceRange?: { min: number; max: number };
+  source: string;
+  generatedAt: string;
+}
 
 const YUANBAO_URL = 'https://yuanbao.tencent.com/';
 
@@ -49,6 +74,8 @@ interface Report {
   name: string;
   code: string;
   market: string;
+  /** 预生成的深度解析（服务端下发），未覆盖的标的为 null */
+  pre: PreAnalysis | null;
   profile: ReportProfile | null;
   business: ReportBusiness | null;
   reports: ReportItem[];
@@ -170,9 +197,11 @@ export default function AiAnalysisPanel({
   };
 
   const biz = report?.business;
-  const pre = getPreAnalysis(code);
+  const pre = report?.pre ?? null;
   const hasBiz =
     biz && (biz.summary || biz.review || (biz.groups && biz.groups.length > 0));
+  /** 有预生成深度解析时，即使实时 F10 抓取失败也要展示 */
+  const hasContent = hasBiz || !!pre;
 
   return (
     <>
@@ -214,15 +243,15 @@ export default function AiAnalysisPanel({
 
           {report && (
             <>
-              {hasBiz && (
+              {hasContent && (
                 <section>
                   <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
                     <h3 className="text-sm font-semibold text-slate-900">
                       公司深度解析
                     </h3>
-                    {(pre?.industry || biz!.industry) && (
+                    {(pre?.industry || biz?.industry) && (
                       <span className="rounded bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700">
-                        {pre?.industry || biz!.industry}
+                        {pre?.industry || biz?.industry}
                       </span>
                     )}
                   </div>
@@ -240,7 +269,7 @@ export default function AiAnalysisPanel({
                         : ''
                     }`}
                   >
-                    {pre?.summary || biz!.summary || '暂无数据'}
+                    {pre?.summary || biz?.summary || '暂无数据'}
                   </div>
                   {pre && pre.summary.length > 420 && (
                     <button
@@ -255,20 +284,20 @@ export default function AiAnalysisPanel({
                     <p className="mt-1 text-[11px] text-slate-400">{pre.source}</p>
                   )}
 
-                  {biz!.groups && biz!.groups.length > 0 && (
+                  {biz?.groups && biz?.groups.length > 0 && (
                     <div className="mt-3">
                       <div className="mb-1.5 flex items-center justify-between">
                         <span className="text-[12px] font-semibold text-slate-900">
                           营收构成
                         </span>
-                        {biz!.groups[compTab]?.date && (
+                        {biz?.groups[compTab]?.date && (
                           <span className="text-[11px] text-slate-400">
-                            {biz!.groups[compTab].date} 口径
+                            {biz?.groups[compTab].date} 口径
                           </span>
                         )}
                       </div>
                       <div className="mb-2 flex flex-wrap gap-1">
-                        {biz!.groups.map((g, i) => (
+                        {biz?.groups.map((g, i) => (
                           <button
                             key={i}
                             type="button"
@@ -284,7 +313,7 @@ export default function AiAnalysisPanel({
                         ))}
                       </div>
                       <div className="space-y-1.5">
-                        {biz!.groups[compTab]?.items.map((s, i) => {
+                        {biz?.groups[compTab]?.items.map((s, i) => {
                           const w = Math.max(
                             0,
                             Math.min(100, (s.incomeRatio ?? 0) * 100),

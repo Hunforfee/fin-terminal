@@ -33,6 +33,7 @@ async function checkStock(code, expectPregen) {
     '营收构成': body.includes('营收构成'),
     '维度Tab': tabCount >= 1,
     '占比条': bars > 0,
+    '无研报主要观点': !body.includes('研报主要观点'),
   };
   if (expectPregen) {
     checks['核心优势'] = body.includes('核心优势与护城河');

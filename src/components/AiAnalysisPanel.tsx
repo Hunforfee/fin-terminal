@@ -83,15 +83,6 @@ interface Report {
   generatedAt: string;
 }
 
-function ratingClass(r: string | null): string {
-  if (!r) return 'bg-slate-100 text-slate-600';
-  if (/买入|推荐|强烈/.test(r)) return 'bg-emerald-100 text-emerald-700';
-  if (/增持|谨慎/.test(r)) return 'bg-sky-100 text-sky-700';
-  if (/中性|持有|观望/.test(r)) return 'bg-slate-100 text-slate-600';
-  if (/减持|卖出|回避/.test(r)) return 'bg-rose-100 text-rose-700';
-  return 'bg-slate-100 text-slate-600';
-}
-
 async function copyText(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
@@ -208,7 +199,7 @@ export default function AiAnalysisPanel({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        title="查看 AI 聚合分析：主营业务、研报观点、公司资料"
+        title="查看 AI 深度解析：业务与护城河、竞争对手、市场多空观点、营收构成"
         className="btn border-brand-200 text-brand-700 hover:border-brand-300 hover:bg-brand-50"
       >
         AI 分析
@@ -282,68 +273,6 @@ export default function AiAnalysisPanel({
                   )}
                   {pre?.source && (
                     <p className="mt-1 text-[11px] text-slate-400">{pre.source}</p>
-                  )}
-
-                  {biz?.groups && biz?.groups.length > 0 && (
-                    <div className="mt-3">
-                      <div className="mb-1.5 flex items-center justify-between">
-                        <span className="text-[12px] font-semibold text-slate-900">
-                          营收构成
-                        </span>
-                        {biz?.groups[compTab]?.date && (
-                          <span className="text-[11px] text-slate-400">
-                            {biz?.groups[compTab].date} 口径
-                          </span>
-                        )}
-                      </div>
-                      <div className="mb-2 flex flex-wrap gap-1">
-                        {biz?.groups.map((g, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            onClick={() => setCompTab(i)}
-                            className={
-                              compTab === i
-                                ? 'rounded px-2 py-0.5 text-[11px] font-medium bg-brand-50 text-brand-700'
-                                : 'rounded px-2 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100'
-                            }
-                          >
-                            {g.label}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="space-y-1.5">
-                        {biz?.groups[compTab]?.items.map((s, i) => {
-                          const w = Math.max(
-                            0,
-                            Math.min(100, (s.incomeRatio ?? 0) * 100),
-                          );
-                          return (
-                            <div key={i}>
-                              <div className="flex items-baseline justify-between gap-2 text-[12px] leading-5">
-                                <span className="truncate text-slate-700">
-                                  {s.name}
-                                </span>
-                                <span className="shrink-0 tabular-nums text-slate-500">
-                                  {s.incomeRatio != null
-                                    ? `${(s.incomeRatio * 100).toFixed(1)}%`
-                                    : '—'}
-                                  {s.grossMargin != null
-                                    ? ` · 毛利${(s.grossMargin * 100).toFixed(0)}%`
-                                    : ''}
-                                </span>
-                              </div>
-                              <div className="mt-1 h-1.5 w-full overflow-hidden rounded bg-slate-100">
-                                <div
-                                  className="h-1.5 rounded bg-brand-500"
-                                  style={{ width: `${w}%` }}
-                                />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
                   )}
                 </section>
               )}
@@ -432,56 +361,67 @@ export default function AiAnalysisPanel({
                   </section>
                 )}
 
-              <section>
-                <h3 className="mb-2 text-sm font-semibold text-slate-900">
-                  研报主要观点
-                </h3>
-                {report.reports.length === 0 ? (
-                  <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-[13px] text-slate-500">
-                    暂未检索到公开研报，可点击右下角「用元宝深度追问」获取 AI 解读。
-                  </p>
-                ) : (
-                  <ul className="space-y-2.5">
-                    {report.reports.map((r, i) => (
-                      <li
+              {biz?.groups && biz?.groups.length > 0 && (
+                <section>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-slate-900">
+                      营收构成
+                    </h3>
+                    {biz?.groups[compTab]?.date && (
+                      <span className="text-[11px] text-slate-400">
+                        {biz?.groups[compTab].date} 口径
+                      </span>
+                    )}
+                  </div>
+                  <div className="mb-2 flex flex-wrap gap-1">
+                    {biz?.groups.map((g, i) => (
+                      <button
                         key={i}
-                        className="rounded-lg border border-slate-200 p-3"
+                        type="button"
+                        onClick={() => setCompTab(i)}
+                        className={
+                          compTab === i
+                            ? 'rounded px-2 py-0.5 text-[11px] font-medium bg-brand-50 text-brand-700'
+                            : 'rounded px-2 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100'
+                        }
                       >
-                        <a
-                          href={r.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[13px] font-medium leading-5 text-brand-700 hover:underline"
-                        >
-                          {r.title}
-                        </a>
-                        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                          {r.orgName && (
-                            <span className="font-medium text-slate-700">
-                              {r.orgName}
-                            </span>
-                          )}
-                          {r.date && <span>· {r.date}</span>}
-                          {r.rating && (
-                            <span
-                              className={`rounded px-1.5 py-0.5 font-medium ${ratingClass(
-                                r.rating,
-                              )}`}
-                            >
-                              {r.rating}
-                            </span>
-                          )}
-                          {r.targetPrice != null && (
-                            <span className="text-slate-600">
-                              目标价 {r.targetPrice.toFixed(2)}
-                            </span>
-                          )}
-                        </div>
-                      </li>
+                        {g.label}
+                      </button>
                     ))}
-                  </ul>
-                )}
-              </section>
+                  </div>
+                  <div className="space-y-1.5">
+                    {biz?.groups[compTab]?.items.map((s, i) => {
+                      const w = Math.max(
+                        0,
+                        Math.min(100, (s.incomeRatio ?? 0) * 100),
+                      );
+                      return (
+                        <div key={i}>
+                          <div className="flex items-baseline justify-between gap-2 text-[12px] leading-5">
+                            <span className="truncate text-slate-700">
+                              {s.name}
+                            </span>
+                            <span className="shrink-0 tabular-nums text-slate-500">
+                              {s.incomeRatio != null
+                                ? `${(s.incomeRatio * 100).toFixed(1)}%`
+                                : '—'}
+                              {s.grossMargin != null
+                                ? ` · 毛利${(s.grossMargin * 100).toFixed(0)}%`
+                                : ''}
+                            </span>
+                          </div>
+                          <div className="mt-1 h-1.5 w-full overflow-hidden rounded bg-slate-100">
+                            <div
+                              className="h-1.5 rounded bg-brand-500"
+                              style={{ width: `${w}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
 
               {report.profile && (
                 <section>
@@ -517,8 +457,8 @@ export default function AiAnalysisPanel({
 
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
                 <p className="text-[11px] leading-4 text-slate-400">
-                  数据来源：通达信 F10 深度资料 + 券商研报（评级/目标价/风险提示）+ 东方财富 F10
-                  主营构成。内容为基于公开资料的研究整理，不构成投资建议。
+                  数据来源：通达信 F10 深度资料 + 券商研报（评级/目标价/风险提示）+
+                  东方财富 F10 主营构成。内容为基于公开资料的研究整理，不构成投资建议。
                 </p>
                 <button
                   type="button"

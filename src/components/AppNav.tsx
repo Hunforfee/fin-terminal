@@ -9,6 +9,7 @@ import { useResearchWorkspace } from './ResearchWorkspaceProvider';
 import { normalizeStockCode } from '@/lib/datasource/codes';
 import { industryStockSymbol } from '@/lib/industryResearch';
 const items = [
+  ['/', '首页'],
   ['/watchlist', '自选公司'],
   ['/industry', '行业研究'],
   ['/screener', '条件选股'],
@@ -31,8 +32,7 @@ export default function AppNav() {
     <nav aria-label="主导航" className="flex items-center gap-1 overflow-x-auto py-1">
       {items.map(([href, label]) => {
         const active =
-          (href === '/watchlist' && pathname === '/') ||
-          pathname.startsWith(href);
+          href === '/' ? pathname === '/' : pathname.startsWith(href);
         return (
             <Link
               key={href}

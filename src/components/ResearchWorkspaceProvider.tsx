@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
   type Dispatch,
   type ReactNode,
@@ -13,16 +14,23 @@ import {
 import { researchNoteSymbol } from '@/lib/researchNotes';
 import { normalizeStockCode } from '@/lib/datasource/codes';
 import useResearchNotes from './useResearchNotes';
-import ResearchNotesDrawer from './ResearchNotesDrawer';
+import ResearchNotesDrawer, {
+  type ResearchNotesOpenRequest,
+} from './ResearchNotesDrawer';
 import type { NoteCompany } from './NoteCompanyPicker';
 import { useWatchlist } from './WatchlistProvider';
 
 interface ResearchWorkspaceContext {
   notebook: ReturnType<typeof useResearchNotes>;
   notesOpen: boolean;
-  openNotes: (company?: NoteCompany | null) => void;
+  openNotes: (
+    company?: NoteCompany | null,
+    options?: OpenResearchNotesOptions,
+  ) => void;
   setNoteCompanies: Dispatch<SetStateAction<NoteCompany[]>>;
 }
+
+export type OpenResearchNotesOptions = Omit<ResearchNotesOpenRequest, 'token'>;
 
 const Context = createContext<ResearchWorkspaceContext | null>(null);
 
@@ -36,11 +44,18 @@ export default function ResearchWorkspaceProvider({
   const { codes } = useWatchlist();
   const [notesOpen, setNotesOpen] = useState(false);
   const [noteContext, setNoteContext] = useState<NoteCompany | null>(null);
+  const [openRequest, setOpenRequest] =
+    useState<ResearchNotesOpenRequest | null>(null);
+  const requestToken = useRef(0);
   const [noteCompanies, setNoteCompanies] = useState<NoteCompany[]>([]);
-  const openNotes = useCallback((company?: NoteCompany | null) => {
-    setNoteContext(company ?? null);
-    setNotesOpen(true);
-  }, []);
+  const openNotes = useCallback(
+    (company?: NoteCompany | null, options?: OpenResearchNotesOptions) => {
+      setNoteContext(company ?? null);
+      setOpenRequest({ ...options, token: ++requestToken.current });
+      setNotesOpen(true);
+    },
+    [],
+  );
   const closeNotes = useCallback(() => setNotesOpen(false), []);
 
   const companies = useMemo(() => {
@@ -89,6 +104,7 @@ export default function ResearchWorkspaceProvider({
       <ResearchNotesDrawer
         open={notesOpen}
         initialCompany={noteContext}
+        openRequest={openRequest}
         onClose={closeNotes}
         companies={companies}
         notes={notebook.notes}

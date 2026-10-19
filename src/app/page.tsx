@@ -1,4 +1,4 @@
-import ResearchDesk from '@/components/ResearchDesk';
+import ResearchHome from '@/components/ResearchHome';
 export default function HomePage() {
-  return <ResearchDesk />;
+  return <ResearchHome />;
 }

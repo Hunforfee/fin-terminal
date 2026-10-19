@@ -248,7 +248,7 @@ export default function ResearchHome() {
   return <div className="min-w-0">
     <div ref={intro}>
     <div className="flex min-h-9 items-center justify-between gap-3 pb-2">
-      <h1 className="text-base font-semibold tracking-tight text-slate-900">研究工作台</h1>
+      <h1 className="text-base font-semibold tracking-tight text-slate-900">首页</h1>
       <div className="flex items-center gap-4"><Link href="/watchlist" className="hidden text-[11px] text-slate-400 hover:text-brand-700 sm:inline">自选公司 {watchlist.ready ? watchlist.codes.length : '—'}</Link><time dateTime={today.iso || undefined} className="text-[11px] text-slate-400">{today.label}</time></div>
     </div>
     </div>

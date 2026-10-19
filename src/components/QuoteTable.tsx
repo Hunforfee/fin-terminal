@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useWatchlist } from '@/components/WatchlistProvider';
 import { pct, price, signedPct, toneClass, yi } from '@/lib/format';
 import type { Quote } from '@/lib/datasource/types';
+import DeepDiveIcon from './DeepDiveIcon';
 
 export interface QuoteTableProps {
   codes: string[];
@@ -126,16 +127,25 @@ export default function QuoteTable({
             return (
               <tr key={q.symbol} className="hover:bg-slate-50/60">
                 <td className="td">
-                  <Link
-                    href={`/${q.kind === 'index' ? 'index' : q.kind === 'fund' || q.kind === 'etf' ? 'fund' : 'stock'}/${q.symbol}`}
-                    prefetch={false}
-                    className="hover:text-brand-600"
-                  >
-                    <div className="font-medium text-slate-900">{q.name}</div>
-                    <div className="font-mono text-xs text-slate-400">
-                      {q.code}
-                    </div>
-                  </Link>
+                  <div className="flex items-start gap-1">
+                    {q.kind === 'stock' && (
+                      <DeepDiveIcon
+                        name={q.name}
+                        code={q.code}
+                        market={q.market === 'HK' ? 'HK' : 'A'}
+                      />
+                    )}
+                    <Link
+                      href={`/${q.kind === 'index' ? 'index' : q.kind === 'fund' || q.kind === 'etf' ? 'fund' : 'stock'}/${q.symbol}`}
+                      prefetch={false}
+                      className="min-w-0 hover:text-brand-600"
+                    >
+                      <div className="font-medium text-slate-900">{q.name}</div>
+                      <div className="font-mono text-xs text-slate-400">
+                        {q.code}
+                      </div>
+                    </Link>
+                  </div>
                 </td>
                 <td className={`td font-medium ${toneClass(q.change)}`}>
                   {price(q.price)}

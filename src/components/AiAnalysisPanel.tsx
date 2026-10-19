@@ -35,10 +35,10 @@ const YUANBAO_URL = 'https://yuanbao.tencent.com/';
 /** 板块导航定义：id 对应各 section 的 DOM id，label 为导航文字 */
 const SECTIONS = [
   { id: 'sec-business', label: '业务与模式' },
+  { id: 'sec-revenue', label: '营收构成' },
   { id: 'sec-moat', label: '护城河' },
   { id: 'sec-competitors', label: '竞争对手对比' },
   { id: 'sec-views', label: '市场观点' },
-  { id: 'sec-revenue', label: '营收构成' },
   { id: 'sec-profile', label: '公司资料' },
 ] as const;
 
@@ -193,6 +193,8 @@ export default function AiAnalysisPanel({
   code,
   market = 'A',
   embedded = false,
+  variant = 'button',
+  autoOpen = false,
   onReady,
 }: {
   name: string;
@@ -200,9 +202,17 @@ export default function AiAnalysisPanel({
   market?: string;
   /** Reuse the same analysis in the daily-company reader without a nested modal. */
   embedded?: boolean;
+  /** 紧凑形态：'none' 表示不渲染触发按钮，由外层自带图标直接挂载本面板 */
+  variant?: 'button' | 'none';
+  /** 列表按需挂载用：挂载即展开弹窗 */
+  autoOpen?: boolean;
   onReady?: (report: CompanyAnalysisReport | null) => void;
 }) {
   const [open, setOpen] = useState(false);
+  /** 列表场景按需挂载：挂载即打开 */
+  useEffect(() => {
+    if (autoOpen) setOpen(true);
+  }, [autoOpen]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [report, setReport] = useState<CompanyAnalysisReport | null>(null);
@@ -392,6 +402,76 @@ export default function AiAnalysisPanel({
                 </section>
               )}
 
+              {biz?.groups && biz?.groups.length > 0 && (
+                <section id="sec-revenue" className="scroll-mt-2">
+                  <h3 className="mb-2 text-sm font-semibold text-slate-900">
+                    营收构成
+                  </h3>
+                  <div
+                    className={
+                      biz.groups.length >= 3
+                        ? 'grid gap-2.5 md:grid-cols-3'
+                        : biz.groups.length === 2
+                          ? 'grid gap-2.5 sm:grid-cols-2'
+                          : ''
+                    }
+                  >
+                    {biz.groups.map((g, gi) => (
+                      <div
+                        key={gi}
+                        className="rounded-lg border border-slate-100 bg-slate-50/60 p-2.5"
+                      >
+                        <div className="mb-2 flex items-center justify-between gap-1">
+                          <span className="text-[12px] font-semibold text-slate-800">
+                            {g.label}
+                          </span>
+                          {g.date && (
+                            <span className="shrink-0 text-[10px] text-slate-400">
+                              {g.date}
+                            </span>
+                          )}
+                        </div>
+                        <div className="space-y-1.5">
+                          {g.items.map((s, i) => {
+                            const w = Math.max(
+                              0,
+                              Math.min(100, (s.incomeRatio ?? 0) * 100),
+                            );
+                            return (
+                              <div key={i}>
+                                <div className="flex items-baseline justify-between gap-1.5 text-[11px] leading-4">
+                                  <span className="truncate text-slate-600">
+                                    {s.name}
+                                  </span>
+                                  <span className="shrink-0 tabular-nums text-slate-500">
+                                    {s.incomeRatio != null
+                                      ? `${(s.incomeRatio * 100).toFixed(1)}%`
+                                      : '—'}
+                                    {s.grossMargin != null && (
+                                      <span className="text-slate-400">
+                                        {' '}
+                                        毛
+                                        {(s.grossMargin * 100).toFixed(0)}%
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
+                                <div className="mt-0.5 h-1 w-full overflow-hidden rounded bg-slate-200/70">
+                                  <div
+                                    className="h-1 rounded bg-brand-500"
+                                    style={{ width: `${w}%` }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
               {pre?.moat && pre.moat.length > 0 && (
                 <section id="sec-moat" className="scroll-mt-2">
                   <h3 className="mb-2 text-sm font-semibold text-slate-900">
@@ -472,76 +552,6 @@ export default function AiAnalysisPanel({
                   </section>
                 )}
 
-              {biz?.groups && biz?.groups.length > 0 && (
-                <section id="sec-revenue" className="scroll-mt-2">
-                  <h3 className="mb-2 text-sm font-semibold text-slate-900">
-                    营收构成
-                  </h3>
-                  <div
-                    className={
-                      biz.groups.length >= 3
-                        ? 'grid gap-2.5 md:grid-cols-3'
-                        : biz.groups.length === 2
-                          ? 'grid gap-2.5 sm:grid-cols-2'
-                          : ''
-                    }
-                  >
-                    {biz.groups.map((g, gi) => (
-                      <div
-                        key={gi}
-                        className="rounded-lg border border-slate-100 bg-slate-50/60 p-2.5"
-                      >
-                        <div className="mb-2 flex items-center justify-between gap-1">
-                          <span className="text-[12px] font-semibold text-slate-800">
-                            {g.label}
-                          </span>
-                          {g.date && (
-                            <span className="shrink-0 text-[10px] text-slate-400">
-                              {g.date}
-                            </span>
-                          )}
-                        </div>
-                        <div className="space-y-1.5">
-                          {g.items.map((s, i) => {
-                            const w = Math.max(
-                              0,
-                              Math.min(100, (s.incomeRatio ?? 0) * 100),
-                            );
-                            return (
-                              <div key={i}>
-                                <div className="flex items-baseline justify-between gap-1.5 text-[11px] leading-4">
-                                  <span className="truncate text-slate-600">
-                                    {s.name}
-                                  </span>
-                                  <span className="shrink-0 tabular-nums text-slate-500">
-                                    {s.incomeRatio != null
-                                      ? `${(s.incomeRatio * 100).toFixed(1)}%`
-                                      : '—'}
-                                    {s.grossMargin != null && (
-                                      <span className="text-slate-400">
-                                        {' '}
-                                        毛
-                                        {(s.grossMargin * 100).toFixed(0)}%
-                                      </span>
-                                    )}
-                                  </span>
-                                </div>
-                                <div className="mt-0.5 h-1 w-full overflow-hidden rounded bg-slate-200/70">
-                                  <div
-                                    className="h-1 rounded bg-brand-500"
-                                    style={{ width: `${w}%` }}
-                                  />
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              )}
-
               {report.profile && (
                 <section id="sec-profile" className="scroll-mt-2">
                   <h3 className="mb-2 text-sm font-semibold text-slate-900">
@@ -601,18 +611,20 @@ export default function AiAnalysisPanel({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        title="查看 AI 深度解析：业务与模式、护城河、竞争对手、市场多空观点、营收构成"
-        className="btn border-brand-200 text-brand-700 hover:border-brand-300 hover:bg-brand-50"
-      >
-        AI 分析
-      </button>
+      {variant === 'none' ? null : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          title="查看深度解析：业务与模式、护城河、竞争对手、市场多空观点、营收构成"
+          className="btn border-brand-200 text-brand-700 hover:border-brand-300 hover:bg-brand-50"
+        >
+          深度解析
+        </button>
+      )}
 
       <Modal
         open={open}
-        title={`${name} · AI 分析`}
+        title={`${name} · 深度解析`}
         onClose={() => {
           setOpen(false);
           setReport(null);

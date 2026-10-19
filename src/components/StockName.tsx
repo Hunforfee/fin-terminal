@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { industryOf } from '@/lib/universe';
 import type { Quote } from '@/lib/datasource/types';
+import DeepDiveIcon from './DeepDiveIcon';
 
 const industryRequests = new Map<string, Promise<string | null>>();
 function requestIndustry(symbol: string) {
@@ -78,6 +79,13 @@ function StockName({
   }
   return (
     <>
+      {quote.kind === 'stock' && (
+        <DeepDiveIcon
+          name={quote.name}
+          code={quote.code}
+          market={quote.market === 'HK' ? 'HK' : 'A'}
+        />
+      )}
       <Link
         prefetch={false}
         href={href}

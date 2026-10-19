@@ -248,6 +248,7 @@ export default function ResearchNotesDrawer({
   const noteCompanies = allCompanies.filter(
     (c) =>
       c.symbol === initialCompany?.symbol ||
+      c.symbol === draft?.company?.symbol ||
       notes.some((note) => researchNoteSymbol(note) === c.symbol),
   );
   const activeFilter =
@@ -278,6 +279,13 @@ export default function ResearchNotesDrawer({
           (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')
         : 0,
     );
+  const createLabel = draft
+    ? category === 'company' && draft.company
+      ? `继续${draft.company.name}草稿`
+      : '继续草稿'
+    : category === 'daily'
+      ? '写心得'
+      : '新建笔记';
   function switchCategory(next: NoteKind) {
     if (next === category) return;
     setCategory(next);
@@ -298,7 +306,11 @@ export default function ResearchNotesDrawer({
     setRenaming(null);
     setPreview(false);
     setEditing(true);
-    if (draft) return;
+    if (draft) {
+      if (category === 'company' && draft.company)
+        setCompanyFilter(draft.company.symbol);
+      return;
+    }
     changeDraft({
       kind: category,
       entryDate: category === 'daily' ? todayResearchDate() : undefined,
@@ -396,7 +408,7 @@ export default function ResearchNotesDrawer({
   return (
     <dialog
       ref={dialog}
-      aria-labelledby={titleId}
+      aria-label="研究笔记"
       onCancel={(event) => {
         event.preventDefault();
         onClose();
@@ -415,13 +427,13 @@ export default function ResearchNotesDrawer({
       className={`fixed inset-y-0 left-auto right-0 !m-0 h-[100dvh] max-h-none w-full ${maximized ? 'max-w-none' : 'max-w-[860px]'} overflow-hidden border-0 bg-white p-0 text-slate-800 shadow-2xl backdrop:bg-slate-900/25 [&[open]]:flex [&[open]]:flex-col`}
     >
       <div
-        className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-6"
+        className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-100 px-4 py-3 sm:px-6"
         onDoubleClick={(event) => {
           if (!(event.target as HTMLElement).closest('button, input, select'))
             setMaximized(!maximized);
         }}
       >
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="mr-auto flex min-w-0 items-center gap-3">
           <div
             role="tablist"
             aria-label="笔记分类"
@@ -469,12 +481,12 @@ export default function ResearchNotesDrawer({
             ))}
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="contents sm:flex sm:shrink-0 sm:items-center sm:gap-2">
           {!editing && (
-            <>
+            <div className="order-last flex w-full min-w-0 items-center gap-2 sm:order-none sm:w-auto">
               <input
                 aria-label="搜索研究笔记"
-                className="input !h-8 w-44"
+                className="input !h-8 !w-auto min-w-0 flex-1 sm:!w-44"
                 placeholder={
                   category === 'daily'
                     ? '搜索日期、标题或正文'
@@ -504,16 +516,16 @@ export default function ResearchNotesDrawer({
                   ))}
                 </select>
               )}
-            </>
+            </div>
           )}
           {!editing && (
             <button
               ref={creating}
               type="button"
               disabled={!ready}
-              aria-label={draft ? '继续草稿' : category === 'daily' ? '写心得' : '新建笔记'}
-              title={draft ? '继续草稿' : category === 'daily' ? '写心得' : '新建笔记'}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-brand-600 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+              aria-label={createLabel}
+              title={createLabel}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-600 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
               onClick={newNote}
             >
               <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
@@ -526,7 +538,7 @@ export default function ResearchNotesDrawer({
               type="button"
               aria-label={directoryOpen ? '收起目录' : '展开目录'}
               title={directoryOpen ? '收起目录' : '展开目录'}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+              className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-700 sm:inline-flex"
               onClick={() => setDirectoryOpen((open) => !open)}
             >
               {directoryOpen ? (
@@ -544,7 +556,7 @@ export default function ResearchNotesDrawer({
             type="button"
             aria-label="关闭研究笔记"
             title="关闭"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
             onClick={onClose}
           >
             <svg
@@ -788,6 +800,7 @@ export default function ResearchNotesDrawer({
                           <Link
                             href={`/stock/${researchNoteSymbol(note) || note.code}`}
                             prefetch={false}
+                            onClick={onClose}
                             className="font-medium hover:text-brand-700"
                           >
                             {note.name}

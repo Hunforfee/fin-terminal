@@ -1,9 +1,7 @@
 'use client';
 
 import { personalStorage } from '@/lib/personalStorage';
-import useResearchNotes from './useResearchNotes';
-import ResearchNotesDrawer from './ResearchNotesDrawer';
-import type { NoteCompany } from './NoteCompanyPicker';
+import { useResearchWorkspace } from './ResearchWorkspaceProvider';
 import { researchNoteSymbol } from '@/lib/researchNotes';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -14,7 +12,6 @@ import WatchlistGroups from './WatchlistGroups';
 import StockName from './StockName';
 import XueqiuLink from './XueqiuLink';
 import ResearchColumns from './ResearchColumns';
-import CompanyWindow from './CompanyWindow';
 import {
   RESEARCH_COLUMNS,
   RESEARCH_TABLE_KEY,
@@ -94,9 +91,7 @@ export default function ResearchDesk({
   const [finLoading, setFinLoading] = useState(false);
   const [error, setError] = useState('');
   const [finErrors, setFinErrors] = useState<string[]>([]);
-  const notebook = useResearchNotes();
-  const [notesOpen, setNotesOpen] = useState(false);
-  const [noteContext, setNoteContext] = useState<NoteCompany | null>(null);
+  const { notebook, openNotes, setNoteCompanies } = useResearchWorkspace();
   const noteCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const note of notebook.notes) {
@@ -110,6 +105,10 @@ export default function ResearchDesk({
     () => quotes.map((q) => ({ symbol: q.symbol, code: q.code, name: q.name })),
     [quotes],
   );
+  useEffect(() => {
+    setNoteCompanies(noteCompanies);
+    return () => setNoteCompanies([]);
+  }, [noteCompanies, setNoteCompanies]);
   const [filter, setFilter] = useState('');
   const tableRef = useRef<HTMLDivElement>(null);
   const rowHeightRef = useRef<number | null>(null);
@@ -493,65 +492,11 @@ export default function ResearchDesk({
         id="research-stocks"
         tabIndex={-1}
         aria-labelledby="research-stocks-title"
-        className="card scroll-mt-24 overflow-hidden"
+        className="card scroll-mt-24"
       >
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 sm:px-4">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <h2 id="research-stocks-title" className="section-title">
-              基本面跟踪
-            </h2>
-            <span className="text-xs text-slate-500">
-              {`${rows.length} 家公司`}
-              {finLoading ? ' · 财报加载中…' : ''}
-            </span>
-          </div>
-          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-            {!management && (
-              <>
-                <CompanyWindow
-                  codes={savedCodes.map((symbol) =>
-                    symbol.replace(/^(SH|SZ|BJ)/, ''),
-                  )}
-                />
-                <button
-                  type="button"
-                  aria-label={`打开研究笔记，共${notebook.notes.length}条`}
-                  aria-haspopup="dialog"
-                  aria-expanded={notesOpen}
-                  disabled={!notebook.ready}
-                  onClick={() => {
-                    setNoteContext(null);
-                    setNotesOpen(true);
-                  }}
-                  className="inline-flex h-8 shrink-0 items-center gap-2 rounded-md border border-brand-100 bg-brand-50 px-2.5 text-[13px] font-medium text-brand-700 transition-colors hover:bg-brand-100 disabled:opacity-50 [@media(pointer:coarse)]:min-h-10"
-                >
-                  研究笔记
-                  <span className="text-xs font-normal tabular-nums text-slate-500">
-                    {notebook.notes.length} 条
-                  </span>
-                </button>
-                <span
-                  aria-hidden="true"
-                  className="mx-1 hidden h-5 border-l border-slate-200 lg:block"
-                />
-              </>
-            )}
-            <input
-              aria-label="筛选关注公司"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              placeholder="公司名称 / 代码"
-              className="input !w-40 !text-xs"
-            />
-            <button
-              type="button"
-              className="btn !px-2.5 !text-xs"
-              onClick={() => setColumnsOpen(true)}
-            >
-              自定义表头
-            </button>
-          </div>
-        </div>
+        <h2 id="research-stocks-title" className="sr-only">
+          基本面股票列表
+        </h2>
         {columnsOpen && (
           <ResearchColumns
             columns={table.columns}
@@ -572,7 +517,21 @@ export default function ResearchDesk({
             {preferenceError}
           </p>
         )}
-        <WatchlistGroups active={group} onChange={setActiveGroup} />
+        <WatchlistGroups
+          active={group}
+          onChange={setActiveGroup}
+          onConfigureColumns={() => setColumnsOpen(true)}
+          toolbar={
+            <input
+              type="search"
+              aria-label="筛选关注公司"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="筛选自选"
+              className="h-8 w-28 min-w-0 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none placeholder:text-slate-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-100 sm:w-40"
+            />
+          }
+        />
         {visibleSelected.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-b border-brand-100 bg-brand-50/50 px-3 py-2 sm:px-5">
             <span className="mr-1 text-xs font-medium text-brand-700">
@@ -640,7 +599,7 @@ export default function ResearchDesk({
           <table
             aria-label="基本面股票列表"
             className="dense-data-table w-full text-right"
-            style={{ minWidth: 360 + columns.length * 105 }}
+            style={{ minWidth: 440 + columns.length * 105 }}
           >
             <thead>
               <tr>
@@ -681,7 +640,7 @@ export default function ResearchDesk({
                   />
                 </th>
                 <th
-                  className="th !w-[180px] !min-w-[180px] !max-w-[180px] sm:!w-[260px] sm:!min-w-[260px] sm:!max-w-[260px]"
+                  className="th !w-[360px] !min-w-[360px] !max-w-[360px]"
                   aria-sort={
                     sort?.column === 'name'
                       ? sort.direction === 'asc'
@@ -859,7 +818,7 @@ export default function ResearchDesk({
                       />
                     </div>
                   </td>
-                  <td className="td max-w-[180px] !py-1 text-left sm:max-w-[260px]">
+                  <td className="td max-w-[360px] !py-1 text-left">
                     <div className="flex min-w-0 items-center gap-1.5">
                       <StockName
                         quote={q}
@@ -884,12 +843,11 @@ export default function ResearchDesk({
                         }
                         disabled={!notebook.ready}
                         onClick={() => {
-                          setNoteContext({
+                          openNotes({
                             symbol: q.symbol,
                             code: q.code,
                             name: q.name,
                           });
-                          setNotesOpen(true);
                         }}
                         className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-amber-50 focus-visible:text-amber-600 ${noteCounts.get(q.symbol) ? 'text-amber-500' : 'text-slate-400 hover:text-amber-600'}`}
                       >
@@ -997,13 +955,14 @@ export default function ResearchDesk({
           </table>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
+        <div className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-2 border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
+          {finLoading && <span role="status">财报加载中…</span>}
           {finErrors.length > 0 && (
             <span className="text-amber-700" title={finErrors.join('、')}>
               财报暂不可用：{finErrors.length} 家公司
             </span>
           )}
-          {rows.length > pageSize && (
+          {rows.length > pageSize ? (
             <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
               <span className="tabular">
                 第 {safePage} / {pageCount} 页 · 共 {rows.length} 家
@@ -1065,6 +1024,8 @@ export default function ResearchDesk({
                 </span>
               )}
             </div>
+          ) : (
+            <span className="ml-auto tabular">共 {rows.length} 家</span>
           )}
         </div>
       </section>
@@ -1105,18 +1066,6 @@ export default function ResearchDesk({
           </div>
         </details>
       )}
-      <ResearchNotesDrawer
-        open={notesOpen}
-        initialCompany={noteContext}
-        onClose={() => setNotesOpen(false)}
-        companies={noteCompanies}
-        notes={notebook.notes}
-        ready={notebook.ready}
-        error={notebook.error}
-        onClearError={notebook.clearError}
-        onSave={notebook.save}
-        onRemove={notebook.remove}
-      />
     </div>
   );
 }

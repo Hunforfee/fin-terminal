@@ -11,6 +11,7 @@ export default function Modal({
   maximizable = false,
   maximized: controlledMaximized,
   onMaximizedChange,
+  nav,
 }: {
   open: boolean;
   title: string;
@@ -25,6 +26,8 @@ export default function Modal({
   /** 受控的最大化状态（内容区自带标题栏时使用） */
   maximized?: boolean;
   onMaximizedChange?: (next: boolean) => void;
+  /** 标题栏右侧导航（与标题同一栏，窄屏自动换行） */
+  nav?: React.ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const id = useId();
@@ -91,7 +94,7 @@ export default function Modal({
     >
       {!bare && (
         <div
-          className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3"
+          className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-slate-100 px-4 py-3"
           onDoubleClick={
             maximizable
               ? (event) => {
@@ -110,6 +113,7 @@ export default function Modal({
             {title}
           </h2>
           <div className="flex shrink-0 items-center gap-1">
+            {nav}
             {maximizable && (
               <button
                 type="button"

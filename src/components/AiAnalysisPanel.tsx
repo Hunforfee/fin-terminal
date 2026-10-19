@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import Modal from './Modal';
 
 /** 预生成深度解析的数据结构（由 /api/analysis 下发，避免打进客户端包） */
@@ -30,6 +31,57 @@ interface PreAnalysis {
 }
 
 const YUANBAO_URL = 'https://yuanbao.tencent.com/';
+
+/** 板块导航定义：id 对应各 section 的 DOM id，label 为导航文字 */
+const SECTIONS = [
+  { id: 'sec-business', label: '业务与模式' },
+  { id: 'sec-moat', label: '护城河' },
+  { id: 'sec-competitors', label: '竞争对手对比' },
+  { id: 'sec-views', label: '市场观点' },
+  { id: 'sec-revenue', label: '营收构成' },
+  { id: 'sec-profile', label: '公司资料' },
+] as const;
+
+/** A 股 / 港股代码 → 站内股票页链接；境外上市代码（.KS/.T 等）返回 null */
+function stockHref(raw: string): string | null {
+  const s = raw.trim();
+  if (/^\d{6}$/.test(s)) return `/stock/${s}`;
+  const hk = s.match(/^(?:hk)?(\d{1,5})(?:\.hk)?$/i);
+  if (hk) return `/stock/${hk[1].padStart(5, '0')}`;
+  return null;
+}
+
+/** 竞争对手代码徽章：可跳转的渲染为链接，境外代码保持纯文本 */
+function CodeBadges({ code }: { code: string }) {
+  return (
+    <>
+      {code
+        .split(/\s*\/\s*/)
+        .filter(Boolean)
+        .map((p, i) => {
+          const href = stockHref(p);
+          return href ? (
+            <Link
+              key={i}
+              href={href}
+              title={`查看 ${p} 行情页`}
+              className="rounded bg-brand-50 px-1 py-px text-[10px] tabular-nums text-brand-700 hover:bg-brand-100 hover:underline"
+            >
+              {p}
+            </Link>
+          ) : (
+            <span
+              key={i}
+              title="境外上市，暂不支持站内跳转"
+              className="rounded bg-slate-100 px-1 py-px text-[10px] tabular-nums text-slate-500"
+            >
+              {p}
+            </span>
+          );
+        })}
+    </>
+  );
+}
 
 const DEFAULT_PROMPT =
   '请深入分析{name}（{code}），包括但不限于公司的业务结构、核心竞争力、行业格局与竞争地位、财务质量（收入/利润/现金流/资产负债）、主要风险，并推测未来 1-3 年的利润区间及关键驱动因素。要求使用最新数据，反复核对，确保信息来源真实可靠；引用数据注明来源与日期，无法核实的明确标注。';
@@ -149,8 +201,9 @@ export default function AiAnalysisPanel({
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [report, setReport] = useState<Report | null>(null);
-  const [expanded, setExpanded] = useState(false);
-  const [reviewExpanded, setReviewExpanded] = useState(false);
+  /** 当前高亮的导航板块（跟随滚动位置） */
+  const [active, setActive] = useState<string>(SECTIONS[0].id);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const nonce = useRef(0);
 
   useEffect(() => {
@@ -186,6 +239,52 @@ export default function AiAnalysisPanel({
     window.open(YUANBAO_URL, '_blank', 'noopener,noreferrer');
   };
 
+  /** 点击导航：平滑滚动到对应板块并立即高亮 */
+  const jumpLock = useRef(0);
+  const jumpTo = (id: string) => {
+    // 平滑滚动期间锁定高亮，避免动画中途的中间态覆盖点击项
+    jumpLock.current = Date.now() + 900;
+    document
+      .getElementById(id)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setActive(id);
+  };
+
+  // 滚动高亮：监听弹窗内容滚动容器（Modal 内容区），同步当前板块
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!open || !body) return;
+    let container: HTMLElement | null = body.parentElement;
+    while (container) {
+      const oy = getComputedStyle(container).overflowY;
+      if (oy === 'auto' || oy === 'scroll') break;
+      container = container.parentElement;
+    }
+    if (!container) return;
+    const onScroll = () => {
+      if (Date.now() < jumpLock.current) return;
+      // 以「在可视区域中占比最大」的板块为当前项，
+      // 避免贴顶板块（底部空间不足滚不到顶）被误判为上一个板块
+      const rect = container!.getBoundingClientRect();
+      let best: string = SECTIONS[0].id;
+      let bestVis = -1;
+      for (const s of SECTIONS) {
+        const el = document.getElementById(s.id);
+        if (!el) continue;
+        const r = el.getBoundingClientRect();
+        const vis = Math.min(r.bottom, rect.bottom) - Math.max(r.top, rect.top);
+        if (vis > bestVis) {
+          bestVis = vis;
+          best = s.id;
+        }
+      }
+      setActive(best);
+    };
+    container.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => container.removeEventListener('scroll', onScroll);
+  }, [open, report]);
+
   const biz = report?.business;
   const pre = report?.pre ?? null;
   const hasBiz =
@@ -193,12 +292,27 @@ export default function AiAnalysisPanel({
   /** 有预生成深度解析时，即使实时 F10 抓取失败也要展示 */
   const hasContent = hasBiz || !!pre;
 
+  /** 仅展示实际渲染出来的板块导航 */
+  const navItems = SECTIONS.filter((s) => {
+    if (s.id === 'sec-business') return !!hasContent;
+    if (s.id === 'sec-moat') return !!pre?.moat?.length;
+    if (s.id === 'sec-competitors') return !!pre?.competitors?.length;
+    if (s.id === 'sec-views')
+      return !!(
+        (pre?.bullCase && pre.bullCase.length > 0) ||
+        (pre?.bearCase && pre.bearCase.length > 0)
+      );
+    if (s.id === 'sec-revenue')
+      return !!(biz?.groups && biz.groups.length > 0);
+    return !!report?.profile;
+  });
+
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        title="查看 AI 深度解析：业务与护城河、竞争对手、市场多空观点、营收构成"
+        title="查看 AI 深度解析：业务与模式、护城河、竞争对手、市场多空观点、营收构成"
         className="btn border-brand-200 text-brand-700 hover:border-brand-300 hover:bg-brand-50"
       >
         AI 分析
@@ -210,13 +324,36 @@ export default function AiAnalysisPanel({
         onClose={() => {
           setOpen(false);
           setReport(null);
-          setExpanded(false);
-          setReviewExpanded(false);
+          setActive(SECTIONS[0].id);
         }}
         size="lg"
         maximizable
+        nav={
+          navItems.length > 1 ? (
+            <nav
+              aria-label="分析板块导航"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 pr-2"
+            >
+              {navItems.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => jumpTo(s.id)}
+                  aria-current={active === s.id ? 'true' : undefined}
+                  className={`border-b-2 pb-0.5 text-[12px] transition-colors ${
+                    active === s.id
+                      ? 'border-brand-600 font-medium text-brand-700'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </nav>
+          ) : undefined
+        }
       >
-        <div className="space-y-5">
+        <div className="space-y-5" ref={bodyRef}>
           {loading && (
             <div className="flex items-center gap-3 py-10 text-sm text-slate-500">
               <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-brand-600" />
@@ -233,10 +370,10 @@ export default function AiAnalysisPanel({
           {report && (
             <>
               {hasContent && (
-                <section>
+                <section id="sec-business" className="scroll-mt-2">
                   <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
                     <h3 className="text-sm font-semibold text-slate-900">
-                      公司深度解析
+                      业务与模式
                     </h3>
                     {(pre?.industry || biz?.industry) && (
                       <span className="rounded bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700">
@@ -251,24 +388,9 @@ export default function AiAnalysisPanel({
                     </p>
                   )}
 
-                  <div
-                    className={`space-y-2.5 whitespace-pre-line text-[13px] leading-[1.75] text-slate-700 ${
-                      pre && !expanded && pre.summary.length > 420
-                        ? 'max-h-[13.5rem] overflow-hidden'
-                        : ''
-                    }`}
-                  >
+                  <div className="space-y-2.5 whitespace-pre-line text-[13px] leading-[1.75] text-slate-700">
                     {pre?.summary || biz?.summary || '暂无数据'}
                   </div>
-                  {pre && pre.summary.length > 420 && (
-                    <button
-                      type="button"
-                      onClick={() => setExpanded((v) => !v)}
-                      className="mt-1 text-[12px] font-medium text-brand-600 hover:underline"
-                    >
-                      {expanded ? '收起' : '展开全文'}
-                    </button>
-                  )}
                   {pre?.source && (
                     <p className="mt-1 text-[11px] text-slate-400">{pre.source}</p>
                   )}
@@ -276,31 +398,27 @@ export default function AiAnalysisPanel({
               )}
 
               {pre?.moat && pre.moat.length > 0 && (
-                <section>
+                <section id="sec-moat" className="scroll-mt-2">
                   <h3 className="mb-2 text-sm font-semibold text-slate-900">
-                    核心优势与护城河
+                    护城河
                   </h3>
                   <PointList items={pre.moat} tone="brand" />
                 </section>
               )}
 
               {pre?.competitors && pre.competitors.length > 0 && (
-                <section>
+                <section id="sec-competitors" className="scroll-mt-2">
                   <h3 className="mb-2 text-sm font-semibold text-slate-900">
                     竞争对手对比
                   </h3>
                   <ul className="divide-y divide-slate-100">
                     {pre.competitors.map((c, i) => (
                       <li key={i} className="py-2 first:pt-0 last:pb-0">
-                        <div className="mb-0.5 flex items-baseline gap-1.5">
+                        <div className="mb-0.5 flex flex-wrap items-baseline gap-1.5">
                           <span className="text-[12.5px] font-medium text-slate-900">
                             {c.name}
                           </span>
-                          {c.code && (
-                            <span className="rounded bg-slate-100 px-1 py-px text-[10px] tabular-nums text-slate-500">
-                              {c.code}
-                            </span>
-                          )}
+                          {c.code && <CodeBadges code={c.code} />}
                         </div>
                         <p className="text-[12.5px] leading-5 text-slate-600">
                           {c.note}
@@ -314,7 +432,7 @@ export default function AiAnalysisPanel({
               {pre &&
                 ((pre.bullCase && pre.bullCase.length > 0) ||
                   (pre.bearCase && pre.bearCase.length > 0)) && (
-                  <section>
+                  <section id="sec-views" className="scroll-mt-2">
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <h3 className="text-sm font-semibold text-slate-900">
                         市场观点
@@ -360,7 +478,7 @@ export default function AiAnalysisPanel({
                 )}
 
               {biz?.groups && biz?.groups.length > 0 && (
-                <section>
+                <section id="sec-revenue" className="scroll-mt-2">
                   <h3 className="mb-2 text-sm font-semibold text-slate-900">
                     营收构成
                   </h3>
@@ -430,7 +548,7 @@ export default function AiAnalysisPanel({
               )}
 
               {report.profile && (
-                <section>
+                <section id="sec-profile" className="scroll-mt-2">
                   <h3 className="mb-2 text-sm font-semibold text-slate-900">
                     公司资料
                   </h3>

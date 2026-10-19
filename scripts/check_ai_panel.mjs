@@ -15,7 +15,7 @@ async function checkStock(code, expectPregen) {
   await page.goto(`${BASE}/stock/${code}`, { waitUntil: 'networkidle', timeout: 30000 });
   await page.waitForTimeout(1200);
   await page.getByRole('button', { name: 'AI 分析' }).first().click();
-  await page.waitForSelector('text=公司深度解析', { timeout: 15000 });
+  await page.waitForSelector('text=业务与模式', { timeout: 15000 });
   await page.waitForTimeout(2200);
 
   const body = await page.locator('body').innerText();
@@ -29,7 +29,7 @@ async function checkStock(code, expectPregen) {
   const bars = await page.locator('div.h-1 > div').count();
 
   const checks = {
-    '深度解析': body.includes('公司深度解析'),
+    '业务与模式': body.includes('业务与模式'),
     '营收构成': body.includes('营收构成'),
     '无维度Tab': tabButtons === 0,
     '并排卡片': gridCols >= 1,
@@ -37,7 +37,7 @@ async function checkStock(code, expectPregen) {
     '无研报主要观点': !body.includes('研报主要观点'),
   };
   if (expectPregen) {
-    checks['核心优势'] = body.includes('核心优势与护城河');
+    checks['护城河'] = body.includes('护城河');
     checks['竞争对手'] = body.includes('竞争对手对比');
     checks['市场观点'] = body.includes('市场观点');
     checks['主流看好'] = body.includes('主流看好');

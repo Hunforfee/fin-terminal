@@ -2,8 +2,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 const items = [
-  ['/', '研究工作台'],
-  ['/watchlist', '关注公司'],
+  ['/watchlist', '自选公司'],
   ['/industry', '行业研究'],
   ['/screener', '条件选股'],
   ['/fund', '基金'],
@@ -13,8 +12,7 @@ export default function AppNav() {
   return (
     <nav aria-label="主导航" className="flex gap-1 overflow-x-auto py-1">
       {items.map(([href, label]) => {
-        const active =
-          href === '/' ? pathname === '/' : pathname.startsWith(href);
+        const active = pathname.startsWith(href);
         return (
           <Link
             key={href}

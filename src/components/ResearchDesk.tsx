@@ -749,7 +749,6 @@ export default function ResearchDesk({
                     </button>
                   </th>
                 ))}
-                <th className="th !text-right">研究</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -935,6 +934,22 @@ export default function ResearchDesk({
                           </svg>
                         </button>
                       </span>
+                      <a
+                        href={`/stock/${q.symbol}#valuation`}
+                        aria-label={`查看${q.name}估值分析`}
+                        title="估值分析"
+                        className="inline-flex h-7 shrink-0 items-center rounded-md bg-slate-100 px-2 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700"
+                      >
+                        估值
+                      </a>
+                      <a
+                        href={`/stock/${q.symbol}/finance`}
+                        aria-label={`查看${q.name}财务体检`}
+                        title="财务体检"
+                        className="inline-flex h-7 shrink-0 items-center rounded-md bg-slate-100 px-2 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700"
+                      >
+                        财报
+                      </a>
                     </div>
                   </td>
                   {columns.map((c) => {
@@ -960,30 +975,12 @@ export default function ResearchDesk({
                       </td>
                     );
                   })}
-                  <td className="td !py-1">
-                    <div className="flex justify-end gap-4">
-                      <Link
-                        prefetch={false}
-                        href={`/stock/${q.symbol}`}
-                        className="text-brand-600"
-                      >
-                        估值
-                      </Link>
-                      <Link
-                        prefetch={false}
-                        href={`/stock/${q.symbol}/finance`}
-                        className="text-brand-600"
-                      >
-                        财报
-                      </Link>
-                    </div>
-                  </td>
                 </tr>
               ))}
               {!rows.length && (
                 <tr>
                   <td
-                    colSpan={columns.length + 3}
+                    colSpan={columns.length + 2}
                     className="py-14 text-center text-sm text-slate-500"
                   >
                     {loading || !ready

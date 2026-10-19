@@ -448,7 +448,7 @@ export default function ValuationSection({ code }: { code: string }) {
     ? `${data.dividendFiscalYear ?? '暂无完整'}财年已实施现金股息 ÷ 当前股价；每股 ${data.dividendPerShare?.total?.toFixed(6) ?? '—'} 港元，其中普通 ${data.dividendPerShare?.ordinary?.toFixed(6) ?? '—'}、特别 ${data.dividendPerShare?.special?.toFixed(6) ?? '—'} 港元。`
     : '预期股息率：在该时间点买入后，未来一年预计税前股息收入占买入金额的比例。';
   return (
-    <section aria-label="估值分析" aria-busy={loading}>
+    <section id="valuation" aria-label="估值分析" aria-busy={loading}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="section-title">估值分析</h2>

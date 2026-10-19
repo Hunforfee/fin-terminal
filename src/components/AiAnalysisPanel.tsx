@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Modal from './Modal';
-import { getPreAnalysis } from '@/data/analyses';
+import { getPreAnalysis, type ViewPoint } from '@/data/analyses';
 
 const YUANBAO_URL = 'https://yuanbao.tencent.com/';
 
@@ -84,6 +84,38 @@ async function copyText(text: string): Promise<boolean> {
       return false;
     }
   }
+}
+
+/** 要点列表：标题 + 说明的紧凑卡片，用于护城河/多空观点 */
+function PointList({
+  items,
+  tone,
+}: {
+  items: ViewPoint[];
+  tone: 'brand' | 'bull' | 'bear';
+}) {
+  const dot =
+    tone === 'bull'
+      ? 'bg-emerald-500'
+      : tone === 'bear'
+        ? 'bg-rose-400'
+        : 'bg-brand-500';
+  return (
+    <ul className="space-y-2">
+      {items.map((it, i) => (
+        <li key={i} className="flex gap-2">
+          <span
+            className={`mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full ${dot}`}
+          />
+          <p className="text-[12.5px] leading-5 text-slate-700">
+            <span className="font-medium text-slate-900">{it.point}</span>
+            <span className="text-slate-500"> —— </span>
+            {it.detail}
+          </p>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 export default function AiAnalysisPanel({
@@ -184,21 +216,41 @@ export default function AiAnalysisPanel({
             <>
               {hasBiz && (
                 <section>
-                  <h3 className="mb-1.5 text-sm font-semibold text-slate-900">
-                    业务与行业地位
-                  </h3>
-
-                  {(pre?.industry || biz!.industry) && (
-                    <div className="mb-2">
-                      <span className="inline-flex items-center rounded-md bg-brand-50 px-2 py-0.5 text-[12px] font-medium text-brand-700">
+                  <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-slate-900">
+                      公司深度解析
+                    </h3>
+                    {(pre?.industry || biz!.industry) && (
+                      <span className="rounded bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700">
                         {pre?.industry || biz!.industry}
                       </span>
-                    </div>
+                    )}
+                  </div>
+
+                  {pre?.position && (
+                    <p className="mb-2 border-l-2 border-brand-400 pl-2 text-[12.5px] font-medium text-slate-800">
+                      {pre.position}
+                    </p>
                   )}
 
-                  <div className="whitespace-pre-line text-[13px] leading-6 text-slate-700">
+                  <div
+                    className={`space-y-2.5 whitespace-pre-line text-[13px] leading-[1.75] text-slate-700 ${
+                      pre && !expanded && pre.summary.length > 420
+                        ? 'max-h-[13.5rem] overflow-hidden'
+                        : ''
+                    }`}
+                  >
                     {pre?.summary || biz!.summary || '暂无数据'}
                   </div>
+                  {pre && pre.summary.length > 420 && (
+                    <button
+                      type="button"
+                      onClick={() => setExpanded((v) => !v)}
+                      className="mt-1 text-[12px] font-medium text-brand-600 hover:underline"
+                    >
+                      {expanded ? '收起' : '展开全文'}
+                    </button>
+                  )}
                   {pre?.source && (
                     <p className="mt-1 text-[11px] text-slate-400">{pre.source}</p>
                   )}
@@ -266,6 +318,90 @@ export default function AiAnalysisPanel({
                   )}
                 </section>
               )}
+
+              {pre?.moat && pre.moat.length > 0 && (
+                <section>
+                  <h3 className="mb-2 text-sm font-semibold text-slate-900">
+                    核心优势与护城河
+                  </h3>
+                  <PointList items={pre.moat} tone="brand" />
+                </section>
+              )}
+
+              {pre?.competitors && pre.competitors.length > 0 && (
+                <section>
+                  <h3 className="mb-2 text-sm font-semibold text-slate-900">
+                    竞争对手对比
+                  </h3>
+                  <ul className="divide-y divide-slate-100">
+                    {pre.competitors.map((c, i) => (
+                      <li key={i} className="py-2 first:pt-0 last:pb-0">
+                        <div className="mb-0.5 flex items-baseline gap-1.5">
+                          <span className="text-[12.5px] font-medium text-slate-900">
+                            {c.name}
+                          </span>
+                          {c.code && (
+                            <span className="rounded bg-slate-100 px-1 py-px text-[10px] tabular-nums text-slate-500">
+                              {c.code}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[12.5px] leading-5 text-slate-600">
+                          {c.note}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {pre &&
+                ((pre.bullCase && pre.bullCase.length > 0) ||
+                  (pre.bearCase && pre.bearCase.length > 0)) && (
+                  <section>
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-sm font-semibold text-slate-900">
+                        市场观点
+                      </h3>
+                      <div className="flex items-center gap-2 text-[11px]">
+                        {pre.ratingSummary && (
+                          <span className="text-slate-600">
+                            买入 {pre.ratingSummary.buy}
+                            {pre.ratingSummary.hold > 0 &&
+                              ` · 增持 ${pre.ratingSummary.hold}`}
+                            {pre.ratingSummary.sell > 0 &&
+                              ` · 中性/减持 ${pre.ratingSummary.sell}`}
+                          </span>
+                        )}
+                        {pre.targetPriceRange &&
+                          pre.targetPriceRange.max > 0 && (
+                            <span className="tabular-nums text-slate-600">
+                              目标价 {pre.targetPriceRange.min}–
+                              {pre.targetPriceRange.max} 元
+                            </span>
+                          )}
+                      </div>
+                    </div>
+
+                    {pre.bullCase && pre.bullCase.length > 0 && (
+                      <div className="mb-2.5 rounded-lg border border-emerald-100 bg-emerald-50/50 p-2.5">
+                        <div className="mb-1.5 text-[12px] font-semibold text-emerald-700">
+                          主流看好
+                        </div>
+                        <PointList items={pre.bullCase} tone="bull" />
+                      </div>
+                    )}
+
+                    {pre.bearCase && pre.bearCase.length > 0 && (
+                      <div className="rounded-lg border border-rose-100 bg-rose-50/50 p-2.5">
+                        <div className="mb-1.5 text-[12px] font-semibold text-rose-700">
+                          分歧与风险
+                        </div>
+                        <PointList items={pre.bearCase} tone="bear" />
+                      </div>
+                    )}
+                  </section>
+                )}
 
               <section>
                 <h3 className="mb-2 text-sm font-semibold text-slate-900">
@@ -352,7 +488,8 @@ export default function AiAnalysisPanel({
 
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
                 <p className="text-[11px] leading-4 text-slate-400">
-                  数据来源：东方财富 F10 公开资料（公司概况 / 经营分析 / 主营构成）+ 研报聚合。本面板仅供研究参考，不构成投资建议。
+                  数据来源：通达信 F10 深度资料 + 券商研报（评级/目标价/风险提示）+ 东方财富 F10
+                  主营构成。内容为基于公开资料的研究整理，不构成投资建议。
                 </p>
                 <button
                   type="button"

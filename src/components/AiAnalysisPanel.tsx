@@ -15,11 +15,18 @@ interface ReportSegment {
   profitRatio: number | null;
   grossMargin: number | null;
 }
+interface ReportGroup {
+  label: string;
+  date: string | null;
+  items: ReportSegment[];
+}
 interface ReportBusiness {
   summary: string | null;
   scope: string | null;
-  segments: ReportSegment[];
-  reportDate: string | null;
+  industry: string | null;
+  review: string | null;
+  reviewDate: string | null;
+  groups: ReportGroup[];
   source: string;
 }
 interface ReportProfile {
@@ -65,6 +72,18 @@ function ratingClass(r: string | null): string {
   return 'bg-slate-100 text-slate-600';
 }
 
+/** 将经营评述的长文本按（一）（二）… 拆分为带小标题的段落，便于阅读 */
+function splitReview(text: string): { head: string; body: string }[] {
+  return text
+    .split(/(?=（[一二三四五六七八九十]+）)/)
+    .map((p) => {
+      const m = p.match(/^（([一二三四五六七八九十]+)）\s*([\s\S]*)$/);
+      if (m) return { head: `（${m[1]}）`, body: m[2].trim() };
+      return { head: '', body: p.trim() };
+    })
+    .filter((x) => x.body.length > 0);
+}
+
 async function copyText(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
@@ -100,6 +119,7 @@ export default function AiAnalysisPanel({
   const [err, setErr] = useState<string | null>(null);
   const [report, setReport] = useState<Report | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [reviewExpanded, setReviewExpanded] = useState(false);
   const nonce = useRef(0);
 
   useEffect(() => {
@@ -135,11 +155,16 @@ export default function AiAnalysisPanel({
     window.open(YUANBAO_URL, '_blank', 'noopener,noreferrer');
   };
 
-  const summaryText = report?.business?.summary ?? '';
+  const biz = report?.business;
+  const summaryText = biz?.summary ?? '';
   const shownSummary =
     expanded || summaryText.length <= 240
       ? summaryText
       : `${summaryText.slice(0, 240)}…`;
+
+  const reviewSections = biz?.review ? splitReview(biz.review) : [];
+  const hasBiz =
+    biz && (biz.summary || biz.review || (biz.groups && biz.groups.length > 0));
 
   return (
     <>
@@ -158,6 +183,8 @@ export default function AiAnalysisPanel({
         onClose={() => {
           setOpen(false);
           setReport(null);
+          setExpanded(false);
+          setReviewExpanded(false);
         }}
         size="lg"
         maximizable
@@ -178,65 +205,135 @@ export default function AiAnalysisPanel({
 
           {report && (
             <>
-              {report.business?.summary && (
+              {hasBiz && (
                 <section>
                   <h3 className="mb-2 text-sm font-semibold text-slate-900">
                     主营业务
                   </h3>
-                  <p className="whitespace-pre-line text-[13px] leading-6 text-slate-700">
-                    {shownSummary}
-                    {summaryText.length > 240 && (
-                      <button
-                        type="button"
-                        onClick={() => setExpanded((v) => !v)}
-                        className="ml-1 align-baseline text-brand-600 hover:underline"
+
+                  {biz!.industry && (
+                    <div className="mb-2">
+                      <span className="inline-flex items-center rounded-md bg-brand-50 px-2 py-0.5 text-[12px] font-medium text-brand-700">
+                        所属行业：{biz!.industry}
+                      </span>
+                    </div>
+                  )}
+
+                  {biz!.summary && (
+                    <p className="whitespace-pre-line text-[13px] leading-6 text-slate-700">
+                      {shownSummary}
+                      {summaryText.length > 240 && (
+                        <button
+                          type="button"
+                          onClick={() => setExpanded((v) => !v)}
+                          className="ml-1 align-baseline text-brand-600 hover:underline"
+                        >
+                          {expanded ? '收起' : '展开全文'}
+                        </button>
+                      )}
+                    </p>
+                  )}
+
+                  {biz!.review && (
+                    <div className="mt-3">
+                      <div className="mb-1.5 flex items-center justify-between">
+                        <span className="text-[12px] font-medium text-slate-600">
+                          经营评述
+                          {biz!.reviewDate && (
+                            <span className="ml-1 text-slate-400">
+                              （{biz!.reviewDate}）
+                            </span>
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setReviewExpanded((v) => !v)}
+                          className="text-[12px] text-brand-600 hover:underline"
+                        >
+                          {reviewExpanded ? '收起' : '展开全文'}
+                        </button>
+                      </div>
+                      <div
+                        className={
+                          reviewExpanded
+                            ? 'space-y-2.5'
+                            : 'max-h-72 space-y-2.5 overflow-y-auto pr-1'
+                        }
                       >
-                        {expanded ? '收起' : '展开全文'}
-                      </button>
-                    )}
-                  </p>
-                  {report.business.segments.length > 0 && (
-                    <div className="mt-3 overflow-hidden rounded-lg border border-slate-200">
-                      <table className="w-full text-[13px]">
-                        <thead>
-                          <tr className="bg-slate-50 text-left text-xs text-slate-500">
-                            <th className="px-3 py-2 font-medium">主营构成</th>
-                            <th className="px-3 py-2 text-right font-medium">
-                              营收
-                            </th>
-                            <th className="px-3 py-2 text-right font-medium">
-                              收入占比
-                            </th>
-                            <th className="px-3 py-2 text-right font-medium">
-                              毛利率
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {report.business.segments.map((s, i) => (
-                            <tr
-                              key={i}
-                              className="border-t border-slate-100 text-slate-700"
-                            >
-                              <td className="px-3 py-2">{s.name}</td>
-                              <td className="px-3 py-2 text-right tabular-nums">
-                                {fmtYi(s.income)}
-                              </td>
-                              <td className="px-3 py-2 text-right tabular-nums">
-                                {pct(s.incomeRatio)}
-                              </td>
-                              <td className="px-3 py-2 text-right tabular-nums">
-                                {pct(s.grossMargin)}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      <div className="bg-slate-50 px-3 py-1.5 text-[11px] text-slate-400">
-                        数据口径：{report.business.reportDate ?? '最新报告期'} 主营构成
+                        {reviewSections.map((s, i) => (
+                          <p
+                            key={i}
+                            className="text-[13px] leading-6 text-slate-700"
+                          >
+                            {s.head && (
+                              <span className="font-semibold text-slate-900">
+                                {s.head}
+                              </span>
+                            )}
+                            {s.body}
+                          </p>
+                        ))}
                       </div>
                     </div>
                   )}
+
+                  {biz!.groups?.map((g, gi) => {
+                    const showMargin = g.items.some(
+                      (s) => s.grossMargin != null,
+                    );
+                    return (
+                      <div
+                        key={gi}
+                        className="mt-3 overflow-hidden rounded-lg border border-slate-200"
+                      >
+                        <div className="flex items-center justify-between bg-slate-50 px-3 py-2 text-[12px] font-medium text-slate-600">
+                          <span>主营构成 · {g.label}</span>
+                          {g.date && (
+                            <span className="text-slate-400">{g.date}</span>
+                          )}
+                        </div>
+                        <table className="w-full text-[13px]">
+                          <thead>
+                            <tr className="text-left text-xs text-slate-500">
+                              <th className="px-3 py-2 font-medium">项目</th>
+                              <th className="px-3 py-2 text-right font-medium">
+                                营收
+                              </th>
+                              <th className="px-3 py-2 text-right font-medium">
+                                收入占比
+                              </th>
+                              {showMargin && (
+                                <th className="px-3 py-2 text-right font-medium">
+                                  毛利率
+                                </th>
+                              )}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {g.items.map((s, i) => (
+                              <tr
+                                key={i}
+                                className="border-t border-slate-100 text-slate-700"
+                              >
+                                <td className="px-3 py-2">{s.name}</td>
+                                <td className="px-3 py-2 text-right tabular-nums">
+                                  {fmtYi(s.income)}
+                                </td>
+                                <td className="px-3 py-2 text-right tabular-nums">
+                                  {pct(s.incomeRatio)}
+                                </td>
+                                {showMargin && (
+                                  <td className="px-3 py-2 text-right tabular-nums">
+                                    {pct(s.grossMargin)}
+                                  </td>
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })}
                 </section>
               )}
 
@@ -325,7 +422,7 @@ export default function AiAnalysisPanel({
 
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
                 <p className="text-[11px] leading-4 text-slate-400">
-                  数据来源：东方财富研报 + F10 公开资料聚合。本面板仅供研究参考，不构成投资建议。
+                  数据来源：东方财富 F10 公开资料（公司概况 / 经营分析 / 主营构成）+ 研报聚合。本面板仅供研究参考，不构成投资建议。
                 </p>
                 <button
                   type="button"

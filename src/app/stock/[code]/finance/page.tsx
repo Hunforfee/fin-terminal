@@ -7,14 +7,15 @@ import FinanceTabs from '@/components/FinanceTabs';
 export const dynamic = 'force-dynamic';
 
 /** 财务体检页：真实财报指标的多维对比可视化（盈利/成长/偿债/现金流/每股） */
-export default async function FinancePage({ params }: { params: Promise<{ code: string }> }) {
-  const { code } = await params;
+export default async function FinancePage({ params, searchParams }: { params: Promise<{ code: string }>; searchParams: Promise<{ view?: string }> }) {
+  const [{ code }, query] = await Promise.all([params, searchParams]);
   const symbol = normalizeStockCode(code)?.symbol ?? code;
   const quote = await getQuote(symbol).catch(() => null);
 
   return (
     <FinanceTabs
       code={code}
+      initialView={query.view === 'table' ? 'table' : 'chart'}
       heading={
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
           <Link

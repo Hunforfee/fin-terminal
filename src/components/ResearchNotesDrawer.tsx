@@ -32,6 +32,8 @@ export interface ResearchNotesOpenRequest {
   kind?: NoteKind;
   noteId?: string;
   mode?: 'read' | 'create';
+  initialText?: string;
+  initialTitle?: string;
 }
 interface Props {
   open: boolean;
@@ -211,8 +213,8 @@ export default function ResearchNotesDrawer({
             entryDate:
               nextCategory === 'daily' ? todayResearchDate() : undefined,
             company,
-            text: '',
-            title: '',
+            text: nextCategory === 'company' ? openRequest?.initialText ?? '' : '',
+            title: nextCategory === 'company' ? openRequest?.initialTitle ?? '' : '',
           },
           nextCategory,
         );

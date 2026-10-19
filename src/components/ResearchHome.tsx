@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import Modal from './Modal';
+import DailyCompanyLearning from './DailyCompanyLearning';
 import { useWatchlist } from './WatchlistProvider';
 import { useResearchWorkspace } from './ResearchWorkspaceProvider';
 import type { NoteCompany } from './NoteCompanyPicker';
@@ -140,6 +141,7 @@ export default function ResearchHome() {
   const [preview, setPreview] = useState<WindowEntry | null>(null);
   const [today, setToday] = useState({ iso: '', label: '' });
   const grid = useRef<HTMLDivElement>(null);
+  const intro = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(640);
   const selectedCodes = useMemo(() => watchlist.codesIn(group), [watchlist, group]);
   const symbols = useMemo(() => [...new Set(selectedCodes.flatMap((input) => {
@@ -192,6 +194,7 @@ export default function ResearchHome() {
     const header = document.querySelector('header');
     const observer = new ResizeObserver(measure);
     if (header) observer.observe(header);
+    if (intro.current) observer.observe(intro.current);
     window.addEventListener('resize', measure);
     window.visualViewport?.addEventListener('resize', measure);
     return () => { observer.disconnect(); window.removeEventListener('resize', measure); window.visualViewport?.removeEventListener('resize', measure); };
@@ -218,7 +221,7 @@ export default function ResearchHome() {
 
   function notesPanel(kind: NoteKind) {
     const daily = kind === 'daily', title = daily ? '每日心得' : '公司笔记';
-    return <section aria-labelledby={`home-${kind}-title`} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
+    return <section aria-labelledby={`home-${kind}-title`} className="flex h-[260px] min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white xl:h-auto">
       <div className="flex min-h-12 shrink-0 items-center justify-between gap-2 border-b border-slate-100 px-3 py-1.5">
         <h2 id={`home-${kind}-title`} className={`border-l-2 pl-2 text-sm font-semibold text-slate-800 ${daily ? 'border-teal-500' : 'border-amber-400'}`}>{title}</h2>
         <div className="flex items-center gap-1">
@@ -243,12 +246,15 @@ export default function ResearchHome() {
   }
 
   return <div className="min-w-0">
-    <div className="flex min-h-8 items-center justify-between gap-3 pb-2">
+    <div ref={intro}>
+    <div className="flex min-h-9 items-center justify-between gap-3 pb-2">
       <h1 className="text-base font-semibold tracking-tight text-slate-900">研究工作台</h1>
-      <time dateTime={today.iso || undefined} className="text-[11px] text-slate-400 sm:text-xs">{today.label}</time>
+      <div className="flex items-center gap-4"><Link href="/watchlist" className="hidden text-[11px] text-slate-400 hover:text-brand-700 sm:inline">自选公司 {watchlist.ready ? watchlist.codes.length : '—'}</Link><time dateTime={today.iso || undefined} className="text-[11px] text-slate-400">{today.label}</time></div>
     </div>
-    <div ref={grid} style={{ '--home-height': `${height}px` } as CSSProperties} className="grid min-w-0 gap-3 lg:h-[var(--home-height)] lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-      <section aria-labelledby="home-announcements-title" className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
+    </div>
+    <div ref={grid} style={{ '--home-height': `${height}px` } as CSSProperties} className="grid min-w-0 gap-3 lg:grid-cols-2 xl:h-[var(--home-height)] xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1.2fr)_minmax(240px,.8fr)]">
+      <DailyCompanyLearning today={today.iso}/>
+      <section aria-labelledby="home-announcements-title" className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
         <div className="flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-1.5">
           <h2 id="home-announcements-title" className="border-l-2 border-blue-500 pl-2 text-sm font-semibold text-slate-800">公司动态</h2>
           <div className="flex min-w-0 items-center gap-1.5">
@@ -262,18 +268,18 @@ export default function ResearchHome() {
             <button type="button" disabled={loading || !symbols.length} onClick={() => setRefresh((value) => value + 1)} className={textAction}>刷新</button>
           </div>
         </div>
-        <div tabIndex={0} role="region" aria-label="本批公司动态" aria-busy={loading} className="max-h-[26rem] min-h-0 flex-1 overflow-y-auto overscroll-contain focus-visible:outline-offset-[-2px] lg:max-h-none">
+        <div tabIndex={0} role="region" aria-label="本批公司动态" aria-busy={loading} className="max-h-[26rem] min-h-0 flex-1 overflow-y-auto overscroll-contain focus-visible:outline-offset-[-2px] lg:max-h-[40rem] xl:max-h-none">
           {loading ? <p role="status" className="px-3 py-10 text-center text-xs text-slate-400">正在读取公司动态…</p>
             : currentFeed?.error ? <div className="flex items-center justify-center gap-2 px-3 py-10"><span role="alert" className="text-xs text-amber-800">{currentFeed.error}</span><button type="button" className={textAction} onClick={() => setRefresh((value) => value + 1)}>重试</button></div>
             : !symbols.length ? <div className="space-y-2 px-3 py-10 text-center text-xs text-slate-400"><p>{hasHongKong ? '港股公司公告暂未接入' : selectedCodes.length ? '当前分组暂无 A 股公司' : '暂无自选公司'}</p>{!selectedCodes.length && <Link href="/watchlist" className="inline-flex min-h-8 items-center rounded px-2 text-brand-700 hover:bg-brand-50">前往自选公司</Link>}</div>
             : shown.length === 0 ? <p className="px-3 py-10 text-center text-xs text-slate-400">{importantOnly ? '本批暂无可用重点动态' : '本批暂无可用动态'}</p>
-            : <ol className="divide-y divide-slate-100">{shown.map((entry) => <li key={`${entry.symbol}:${entry.artCode}`} className="px-3 py-2.5">
+            : <ol className="divide-y divide-slate-100">{shown.map((entry) => <li key={`${entry.symbol}:${entry.artCode}`} className="px-3 py-2.5 transition-colors hover:bg-slate-50/70">
               <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
                 <Link prefetch={false} href={`/stock/${entry.symbol}`} className="max-w-[180px] truncate font-medium text-slate-700 hover:text-brand-700 hover:underline">{entry.name}</Link>
                 <time dateTime={entry.date} className="text-[11px] tabular-nums text-slate-400">{entry.date}</time>
                 {entry.important && <span className="rounded bg-amber-50 px-1 text-[10px] text-amber-800">重点</span>}
               </div>
-              <button type="button" aria-haspopup="dialog" onClick={() => setPreview(entry)} className="mt-1 block w-full rounded text-left text-[13px] leading-5 text-slate-700 hover:text-brand-700 focus-visible:outline-offset-2">{entry.title}</button>
+              <button type="button" aria-haspopup="dialog" onClick={() => setPreview(entry)} className="mt-1 line-clamp-2 w-full rounded text-left text-[12px] leading-5 text-slate-700 hover:text-brand-700 focus-visible:outline-offset-2">{entry.title}</button>
             </li>)}</ol>}
         </div>
         <div className="flex min-h-10 shrink-0 flex-wrap items-center justify-between gap-1 border-t border-slate-100 px-3 py-1 text-[11px] text-slate-400">
@@ -284,7 +290,7 @@ export default function ResearchHome() {
           </div>
         </div>
       </section>
-      <div className="flex min-h-0 min-w-0 flex-col gap-3">
+      <div className="flex min-h-0 min-w-0 flex-col gap-3 lg:col-span-2 lg:flex-row xl:col-span-1 xl:flex-col">
         {notesPanel('company')}
         {notesPanel('daily')}
       </div>

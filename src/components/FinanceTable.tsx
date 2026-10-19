@@ -8,6 +8,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import FieldPicker, { allFieldMetas, type PickerCatalog } from '@/components/FieldPicker';
 import { INDICATORS } from '@/lib/datasource/sinaFinancial';
 import { financeStorageKey, sanitizeFields, takeLegacyHkMergeFields } from '@/lib/financePreferences';
+import type { FinancialReportLink } from '@/lib/financialReportLinks';
 import {
   financialUnitText,
   formatFinancialValue as fmtVal,
@@ -115,6 +116,8 @@ export default function FinanceTable({ code }: { code: string }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [onlyHasData, setOnlyHasData] = useState(true);
   const [selectedReportKind, setSelectedReportKind] = useState<ReportKind | null>(null);
+  const [originals, setOriginals] = useState<{ key: string; items: FinancialReportLink[]; failed: boolean }>({ key: '', items: [], failed: false });
+  const [originalRetry, setOriginalRetry] = useState(0);
   const bootedRef = useRef(false);
   const tableRef = useRef<HTMLDivElement>(null);
   const [tableHeight, setTableHeight] = useState<number>();
@@ -277,6 +280,28 @@ export default function FinanceTable({ code }: { code: string }) {
   /** 列（报告期）以主公司为准，倒序 = 最新在左 */
   const periodsAsc = primary?.periods ?? [];
   const labelsAsc = primary?.periodLabels ?? [];
+  const isHk = fieldsKey.endsWith('.hk');
+  const annualPeriods = periodsAsc.filter(period => reportKindOf(period, primary?.periodKinds) === 'annual');
+  const calendarYear = annualPeriods.length > 0 && annualPeriods.every(period => period.endsWith('-12-31'));
+  const originalKey = `${code}:${isHk ? calendarYear : false}`;
+  const canLookupOriginals = !isHk || !!primary;
+  useEffect(() => {
+    if (!canLookupOriginals) return;
+    const controller = new AbortController();
+    setOriginals({ key: originalKey, items: [], failed: false });
+    fetch(`/api/financial-reports?${new URLSearchParams({ code, calendarYear: isHk && calendarYear ? '1' : '0' })}`, { signal: controller.signal })
+      .then(async response => {
+        const result = await response.json();
+        if (!response.ok || !result.ok || !Array.isArray(result.data)) throw Error('原文目录加载失败');
+        if (!controller.signal.aborted) setOriginals({ key: originalKey, items: result.data, failed: false });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setOriginals({ key: originalKey, items: [], failed: true });
+      });
+    return () => controller.abort();
+  }, [code, originalKey, canLookupOriginals, originalRetry]);
+  const originalOf = (period: string, kind: ReportKind | null) => originals.key === originalKey
+    ? originals.items.find(item => item.period === period && item.kind === kind) : undefined;
   /** 列标题按当前粒度口径改写：年报视图的 12-31 显示「年报」，中报视图显示「中报」 */
   const labelOf = (period: string, raw: string): string => {
     if (primary?.periodKinds) return raw;
@@ -446,9 +471,14 @@ export default function FinanceTable({ code }: { code: string }) {
               </button>
             ))}
           </div>
-          <span className="hidden text-xs font-medium text-slate-500 sm:block">
-            {primary?.name ?? code}{primary?.currency ? ` · ${primary.currency}` : ''}
-          </span>
+          <div className="flex items-center gap-3 text-xs text-slate-500">
+            {originals.key === originalKey && originals.failed && (
+              <button type="button" onClick={() => setOriginalRetry(value => value + 1)} className="text-slate-500 hover:text-brand-700" title="重新加载近两年财报原文目录">
+                原文暂不可用 · 重试
+              </button>
+            )}
+            <span className="hidden font-medium sm:block">{primary?.name ?? code}{primary?.currency ? ` · ${primary.currency}` : ''}</span>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 px-3 py-2">
           <div className="segmented" role="group" aria-label="报告类型">
@@ -549,24 +579,44 @@ export default function FinanceTable({ code }: { code: string }) {
                     ）
                   </span>
                 </th>
-                {colsDesc.map((c, index) => (
+                {colsDesc.map((c, index) => {
+                  const original = originalOf(c.p, c.kind);
+                  return (
                   <th
                     key={c.p}
                     scope="col"
                     {...reportProps(c.p, index)}
                     className="min-w-[92px] border-b border-l border-slate-200 bg-slate-50 px-2.5 py-2 text-center font-semibold text-slate-700"
                   >
+                    <div className="flex items-center justify-center gap-1">
                     <button
                       type="button"
                       disabled={c.kind === null}
                       aria-pressed={c.kind !== null && selectedReportKind === c.kind}
                       onClick={() => setSelectedReportKind((current) => current === c.kind ? null : c.kind)}
-                      className="block w-full rounded-sm text-center hover:text-brand-700 disabled:cursor-default disabled:hover:text-inherit"
+                      className="rounded-sm text-center hover:text-brand-700 disabled:cursor-default disabled:hover:text-inherit"
                     >
                       {c.label}
                     </button>
+                    {original && (
+                      <a
+                        href={original.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`查看${original.title}原文`}
+                        title={`${original.title}${original.revised ? ' · 修订版' : ''}\n披露日期：${original.publishedAt} · ${original.source}\n新标签页打开 PDF`}
+                        onClick={event => event.stopPropagation()}
+                        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-slate-400 transition hover:bg-brand-100 hover:text-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+                      >
+                        <svg aria-hidden="true" width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M11.5 3.5h5v5m0-5-8 8M8 4.5H4.5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V12" />
+                        </svg>
+                      </a>
+                    )}
+                    </div>
                   </th>
-                ))}
+                  );
+                })}
               </tr>
             </thead>
             {loading && (

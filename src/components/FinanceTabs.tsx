@@ -12,11 +12,13 @@ import FinanceTable from './FinanceTable';
 export default function FinanceTabs({
   code,
   heading,
+  initialView = 'chart',
 }: {
   code: string;
   heading?: React.ReactNode;
+  initialView?: 'chart' | 'table';
 }) {
-  const [view, setView] = useState<'chart' | 'table'>('chart');
+  const [view, setView] = useState<'chart' | 'table'>(initialView);
 
   const TABS = [
     ['chart', '指标趋势'],

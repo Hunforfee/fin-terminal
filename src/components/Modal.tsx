@@ -67,6 +67,8 @@ export default function Modal({
       aria-label={bare ? title : undefined}
       onCancel={(event) => {
         event.preventDefault();
+        // Escape should close only the uppermost nested dialog.
+        event.stopPropagation();
         onClose();
       }}
       onClick={(event) => {

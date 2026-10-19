@@ -122,7 +122,7 @@ interface ReportItem {
   rating: string | null;
   targetPrice: number | null;
 }
-interface Report {
+export interface CompanyAnalysisReport {
   name: string;
   code: string;
   market: string;
@@ -192,43 +192,58 @@ export default function AiAnalysisPanel({
   name,
   code,
   market = 'A',
+  embedded = false,
+  onReady,
 }: {
   name: string;
   code: string;
   market?: string;
+  /** Reuse the same analysis in the daily-company reader without a nested modal. */
+  embedded?: boolean;
+  onReady?: (report: CompanyAnalysisReport | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [report, setReport] = useState<Report | null>(null);
+  const [report, setReport] = useState<CompanyAnalysisReport | null>(null);
+  const [attempt, setAttempt] = useState(0);
   /** 当前高亮的导航板块（跟随滚动位置） */
   const [active, setActive] = useState<string>(SECTIONS[0].id);
   const bodyRef = useRef<HTMLDivElement>(null);
   const nonce = useRef(0);
 
   useEffect(() => {
-    if (!open || report) return;
+    if (!open && !embedded) return;
     const id = ++nonce.current;
+    const controller = new AbortController();
     setLoading(true);
     setErr(null);
+    setReport(null);
     fetch(
       `/api/analysis?code=${encodeURIComponent(code)}&name=${encodeURIComponent(
         name,
       )}&market=${market}`,
+      { signal: controller.signal },
     )
       .then((r) => r.json())
       .then((d) => {
-        if (id !== nonce.current) return;
+        if (controller.signal.aborted || id !== nonce.current) return;
         if (d?.error) setErr(d.error);
         else setReport(d);
         setLoading(false);
       })
       .catch((e) => {
-        if (id !== nonce.current) return;
+        if (controller.signal.aborted || id !== nonce.current) return;
         setErr(String(e));
         setLoading(false);
       });
-  }, [open, report, code, name, market]);
+    return () => { controller.abort(); nonce.current++; };
+  }, [open, embedded, code, name, market, attempt]);
+
+  useEffect(() => {
+    onReady?.(report);
+    return () => onReady?.(null);
+  }, [report, onReady]);
 
   const askYuanbao = async () => {
     const text = `【${name}（${code}）】\n\n${DEFAULT_PROMPT.replaceAll(
@@ -244,8 +259,8 @@ export default function AiAnalysisPanel({
   const jumpTo = (id: string) => {
     // 平滑滚动期间锁定高亮，避免动画中途的中间态覆盖点击项
     jumpLock.current = Date.now() + 900;
-    document
-      .getElementById(id)
+    bodyRef.current
+      ?.querySelector<HTMLElement>(`#${id}`)
       ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setActive(id);
   };
@@ -253,7 +268,7 @@ export default function AiAnalysisPanel({
   // 滚动高亮：监听弹窗内容滚动容器（Modal 内容区），同步当前板块
   useEffect(() => {
     const body = bodyRef.current;
-    if (!open || !body) return;
+    if ((!open && !embedded) || !body) return;
     let container: HTMLElement | null = body.parentElement;
     while (container) {
       const oy = getComputedStyle(container).overflowY;
@@ -269,7 +284,7 @@ export default function AiAnalysisPanel({
       let best: string = SECTIONS[0].id;
       let bestVis = -1;
       for (const s of SECTIONS) {
-        const el = document.getElementById(s.id);
+        const el = body.querySelector<HTMLElement>(`#${s.id}`);
         if (!el) continue;
         const r = el.getBoundingClientRect();
         const vis = Math.min(r.bottom, rect.bottom) - Math.max(r.top, rect.top);
@@ -283,7 +298,7 @@ export default function AiAnalysisPanel({
     container.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
     return () => container.removeEventListener('scroll', onScroll);
-  }, [open, report]);
+  }, [open, embedded, report]);
 
   const biz = report?.business;
   const pre = report?.pre ?? null;
@@ -307,29 +322,8 @@ export default function AiAnalysisPanel({
     return !!report?.profile;
   });
 
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        title="查看 AI 深度解析：业务与模式、护城河、竞争对手、市场多空观点、营收构成"
-        className="btn border-brand-200 text-brand-700 hover:border-brand-300 hover:bg-brand-50"
-      >
-        AI 分析
-      </button>
-
-      <Modal
-        open={open}
-        title={`${name} · AI 分析`}
-        onClose={() => {
-          setOpen(false);
-          setReport(null);
-          setActive(SECTIONS[0].id);
-        }}
-        size="lg"
-        maximizable
-        nav={
-          navItems.length > 1 ? (
+  const navigation = (
+    navItems.length > 1 ? (
             <nav
               aria-label="分析板块导航"
               className="flex flex-wrap items-center gap-x-3 gap-y-1 pr-2"
@@ -351,9 +345,9 @@ export default function AiAnalysisPanel({
               ))}
             </nav>
           ) : undefined
-        }
-      >
-        <div className="space-y-5" ref={bodyRef}>
+  );
+  const body = (
+    <div className="space-y-5" ref={bodyRef}>
           {loading && (
             <div className="flex items-center gap-3 py-10 text-sm text-slate-500">
               <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-brand-600" />
@@ -364,6 +358,7 @@ export default function AiAnalysisPanel({
           {err && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               分析生成失败：{err}
+              <button type="button" onClick={() => setAttempt(value => value + 1)} className="ml-3 underline">重试</button>
             </div>
           )}
 
@@ -595,6 +590,39 @@ export default function AiAnalysisPanel({
             </>
           )}
         </div>
+  );
+
+  if (embedded) return (
+    <div className="min-w-0 px-4 pb-5 sm:px-6 [&_section]:scroll-mt-24">
+      {navigation && <div className="sticky top-0 z-10 -mx-4 mb-4 border-b border-slate-200 bg-white/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6">{navigation}</div>}
+      {body}
+    </div>
+  );
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        title="查看 AI 深度解析：业务与模式、护城河、竞争对手、市场多空观点、营收构成"
+        className="btn border-brand-200 text-brand-700 hover:border-brand-300 hover:bg-brand-50"
+      >
+        AI 分析
+      </button>
+
+      <Modal
+        open={open}
+        title={`${name} · AI 分析`}
+        onClose={() => {
+          setOpen(false);
+          setReport(null);
+          setActive(SECTIONS[0].id);
+        }}
+        size="lg"
+        maximizable
+        nav={navigation}
+      >
+        {body}
       </Modal>
     </>
   );

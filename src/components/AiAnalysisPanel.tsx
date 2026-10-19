@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Modal from './Modal';
+import { getPreAnalysis } from '@/data/analyses';
 
 const YUANBAO_URL = 'https://yuanbao.tencent.com/';
 
@@ -55,14 +56,6 @@ interface Report {
   generatedAt: string;
 }
 
-function fmtYi(n: number | null): string {
-  if (n == null) return '—';
-  return `${(n / 1e8).toFixed(2)} 亿`;
-}
-function pct(x: number | null): string {
-  if (x == null) return '—';
-  return `${(x * 100).toFixed(1)}%`;
-}
 function ratingClass(r: string | null): string {
   if (!r) return 'bg-slate-100 text-slate-600';
   if (/买入|推荐|强烈/.test(r)) return 'bg-emerald-100 text-emerald-700';
@@ -70,18 +63,6 @@ function ratingClass(r: string | null): string {
   if (/中性|持有|观望/.test(r)) return 'bg-slate-100 text-slate-600';
   if (/减持|卖出|回避/.test(r)) return 'bg-rose-100 text-rose-700';
   return 'bg-slate-100 text-slate-600';
-}
-
-/** 将经营评述的长文本按（一）（二）… 拆分为带小标题的段落，便于阅读 */
-function splitReview(text: string): { head: string; body: string }[] {
-  return text
-    .split(/(?=（[一二三四五六七八九十]+）)/)
-    .map((p) => {
-      const m = p.match(/^（([一二三四五六七八九十]+)）\s*([\s\S]*)$/);
-      if (m) return { head: `（${m[1]}）`, body: m[2].trim() };
-      return { head: '', body: p.trim() };
-    })
-    .filter((x) => x.body.length > 0);
 }
 
 async function copyText(text: string): Promise<boolean> {
@@ -120,6 +101,7 @@ export default function AiAnalysisPanel({
   const [report, setReport] = useState<Report | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [reviewExpanded, setReviewExpanded] = useState(false);
+  const [compTab, setCompTab] = useState(0);
   const nonce = useRef(0);
 
   useEffect(() => {
@@ -156,13 +138,7 @@ export default function AiAnalysisPanel({
   };
 
   const biz = report?.business;
-  const summaryText = biz?.summary ?? '';
-  const shownSummary =
-    expanded || summaryText.length <= 240
-      ? summaryText
-      : `${summaryText.slice(0, 240)}…`;
-
-  const reviewSections = biz?.review ? splitReview(biz.review) : [];
+  const pre = getPreAnalysis(code);
   const hasBiz =
     biz && (biz.summary || biz.review || (biz.groups && biz.groups.length > 0));
 
@@ -185,6 +161,7 @@ export default function AiAnalysisPanel({
           setReport(null);
           setExpanded(false);
           setReviewExpanded(false);
+          setCompTab(0);
         }}
         size="lg"
         maximizable
@@ -207,133 +184,86 @@ export default function AiAnalysisPanel({
             <>
               {hasBiz && (
                 <section>
-                  <h3 className="mb-2 text-sm font-semibold text-slate-900">
-                    主营业务
+                  <h3 className="mb-1.5 text-sm font-semibold text-slate-900">
+                    业务与行业地位
                   </h3>
 
-                  {biz!.industry && (
+                  {(pre?.industry || biz!.industry) && (
                     <div className="mb-2">
                       <span className="inline-flex items-center rounded-md bg-brand-50 px-2 py-0.5 text-[12px] font-medium text-brand-700">
-                        所属行业：{biz!.industry}
+                        {pre?.industry || biz!.industry}
                       </span>
                     </div>
                   )}
 
-                  {biz!.summary && (
-                    <p className="whitespace-pre-line text-[13px] leading-6 text-slate-700">
-                      {shownSummary}
-                      {summaryText.length > 240 && (
-                        <button
-                          type="button"
-                          onClick={() => setExpanded((v) => !v)}
-                          className="ml-1 align-baseline text-brand-600 hover:underline"
-                        >
-                          {expanded ? '收起' : '展开全文'}
-                        </button>
-                      )}
-                    </p>
+                  <div className="whitespace-pre-line text-[13px] leading-6 text-slate-700">
+                    {pre?.summary || biz!.summary || '暂无数据'}
+                  </div>
+                  {pre?.source && (
+                    <p className="mt-1 text-[11px] text-slate-400">{pre.source}</p>
                   )}
 
-                  {biz!.review && (
+                  {biz!.groups && biz!.groups.length > 0 && (
                     <div className="mt-3">
                       <div className="mb-1.5 flex items-center justify-between">
-                        <span className="text-[12px] font-medium text-slate-600">
-                          经营评述
-                          {biz!.reviewDate && (
-                            <span className="ml-1 text-slate-400">
-                              （{biz!.reviewDate}）
-                            </span>
-                          )}
+                        <span className="text-[12px] font-semibold text-slate-900">
+                          营收构成
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => setReviewExpanded((v) => !v)}
-                          className="text-[12px] text-brand-600 hover:underline"
-                        >
-                          {reviewExpanded ? '收起' : '展开全文'}
-                        </button>
+                        {biz!.groups[compTab]?.date && (
+                          <span className="text-[11px] text-slate-400">
+                            {biz!.groups[compTab].date} 口径
+                          </span>
+                        )}
                       </div>
-                      <div
-                        className={
-                          reviewExpanded
-                            ? 'space-y-2.5'
-                            : 'max-h-72 space-y-2.5 overflow-y-auto pr-1'
-                        }
-                      >
-                        {reviewSections.map((s, i) => (
-                          <p
+                      <div className="mb-2 flex flex-wrap gap-1">
+                        {biz!.groups.map((g, i) => (
+                          <button
                             key={i}
-                            className="text-[13px] leading-6 text-slate-700"
+                            type="button"
+                            onClick={() => setCompTab(i)}
+                            className={
+                              compTab === i
+                                ? 'rounded px-2 py-0.5 text-[11px] font-medium bg-brand-50 text-brand-700'
+                                : 'rounded px-2 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100'
+                            }
                           >
-                            {s.head && (
-                              <span className="font-semibold text-slate-900">
-                                {s.head}
-                              </span>
-                            )}
-                            {s.body}
-                          </p>
+                            {g.label}
+                          </button>
                         ))}
+                      </div>
+                      <div className="space-y-1.5">
+                        {biz!.groups[compTab]?.items.map((s, i) => {
+                          const w = Math.max(
+                            0,
+                            Math.min(100, (s.incomeRatio ?? 0) * 100),
+                          );
+                          return (
+                            <div key={i}>
+                              <div className="flex items-baseline justify-between gap-2 text-[12px] leading-5">
+                                <span className="truncate text-slate-700">
+                                  {s.name}
+                                </span>
+                                <span className="shrink-0 tabular-nums text-slate-500">
+                                  {s.incomeRatio != null
+                                    ? `${(s.incomeRatio * 100).toFixed(1)}%`
+                                    : '—'}
+                                  {s.grossMargin != null
+                                    ? ` · 毛利${(s.grossMargin * 100).toFixed(0)}%`
+                                    : ''}
+                                </span>
+                              </div>
+                              <div className="mt-1 h-1.5 w-full overflow-hidden rounded bg-slate-100">
+                                <div
+                                  className="h-1.5 rounded bg-brand-500"
+                                  style={{ width: `${w}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
-
-                  {biz!.groups?.map((g, gi) => {
-                    const showMargin = g.items.some(
-                      (s) => s.grossMargin != null,
-                    );
-                    return (
-                      <div
-                        key={gi}
-                        className="mt-3 overflow-hidden rounded-lg border border-slate-200"
-                      >
-                        <div className="flex items-center justify-between bg-slate-50 px-3 py-2 text-[12px] font-medium text-slate-600">
-                          <span>主营构成 · {g.label}</span>
-                          {g.date && (
-                            <span className="text-slate-400">{g.date}</span>
-                          )}
-                        </div>
-                        <table className="w-full text-[13px]">
-                          <thead>
-                            <tr className="text-left text-xs text-slate-500">
-                              <th className="px-3 py-2 font-medium">项目</th>
-                              <th className="px-3 py-2 text-right font-medium">
-                                营收
-                              </th>
-                              <th className="px-3 py-2 text-right font-medium">
-                                收入占比
-                              </th>
-                              {showMargin && (
-                                <th className="px-3 py-2 text-right font-medium">
-                                  毛利率
-                                </th>
-                              )}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {g.items.map((s, i) => (
-                              <tr
-                                key={i}
-                                className="border-t border-slate-100 text-slate-700"
-                              >
-                                <td className="px-3 py-2">{s.name}</td>
-                                <td className="px-3 py-2 text-right tabular-nums">
-                                  {fmtYi(s.income)}
-                                </td>
-                                <td className="px-3 py-2 text-right tabular-nums">
-                                  {pct(s.incomeRatio)}
-                                </td>
-                                {showMargin && (
-                                  <td className="px-3 py-2 text-right tabular-nums">
-                                    {pct(s.grossMargin)}
-                                  </td>
-                                )}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    );
-                  })}
                 </section>
               )}
 

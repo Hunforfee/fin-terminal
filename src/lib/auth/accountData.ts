@@ -72,11 +72,11 @@ function writeStore(store: Store): void {
 
 /* ---------------- Postgres 分支（配置 DATABASE_URL 时启用） ---------------- */
 
-let pool: import('pg').Pool | null = null;
+let pool: any | null = null;
 let initialized: Promise<void> | null = null;
 
-async function database(): Promise<import('pg').Pool> {
-  const { Pool } = await import('pg');
+async function database(): Promise<any> {
+  const { Pool } = await import(/* webpackIgnore: true */ 'pg');
   pool ??= new Pool({
     connectionString: process.env.DATABASE_URL,
     max: 5,

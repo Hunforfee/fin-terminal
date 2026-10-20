@@ -15,19 +15,18 @@
     "analyses:index": "node scripts/sync-analysis-index.mjs"
   },
   "dependencies": {
+    "@tencent-ai/workbuddy-cloud-sdk": "dev",
     "@types/nodemailer": "^8.0.2",
     "echarts": "^5.5.1",
     "next": "15.5.28",
     "nodemailer": "^10.1.2",
     "opencc-js": "1.4.2",
-    "pg": "8.23.1",
     "react": "19.2.5",
     "react-dom": "19.2.5",
     "xlsx": "npm:@e965/xlsx@0.20.3"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
-    "@types/pg": "8.23.1",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
     "autoprefixer": "^10.4.20",

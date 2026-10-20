@@ -4,6 +4,7 @@ import { fetchBusiness } from '@/lib/datasource/business';
 import { fetchReports } from '@/lib/datasource/research';
 import { getPreAnalysis } from '@/data/analyses';
 import { normalizeStockCode } from '@/lib/datasource/codes';
+import { simplifiedChinese } from '@/lib/simplifiedChinese';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
       fetchReports(code, market).catch(() => []),
     ]);
 
-    return NextResponse.json({
+    const payload = {
       name: name && !/^(?:(?:sh|sz|bj|hk))?\d{1,6}(?:\.(?:sh|sz|bj|hk))?$/i.test(name) ? name : pre?.fullName || name || code,
       code,
       market,
@@ -43,12 +44,13 @@ export async function GET(req: NextRequest) {
             industry: profile.industry,
             industryPath: profile.industryPath,
           }
-        : null,
-      business,
+        : pre ? { holder: null, holderRatio: null, controller: null, industry: pre.industry, industryPath: pre.industry } : null,
+      business: business?.groups?.length ? business : pre?.businessSnapshot || business,
       reports,
       reportCount: reports.length,
       generatedAt: new Date().toISOString(),
-    });
+    };
+    return NextResponse.json(market === 'HK' ? simplifiedChinese(payload) : payload);
   } catch (e: any) {
     return NextResponse.json(
       { error: String(e?.message ?? e) },

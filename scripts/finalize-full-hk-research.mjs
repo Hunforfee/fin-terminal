@@ -1,0 +1,13 @@
+import fs from 'node:fs/promises';
+import crypto from 'node:crypto';
+import {simplified} from './hk-simplified.mjs';
+const file='docs/full-hk-research.json',b=JSON.parse(await fs.readFile(file,'utf8'));
+for(const [code,sha]of Object.entries(b.baselineExisting))if(crypto.createHash('sha256').update(await fs.readFile(`src/data/analyses/${code}.json`)).digest('hex')!==sha)throw Error('Existing analysis changed: '+code);
+b.preservation={baselineFiles:5825,allHashesMatched:true};b.created=b.companies.filter(x=>x.analysisStatus==='draft').length;
+b.companies=b.companies.map(simplified);await fs.writeFile(file,JSON.stringify(b,null,2)+'\n');
+const gaps=b.companies.filter(x=>x.analysisStatus!=='draft');
+for(const t of gaps)if(t.code==='00362')t.sourceLeads=[{label:'2024年报（历史资料，不代表当前经营情况）',url:'https://www.hkexnews.hk/listedco/listconews/sehk/2024/1101/2024110103555.pdf'},{label:'2025年3月停牌通告（历史事件，需核对后续公告）',url:'https://www.hkexnews.hk/listedco/listconews/sehk/2025/0317/2025031700178_c.htm'}];
+await fs.writeFile(file,JSON.stringify(b,null,2)+'\n');
+await fs.writeFile('docs/full-hk-source-gaps.json',JSON.stringify({asOf:b.asOf,gaps},null,2)+'\n');
+const md=`# 新增港股研究稿\n\n日期：${b.asOf}。本地新增 ${b.created}/${b.requested} 家；原5825份解析哈希未变，未上传Git。\n\n全部新增文字为简体中文。公司资料与分业务框架整理不等于逐家公司完成原文人工复核，来源、币种及分部任务保留。\n\n资料缺口：${gaps.map(x=>x.name+' '+x.code+'：'+x.gaps.join('；')).join('。')||'无阻塞缺口'}。缺项不填造比例或金额，后续从公司网站及披露易取得新原文后继续。\n\n|公司|代码|本地预览|\n|---|---|---|\n`+b.companies.filter(x=>x.analysisStatus==='draft').map(x=>`|${x.name}|${x.code}|[查看](http://127.0.0.1:3101/?learn=${x.code}&preview=full-hk)|`).join('\n')+'\n';
+await fs.writeFile('docs/full-hk-research.md',md);console.log(JSON.stringify({created:b.created,requested:b.requested,gaps:gaps.map(x=>x.code),preserved:5825}));

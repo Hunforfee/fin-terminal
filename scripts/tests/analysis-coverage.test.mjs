@@ -46,7 +46,8 @@ test('business frameworks use leaf industries and issuer-specific exceptions',()
 });
 test('all 170 new drafts retain source identities, frozen ratios and unresolved verification tasks',()=>{
   const dir=new URL('../../src/data/analyses/',import.meta.url);
-  const rows=fs.readdirSync(dir).filter(file=>/^\d{5}\.json$/.test(file)).map(file=>JSON.parse(fs.readFileSync(new URL(file,dir),'utf8'))).filter(row=>row.researchStatus==='draft');
+  const hkBatch=JSON.parse(fs.readFileSync(new URL('../../docs/full-hk-research.json',import.meta.url),'utf8'));
+  const rows=fs.readdirSync(dir).filter(file=>/^\d{5}\.json$/.test(file)&&hkBatch.baselineExisting[file.slice(0,-5)]).map(file=>JSON.parse(fs.readFileSync(new URL(file,dir),'utf8'))).filter(row=>row.researchStatus==='draft');
   assert.equal(rows.length,170);
   for(const row of rows){
     assert.deepEqual(validateAnalysis(row,row.code,date),[],row.code);

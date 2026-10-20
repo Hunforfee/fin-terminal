@@ -1,0 +1,2 @@
+# Research hashes must remain stable across Windows and Linux checkouts.
+src/data/analyses/*.json text eol=lf

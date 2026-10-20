@@ -1,0 +1,40 @@
+{
+  "asOf": "2026-10-20",
+  "gaps": [
+    {
+      "code": "00362",
+      "market": "HK",
+      "name": "中国天化工",
+      "industry": "电力公用事业",
+      "industryPath": [
+        "公用事业",
+        "公用事业",
+        "电力公用事业"
+      ],
+      "listingDate": "2001-05-02",
+      "status": "collected",
+      "sourceErrors": [
+        {
+          "source": "announcements",
+          "error": "HTTP 567"
+        }
+      ],
+      "reports": 0,
+      "businessGuide": "power",
+      "readiness": "source-gap",
+      "gaps": [
+        "缺少具体主营业务说明"
+      ],
+      "sourceLeads": [
+        {
+          "label": "2024年报（历史资料，不代表当前经营情况）",
+          "url": "https://www.hkexnews.hk/listedco/listconews/sehk/2024/1101/2024110103555.pdf"
+        },
+        {
+          "label": "2025年3月停牌通告（历史事件，需核对后续公告）",
+          "url": "https://www.hkexnews.hk/listedco/listconews/sehk/2025/0317/2025031700178_c.htm"
+        }
+      ]
+    }
+  ]
+}

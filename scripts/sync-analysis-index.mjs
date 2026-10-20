@@ -14,6 +14,13 @@ for (const code of codes) {
 }
 if (process.argv.includes('--check')) { console.log(JSON.stringify({ unregistered: codes })); if (codes.length) process.exitCode = 1; }
 else if (codes.length) {
+ if(index.includes('export const ANALYSIS_FILES:')){
+  const marker='\n};\nconst cache';
+  const end=index.indexOf(marker);
+  if(end<0)throw Error('Lazy registry shape changed');
+  index=index.slice(0,end)+'\n'+codes.map(code=>`  '${code}': '${code}.json',`).join('\n')+index.slice(end);
+  await fs.writeFile(target,index);console.log(`Registered ${codes.length} analysis files`);
+ } else {
   const imports = codes.map(code => `import coverage${code} from './${code}.json';`).join('\n');
   const first = index.indexOf('import c');
   const end = index.indexOf('\n};\n\nexport function getPreAnalysis');
@@ -22,4 +29,5 @@ else if (codes.length) {
   index = index.slice(0,first) + imports + '\n' + index.slice(first);
   await fs.writeFile(target,index);
   console.log(`Registered ${codes.length} analysis files`);
+ }
 } else console.log('All analysis files are already registered');

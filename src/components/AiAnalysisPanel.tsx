@@ -3,36 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Modal from './Modal';
+import type { PreAnalysis, ViewPoint } from '@/data/analyses';
 
 /** 预生成深度解析的数据结构（由 /api/analysis 下发，避免打进客户端包） */
-interface ViewPoint {
-  point: string;
-  detail: string;
-}
-interface Competitor {
-  name: string;
-  code?: string;
-  note: string;
-}
-interface PreAnalysis {
-  code: string;
-  researchStatus?: 'draft' | 'reviewed';
-  viewBasis?: 'research_hypotheses' | 'institutional_views';
-  sources?: { id: string; label: string; url: string; kind: 'issuer' | 'disclosure' | 'aggregate'; retrievedAt: string }[];
-  verificationTasks?: string[];
-  fullName?: string;
-  industry: string;
-  position?: string;
-  summary: string;
-  moat?: ViewPoint[];
-  competitors?: Competitor[];
-  bullCase?: ViewPoint[];
-  bearCase?: ViewPoint[];
-  ratingSummary?: { buy: number; hold: number; sell: number };
-  targetPriceRange?: { min: number; max: number };
-  source: string;
-  generatedAt: string;
-}
 
 const YUANBAO_URL = 'https://yuanbao.tencent.com/';
 
@@ -329,16 +302,16 @@ export default function AiAnalysisPanel({
   const navItems = SECTIONS.filter((s) => {
     if (s.id === 'sec-business') return !!hasContent;
     if (s.id === 'sec-moat') return !!pre?.moat?.length;
-    if (s.id === 'sec-competitors') return !!pre?.competitors?.length;
+    if (s.id === 'sec-competitors') return !!pre?.competitors?.length || pre?.researchStatus === 'draft';
     if (s.id === 'sec-views')
       return !!(
         (pre?.bullCase && pre.bullCase.length > 0) ||
         (pre?.bearCase && pre.bearCase.length > 0)
       );
     if (s.id === 'sec-revenue')
-      return !!(biz?.groups && biz.groups.length > 0);
+      return !!(biz?.groups?.length || pre?.businessSnapshot);
     return !!report?.profile;
-  }).map(s => pre?.viewBasis === 'research_hypotheses' && s.id === 'sec-views' ? { ...s, label: '研究假设' } : pre?.researchStatus === 'draft' && s.id === 'sec-moat' ? { ...s, label: '优势线索' } : pre?.researchStatus === 'draft' && s.id === 'sec-competitors' ? { ...s, label: '同行对照' } : s);
+  });
 
   const navigation = (
     navItems.length > 1 ? (
@@ -388,7 +361,6 @@ export default function AiAnalysisPanel({
                     <h3 className="text-sm font-semibold text-slate-900">
                       业务与模式
                     </h3>
-                    {pre?.researchStatus === 'draft' && <span className="text-[11px] font-medium text-amber-700">研究稿 · 待复核</span>}
                     {(pre?.industry || biz?.industry) && (
                       <span className="rounded bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700">
                         {pre?.industry || biz?.industry}
@@ -405,12 +377,16 @@ export default function AiAnalysisPanel({
                   <div className="space-y-2.5 whitespace-pre-line text-[13px] leading-[1.75] text-slate-700">
                     {pre?.summary || biz?.summary || '暂无数据'}
                   </div>
-                  {pre?.source && (
-                    <p className="mt-1 text-[11px] text-slate-400">{pre.source}</p>
-                  )}
                 </section>
               )}
 
+              {pre?.businessSnapshot && !biz?.groups?.length && (
+                <section id="sec-revenue" className="scroll-mt-2">
+                  <h3 className="mb-2 text-sm font-semibold text-slate-900">营收构成</h3>
+                  <p className="text-[12px] leading-5 text-slate-500">未取得可用收入分项，不据此填零或估算占比。</p>
+                  <p className="mt-1 text-[11px] text-slate-400">{pre.businessSnapshot.source}</p>
+                </section>
+              )}
               {biz?.groups && biz?.groups.length > 0 && (
                 <section id="sec-revenue" className="scroll-mt-2">
                   <h3 className="mb-2 text-sm font-semibold text-slate-900">
@@ -484,16 +460,22 @@ export default function AiAnalysisPanel({
               {pre?.moat && pre.moat.length > 0 && (
                 <section id="sec-moat" className="scroll-mt-2">
                   <h3 className="mb-2 text-sm font-semibold text-slate-900">
-                    {pre?.researchStatus === 'draft' ? '优势线索与验证' : '护城河'}
+                    护城河
                   </h3>
                   <PointList items={pre.moat} tone="brand" />
                 </section>
               )}
 
+              {pre?.researchStatus === 'draft' && !pre.competitors?.length && (
+                <section id="sec-competitors" className="scroll-mt-2">
+                  <h3 className="mb-2 text-sm font-semibold text-slate-900">竞争对手对比</h3>
+                  <p className="text-[12px] leading-5 text-slate-500">尚未确认足够可比的公司，需按具体产品、客户与地区补充。</p>
+                </section>
+              )}
               {pre?.competitors && pre.competitors.length > 0 && (
                 <section id="sec-competitors" className="scroll-mt-2">
                   <h3 className="mb-2 text-sm font-semibold text-slate-900">
-                    {pre?.researchStatus === 'draft' ? '同行对照' : '竞争对手对比'}
+                    竞争对手对比
                   </h3>
                   <ul className="divide-y divide-slate-100">
                     {pre.competitors.map((c, i) => (
@@ -519,7 +501,7 @@ export default function AiAnalysisPanel({
                   <section id="sec-views" className="scroll-mt-2">
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <h3 className="text-sm font-semibold text-slate-900">
-                        {pre.viewBasis === 'research_hypotheses' ? '研究假设' : '市场观点'}
+                        市场观点
                       </h3>
                       <div className="flex items-center gap-2 text-[11px]">
                         {pre.ratingSummary && (
@@ -598,9 +580,6 @@ export default function AiAnalysisPanel({
                 {pre.verificationTasks?.length ? <details className="mt-3 text-slate-500"><summary className="cursor-pointer">待核对 {pre.verificationTasks.length} 项</summary><ul className="mt-2 list-disc space-y-1 pl-4">{pre.verificationTasks.map(task => <li key={task} className="leading-5">{task}</li>)}</ul></details> : null}
               </section> : null}
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
-                <p className="text-[11px] leading-4 text-slate-400">
-                  {pre?.researchStatus === 'draft' ? '公司资料与指标线索已整理；原始财报、币种及研究假设仍待复核，未统计机构评级或目标价。' : '数据来源：通达信 F10 深度资料、券商研报及东方财富 F10。内容为基于公开资料的研究整理。'}
-                </p>
                 <button
                   type="button"
                   onClick={askYuanbao}

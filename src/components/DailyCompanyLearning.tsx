@@ -66,7 +66,7 @@ export default function DailyCompanyLearning({ today }: { today: string }) {
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5 pt-5 sm:px-5 xl:overscroll-contain">
         <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1"><h3 className="text-[26px] font-semibold tracking-tight text-slate-900">{company?.name || '今日公司'}</h3>{marked && <span className="rounded bg-teal-50 px-1.5 py-0.5 text-[10px] text-teal-700">已了解</span>}</div>
-        <p className="text-[11px] text-slate-400">{company ? `${company.code} · ${company.industry || '行业待取得'}` : today}{research?.researchStatus === 'draft' && <span className="ml-2 text-amber-700">研究稿 · 待复核</span>}</p>
+        <p className="text-[11px] text-slate-400">{company ? `${company.code} · ${company.industry || '行业待取得'}` : today}</p>
         {learning.error || brief.error ? <p role="alert" className="mt-5 text-xs leading-6 text-amber-700">{learning.error || brief.error}</p> : !learning.ready || brief.loading ? <p className="py-10 text-xs text-slate-400">正在准备今日公司…</p> : <>
           <p className="mt-5 text-[15px] font-medium leading-7 text-slate-800">{introduction || '从业务、竞争格局与盈利质量认识这家公司。'}</p>
           {research && <p className="mt-3 hidden text-xs leading-6 text-slate-500 xl:line-clamp-4">{research.paragraphs[0]}</p>}

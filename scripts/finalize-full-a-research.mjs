@@ -1,0 +1,13 @@
+import fs from 'node:fs/promises';
+import crypto from 'node:crypto';
+const file='docs/full-market-research.json',b=JSON.parse(await fs.readFile(file,'utf8'));
+for(const [code,sha]of Object.entries(b.baselineExisting))if(crypto.createHash('sha256').update(await fs.readFile(`src/data/analyses/${code}.json`)).digest('hex')!==sha)throw Error('Existing analysis changed: '+code);
+b.created=b.companies.filter(x=>x.analysisStatus==='draft').length;
+b.status=b.created===b.requested?'local-drafts-awaiting-user-review':'partial-source-gaps';
+b.preservation={baselineFiles:Object.keys(b.baselineExisting).length,allHashesMatched:true,newHKFiles:0};
+b.qualityNote='逐家公司主营及财务证据与分业务机制框架形成的研究稿；不等于逐家公司人工精修或原文复核。部分公告访问受限，需按核验任务接续。';
+await fs.writeFile(file,JSON.stringify(b,null,2)+'\n');
+const counts={A:0,HK:0};for(const f of await fs.readdir('src/data/analyses'))if(/^\d{5,6}\.json$/.test(f))counts[f.length===10?'HK':'A']++;
+const md=`# 剩余 A 股研究稿核查入口\n\n日期：${b.asOf}。新增 ${b.created}/${b.requested} 家；全部本地，未上传。当前解析库 A 股 ${counts.A} 家，港股 ${counts.HK} 家（本轮零新增）。原有 ${b.preservation.baselineFiles} 份文件内容哈希不变。\n\n${b.qualityNote}\n\n必贝特缺少可用收入分项，已单独解释研发与商业化，不填造销售结构。具体后续任务在每家解析的 verificationTasks 和 analysis-work-queue.json。\n\n|公司|代码|本地预览|\n|---|---|---|\n`+b.companies.map(x=>`|${x.name}|${x.code}|[查看](http://127.0.0.1:3101/?learn=${x.code}&preview=full-a)|`).join('\n')+'\n';
+await fs.writeFile('docs/full-a-research.md',md);
+console.log(JSON.stringify({created:b.created,requested:b.requested,counts,baselinePreserved:b.preservation.baselineFiles}));

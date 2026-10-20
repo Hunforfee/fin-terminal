@@ -1,5 +1,13 @@
 # 公司解析维护
 
+用户现已明确授权双向同步Git：先合并远端更新，再同步本地成果。下方“仅本地”属于历史阶段。跨平台研究文件固定LF换行，纯换行修订及对应基线更新见 `docs/research-line-endings.json`，不是内容改写。
+
+最新补充：用户明确要求此前港股解析也全部替换为简体中文，已授权对港股旧稿进行纯繁简转换；不改写业务结论、数字、链接或研究状态。转换记录见 `docs/hk-simplified-migration.json`，历史基线哈希依照该记录显式更新；A股文件不得修改。下方旧稿不改的要求对本次纯文字转换不适用。
+
+最新补充：用户已恢复港股未覆盖公司研究，新增港股文字全部简体中文。本轮清单改读 `docs/full-hk-research.json`；保留此前5825份解析，不重写A股和已有港股。下方“港股暂停”是历史范围，已由本条替代。仍仅本地，不推送Git。
+
+最新用户范围（2026-10-20）：继续补齐网站目录内尚未覆盖的 A 股；港股暂不覆盖，已有解析保持不变。先读 `docs/research-scope-current.md` 与 `docs/full-market-research.json`，历史两批停止条件已被用户新授权替代。本轮仅本地，不推送 Git。
+
 涉及“深度解析”、覆盖范围、公司资料或新增股票时，先阅读 `docs/analysis-handoff.md` 和 `scripts/WRITER_GUIDE.md`，再运行 `npm run analyses:check`。
 
 - `scripts/analysis-targets.json` 是本轮自选清单快照、内置公司池和已有解析的管理范围；不是全市场，也不是实时读取浏览器的个人自选。

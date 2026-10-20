@@ -49,21 +49,39 @@ export default function KLineSection({ code, isIndex = false, prevClose = null }
 
   useEffect(() => {
     let alive = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     setLoading(true);
     setErr(null);
     const adj = isIndex ? 'none' : adjust;
     const count = period === 'day' ? range.months * 31 + 10 : period === 'week' ? Math.ceil(range.months * 4.5) + 2 : range.months + 2;
-    fetch(`/api/kline?code=${encodeURIComponent(code)}&period=${period}&adjust=${adj}&count=${count}&start=${calendarRangeStart(range.months)}`)
-      .then((r) => r.json())
-      .then((j) => {
-        if (!alive) return;
-        if (j.ok) { setCandles((j.data.candles ?? []) as Candle[]); setMeta({ source: j.data.source, stale: j.data.stale, adjust: j.data.adjust }); }
-        else setErr(j.error ?? 'K 线获取失败');
-      })
-      .catch((e) => alive && setErr(String(e)))
-      .finally(() => alive && setLoading(false));
+    const load = (attempt: number) => {
+      fetch(`/api/kline?code=${encodeURIComponent(code)}&period=${period}&adjust=${adj}&count=${count}&start=${calendarRangeStart(range.months)}`)
+        .then((r) => r.json())
+        .then((j) => {
+          if (!alive) return;
+          if (j.ok) {
+            setCandles((j.data.candles ?? []) as Candle[]);
+            setMeta({ source: j.data.source, stale: j.data.stale, adjust: j.data.adjust });
+            setLoading(false);
+            return;
+          }
+          throw new Error(j.error ?? 'K 线获取失败');
+        })
+        .catch((e) => {
+          if (!alive) return;
+          // 上游行情源偶发被拦截（WAF 501 / 限频）：稍候自动重试，避免整块报错
+          if (attempt < 2) {
+            timer = setTimeout(() => load(attempt + 1), 1500);
+            return;
+          }
+          setErr(e instanceof Error ? e.message : String(e));
+          setLoading(false);
+        });
+    };
+    load(1);
     return () => {
       alive = false;
+      if (timer) clearTimeout(timer);
     };
   }, [code, period, adjust, range.months, isIndex]);
 

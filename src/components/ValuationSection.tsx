@@ -376,20 +376,37 @@ export default function ValuationSection({ code }: { code: string }) {
 
   useEffect(() => {
     let alive = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     setLoading(true);
     setData(null);
     setErr(null);
-    fetch(`/api/valuation?code=${encodeURIComponent(code)}&years=${years}`)
-      .then((r) => r.json())
-      .then((j) => {
-        if (!alive) return;
-        if (j.ok) setData(j.data as ValuationResp);
-        else setErr(j.error ?? '估值数据加载失败');
-      })
-      .catch((e) => alive && setErr(String(e)))
-      .finally(() => alive && setLoading(false));
+    const load = (attempt: number) => {
+      fetch(`/api/valuation?code=${encodeURIComponent(code)}&years=${years}`)
+        .then((r) => r.json())
+        .then((j) => {
+          if (!alive) return;
+          if (j.ok) {
+            setData(j.data as ValuationResp);
+            setLoading(false);
+            return;
+          }
+          throw new Error(j.error ?? '估值数据加载失败');
+        })
+        .catch((e) => {
+          if (!alive) return;
+          // 上游行情源偶发被拦截（WAF 501 / 限频）：稍候自动重试，避免整块报错
+          if (attempt < 2) {
+            timer = setTimeout(() => load(attempt + 1), 1500);
+            return;
+          }
+          setErr(e instanceof Error ? e.message : String(e));
+          setLoading(false);
+        });
+    };
+    load(1);
     return () => {
       alive = false;
+      if (timer) clearTimeout(timer);
     };
   }, [code, years]);
 

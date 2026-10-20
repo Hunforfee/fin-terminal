@@ -14,6 +14,8 @@ export interface FetchOpts {
   encoding?: 'utf-8' | 'gbk';
   /** 视为临时失败、可切下一数据源的状态码（默认不重试，保持原有行为） */
   retryStatuses?: number[];
+  /** 重试基础退避（毫秒），默认 200；第 n 次重试等待 backoffMs*n */
+  backoffMs?: number;
 }
 
 const DEFAULT_TIMEOUT = Number(process.env.UPSTREAM_TIMEOUT_MS ?? 8000);
@@ -30,7 +32,7 @@ export class UpstreamError extends Error {
 }
 
 export async function fetchText(url: string, opts: FetchOpts = {}): Promise<string> {
-  const { timeoutMs = DEFAULT_TIMEOUT, retries = 1, headers = {}, encoding = 'utf-8', retryStatuses } = opts;
+  const { timeoutMs = DEFAULT_TIMEOUT, retries = 1, headers = {}, encoding = 'utf-8', retryStatuses, backoffMs = 200 } = opts;
   let lastErr: unknown;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -61,7 +63,7 @@ export async function fetchText(url: string, opts: FetchOpts = {}): Promise<stri
         lastErr = new UpstreamError(`timeout ${timeoutMs}ms`, url, 'timeout');
       }
       // 最后一次尝试不再等待
-      if (attempt < retries) await sleep(200 * (attempt + 1));
+      if (attempt < retries) await sleep(backoffMs * (attempt + 1));
     } finally {
       clearTimeout(timer);
     }

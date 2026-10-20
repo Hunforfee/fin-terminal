@@ -24,6 +24,7 @@ const QUOTE_URL = 'https://qt.gtimg.cn/q=';
 const KLINE_URLS = [
   'https://ifzq.gtimg.cn/appstock/app/fqkline/get',
   'https://proxy.finance.qq.com/ifzqgtimg/appstock/app/fqkline/get',
+  'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get',
 ];
 const MINUTE_URL = 'https://web.ifzq.gtimg.cn/appstock/app/minute/query';
 const SMARTBOX_URL = 'https://smartbox.gtimg.cn/s3/';
@@ -186,18 +187,29 @@ export async function fetchQuote(symbol: string): Promise<Quote | null> {
   return list[0] ?? null;
 }
 
+/**
+ * WAF 挑战页（501）与限频（429）都是瞬时状态，值得原地重试；
+ * 这些状态码按节点策略下发，同一节点立刻重试往往还是同样结果，因此配合换镜像 + 退避。
+ */
+const KLINE_RETRY_STATUSES = [403, 408, 418, 429, 500, 501, 502, 503, 504];
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
 /** 依次尝试 K 线镜像域名，直到拿到合法 JSON（WAF 常返回 501 挑战页） */
 async function fetchKLineJson(param: string): Promise<Record<string, unknown>> {
   let lastErr: unknown;
-  for (const base of KLINE_URLS) {
-    const url = `${base}?param=${encodeURIComponent(param)}`;
+  for (let i = 0; i < KLINE_URLS.length; i++) {
+    const url = `${KLINE_URLS[i]}?param=${encodeURIComponent(param)}`;
     try {
       return await fetchJson<Record<string, unknown>>(url, {
         timeoutMs: 10000,
-        retryStatuses: [403, 429, 500, 502, 503, 504],
+        retries: 2,
+        backoffMs: 500,
+        retryStatuses: KLINE_RETRY_STATUSES,
       });
     } catch (e) {
       lastErr = e;
+      // 换镜像前稍等：同一节点的 WAF 策略不会因为立刻重试而改变
+      if (i < KLINE_URLS.length - 1) await sleep(400);
     }
   }
   throw lastErr instanceof Error
@@ -220,19 +232,19 @@ export async function fetchKLine(
   if (count > 640) {
     const byDate = new Map<string, Candle>();
     let end = endDate;
-    for (let page = 0; page < Math.ceil(count / 640) + 1; page++) {
-      // 单页失败重试一次（并行调用多页时易触发上游限频）
+    const pages = Math.ceil(count / 640) + 1;
+    for (let page = 0; page < pages; page++) {
+      // 单页多重试几次：WAF 挑战与限频都是瞬时的；仍失败则保留已取得的页，优雅截断
       let part;
-      try {
-        part = await fetchKLine(symbol, period, adjust, 640, undefined, end);
-      } catch {
-        await new Promise((r) => setTimeout(r, 600));
+      for (let attempt = 0; attempt < 3; attempt++) {
         try {
           part = await fetchKLine(symbol, period, adjust, 640, undefined, end);
+          break;
         } catch {
-          break; // 已取得的页保留，优雅截断而非整体报错
+          if (attempt < 2) await sleep(500 * (attempt + 1));
         }
       }
+      if (!part) break; // 已取得的页保留，优雅截断而非整体报错
       const rows = part.candles;
       if (!rows.length) break;
       const oldest = rows[0].date;
@@ -240,6 +252,8 @@ export async function fetchKLine(
       for (const c of rows) byDate.set(c.date, c);
       if (byDate.size === before || (startDate && oldest <= startDate) || byDate.size >= count) break;
       end = new Date(Date.parse(oldest + 'T00:00:00Z') - 864e5).toISOString().slice(0, 10);
+      // 页间 pacing：连续翻页最容易触发上游限频
+      if (page < pages - 1) await sleep(350);
     }
     if (byDate.size === 0) throw new Error(`tencent kline: empty series (${adjust})`);
     return { symbol, code: symbol.slice(2), period, adjust,

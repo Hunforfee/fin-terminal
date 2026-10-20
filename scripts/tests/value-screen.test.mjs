@@ -39,16 +39,16 @@ test('screen metadata covers the full bundled A-share universe and all 31 first-
   assert.equal(meta.industries.length, 31);
   assert.ok(meta.universeCount > 4000, 'the old 104-company sample is not the candidate pool');
   assert.equal(meta.industries.reduce((sum, industry) => sum + industry.count, 0), meta.universeCount);
-  assert.equal(meta.defaultPeriod, period);
-  assert.equal(meta.periods.length, 5);
+  assert.equal(meta.defaultPeriod, 'auto');
+  assert.equal(meta.periods.length, 8);
   const rows = valueScreenUniverse([{ name: '银行', stocks: ['000001', '920087', '200019', '900908', '00700', '899050', '600519', '600519'] }]);
   assert.deepEqual(rows.map(row => row.symbol), ['sz000001', 'sh600519', 'bj920087']);
 });
 
-test('annual defaults use Shanghai dates and wait until after the April 30 disclosure deadline', () => {
+test('latest report periods include completed quarters in Shanghai time', () => {
   assert.equal(valueScreenToday(new Date('2026-04-30T16:00:00Z')), '2026-05-01');
-  assert.equal(valueScreenPeriods(new Date('2026-04-30T15:59:59Z'))[0], '2024-12-31');
-  assert.equal(valueScreenPeriods(new Date('2026-04-30T16:00:00Z'))[0], '2025-12-31');
+  assert.equal(valueScreenPeriods(new Date('2026-04-30T15:59:59Z'))[0], '2026-03-31');
+  assert.equal(valueScreenPeriods(new Date('2026-04-30T16:00:00Z'))[0], '2026-03-31');
 });
 
 test('criteria reject invalid or silently ignored filters and add no implicit thresholds', () => {
@@ -57,7 +57,7 @@ test('criteria reject invalid or silently ignored filters and add no implicit th
   for (const raw of [null, [], criteria({ scope: 'HK' }), criteria({ industries: ['不存在'] }), criteria({ roeMin: '15' }),
     criteria({ roeMin: null }), criteria({ roeMin: NaN }), criteria({ cashflowPositive: 'true' }),
     criteria({ peMin: 20, peMax: 10 }), criteria({ codes: [123] }), criteria({ limit: 300 }),
-    criteria({ period: '2026-12-31' }), criteria({ period: '2025-06-30' })])
+    criteria({ period: '2026-12-31' }), criteria({ period: '2025-05-31' })])
     assert.throws(() => readValueScreenCriteria(raw, ['银行'], now));
 });
 
@@ -91,8 +91,8 @@ test('industry lists validate against the classification and reject self-contrad
 
 test('auto period requests several report dates and each row keeps the date actually matched', async () => {
   const meta = getValueScreenMeta(now);
-  assert.equal(meta.defaultPeriod, period);
-  assert.deepEqual(meta.fallbackPeriods, [period, '2024-12-31', '2023-12-31']);
+  assert.equal(meta.defaultPeriod, 'auto');
+  assert.deepEqual(meta.fallbackPeriods, ['2026-09-30', '2026-06-30', '2026-03-31', period, '2025-09-30', '2025-06-30', '2025-03-31', '2024-12-31']);
   assert.deepEqual(valueScreenRequestedPeriods(criteria({ period: 'auto' }), meta.periods), meta.fallbackPeriods);
   assert.deepEqual(valueScreenRequestedPeriods(criteria({}), meta.periods), [period]);
 
@@ -104,9 +104,9 @@ test('auto period requests several report dates and each row keeps the date actu
   });
   assert.deepEqual(requested, meta.fallbackPeriods);
   assert.equal(result.requestedPeriod, 'auto');
-  assert.equal(result.period, period, 'the headline period stays the newest requested date');
+  assert.equal(result.period, '2026-09-30', 'the headline period stays the newest requested date');
   assert.equal(result.financialCount, 3);
-  assert.equal(result.fallbackCount, 2);
+  assert.equal(result.fallbackCount, 3);
   assert.equal(result.rows.find(row => row.code === '600519').period, period);
   assert.equal(result.rows.find(row => row.code === '600415').period, '2024-12-31');
 });
@@ -290,15 +290,16 @@ test('report queries fetch every stable page, with exact annual/disclosure filte
   assert.equal(rows.length, 501);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].get('filter'), "(REPORT_DATE in ('2025-12-31'))(NOTICE_DATE<='2026-10-19 23:59:59')");
-  assert.equal(calls[0].get('sortColumns'), 'SECURITY_CODE,UPDATE_DATE');
+  assert.equal(calls[0].get('sortColumns'), 'SECURITY_CODE,REPORT_DATE,UPDATE_DATE,NOTICE_DATE,CURRENCY');
+  assert.equal(calls[0].get('sortTypes'), '1,-1,-1,-1,1');
   assert.equal(calls[0].get('columns'), 'SECURITY_CODE,ROEJQ');
 });
 
 test('multi-period requests filter every requested date at once and accept no dates silently', async () => {
   const calls = [];
   const fetcher = async url => { calls.push(new URL(url).searchParams); return { success: true, result: { pages: 1, count: 1, data: [financial('600519')] } }; };
-  await fetchValueScreenReportPages('TEST', 'ALL', [period, '2024-12-31', '2023-12-31'], today, fetcher);
-  assert.equal(calls[0].get('filter'), "(REPORT_DATE in ('2025-12-31','2024-12-31','2023-12-31'))(NOTICE_DATE<='2026-10-19 23:59:59')");
+  await fetchValueScreenReportPages('TEST', 'ALL', ['2026-09-30', '2026-06-30', '2026-03-31', period, '2025-09-30', '2025-06-30', '2025-03-31', '2024-12-31'], today, fetcher);
+  assert.equal(calls[0].get('filter'), "(REPORT_DATE in ('2026-09-30','2026-06-30','2026-03-31','2025-12-31','2025-09-30','2025-06-30','2025-03-31','2024-12-31'))(NOTICE_DATE<='2026-10-19 23:59:59')");
   assert.deepEqual(await fetchValueScreenReportPages('TEST', 'ALL', [], today, fetcher), []);
   assert.equal(calls.length, 1, 'an empty date list must not reach the network');
 });
@@ -363,4 +364,13 @@ test('screen route exposes metadata and validates POST while refusing legacy der
   assert.equal((await exports.POST({ json: async () => criteria({ roeMin: '15' }) })).status, 400);
   assert.equal((await exports.POST({ json: async () => { throw Error('bad JSON'); } })).status, 400);
   assert.equal(calls.length, 1);
+});
+
+test('scope excludes ST and loss independently and cash ratio never mixes periods', () => {
+ const row = { ...emptyValueScreenRow(universe[0], period), name: '*ST测试', pe: -5 };
+ assert.equal(matchesValueScreenQuote(row, criteria({ excludeST: true })), false);
+ assert.equal(matchesValueScreenQuote(row, criteria({ excludeLoss: true })), false);
+ assert.equal(matchesValueScreenQuote({ ...row, name: '正常公司', pe: 8 }, criteria({ excludeST: true, excludeLoss: true })), true);
+ const parsed = parseValueScreenFinancials({ main: [financial('600519')], income: [income('600519', { REPORT_DATE: '2024-12-31' })] }, [period, '2024-12-31'], today);
+ assert.equal(parsed.get('600519').ocfToProfit, null);
 });

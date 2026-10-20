@@ -8,7 +8,7 @@ export const VALUE_SCREEN_NUMBER_KEYS = [
   'marketCapMin', 'marketCapMax', 'ocfMin', 'ocfToProfitMin',
 ] as const;
 export type ValueScreenNumberKey = (typeof VALUE_SCREEN_NUMBER_KEYS)[number];
-export const VALUE_SCREEN_BOOLEAN_KEYS = ['cashflowPositive', 'deductedProfitPositive'] as const;
+export const VALUE_SCREEN_BOOLEAN_KEYS = ['cashflowPositive', 'deductedProfitPositive', 'excludeST', 'excludeLoss'] as const;
 
 /** Percentages use percentage points (100 = 100%); monetary filters use CNY yi. */
 export interface ValueScreenCriteria extends Partial<Record<ValueScreenNumberKey, number>> {
@@ -20,6 +20,8 @@ export interface ValueScreenCriteria extends Partial<Record<ValueScreenNumberKey
   excludedIndustries?: string[];
   scope: 'all' | 'watchlist';
   codes?: string[];
+  excludeST?: boolean;
+  excludeLoss?: boolean;
   cashflowPositive?: boolean;
   deductedProfitPositive?: boolean;
 }
@@ -101,15 +103,14 @@ export function valueScreenToday(now = new Date()): string {
   return `${value('year')}-${value('month')}-${value('day')}`;
 }
 
-/** Annual reports finish their normal disclosure window on the following April 30. */
+/** Completed quarter ends; actual selection also checks disclosure dates. */
 export function valueScreenPeriods(now = new Date()): string[] {
-  const today = valueScreenToday(now);
-  const newest = Number(today.slice(0, 4)) - (today.slice(5) >= '05-01' ? 1 : 2);
-  return Array.from({ length: 5 }, (_, index) => `${newest - index}-12-31`);
+  const today = valueScreenToday(now), year = Number(today.slice(0, 4));
+  return Array.from({ length: 4 }, (_, index) => year - index)
+    .flatMap(y => ['12-31', '09-30', '06-30', '03-31'].map(end => `${y}-${end}`))
+    .filter(date => date < today).slice(0, 8);
 }
-
-/** How many report dates 'auto' scans; later dates cover the vast majority of companies. */
-export const VALUE_SCREEN_FALLBACK_DEPTH = 3;
+export const VALUE_SCREEN_FALLBACK_DEPTH = 8;
 /** Newest-first dates actually requested when period is 'auto'. */
 export function valueScreenFallbackPeriods(periods: string[]): string[] {
   return periods.slice(0, VALUE_SCREEN_FALLBACK_DEPTH);
@@ -166,11 +167,11 @@ export function readValueScreenCriteria(raw: unknown, industries: string[], now 
   const input = raw as Record<string, unknown>;
   const allowed = new Set<string>(['period', 'industries', 'excludedIndustries', 'industry', 'scope', 'codes', ...VALUE_SCREEN_NUMBER_KEYS, ...VALUE_SCREEN_BOOLEAN_KEYS]);
   if (Object.keys(input).some(key => !allowed.has(key))) throw Error('包含不支持的筛选条件');
-  const period = input.period;
+  const period = input.period ?? VALUE_SCREEN_AUTO_PERIOD;
   if (typeof period !== 'string' || (period !== VALUE_SCREEN_AUTO_PERIOD &&
-    (!/^\d{4}-12-31$/.test(period) ||
+    (!/^\d{4}-(?:03-31|06-30|09-30|12-31)$/.test(period) ||
       Number(period.slice(0, 4)) < 1998 || period >= valueScreenToday(now))))
-    throw Error('请选择已结束年度的年报日期，如 2025-12-31');
+    throw Error('请选择已结束的季度报告日期');
   const scope = input.scope ?? 'all';
   if (scope !== 'all' && scope !== 'watchlist') throw Error('股票范围仅支持全部 A 股或自选 A 股');
   const result: ValueScreenCriteria = { period, scope };
@@ -228,6 +229,8 @@ export function valueScreenFinancialStatus(row: ValueScreenRow, c: ValueScreenCr
 
 export function valueScreenQuoteStatus(row: ValueScreenRow, c: ValueScreenCriteria): ValueScreenConditionStatus {
   return conditionStatus([
+    !c.excludeST || !/^(?:(?:XD|XR|DR))*S?\*?ST/i.test(row.name.trim()),
+    !c.excludeLoss || !finite(row.pe) || row.pe >= 0,
     minimum(row.pe, c.peMin), maximum(row.pe, c.peMax),
     minimum(row.pb, c.pbMin), maximum(row.pb, c.pbMax),
     minimum(row.totalMarketCap, c.marketCapMin), maximum(row.totalMarketCap, c.marketCapMax),

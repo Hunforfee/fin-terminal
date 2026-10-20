@@ -21,11 +21,12 @@ function toggle(list: string[], name: string, checked: boolean): string[] {
   return checked ? [...next, name] : next;
 }
 
-const summarize = (included: string[], excluded: string[]) => {
+const summarize = (included: string[], excluded: string[], total: number) => {
+  if (total > 0 && included.length === total && excluded.length === 0) return '全部行业';
   const parts: string[] = [];
   if (included.length) parts.push(`行业 ${included.length}`);
   if (excluded.length) parts.push(`排除 ${excluded.length}`);
-  return parts.length ? parts.join(' · ') : '全部行业';
+  return parts.length ? parts.join(' · ') : '选择行业';
 };
 
 /** Include/exclude industry picker; keeps the popover open so several rows can be ticked. */
@@ -48,19 +49,19 @@ export default function IndustryMultiSelect({ options, included, excluded, onInc
   return <details ref={ref} className="relative shrink-0" onToggle={event => setOpen((event.currentTarget as HTMLDetailsElement).open)}>
     <summary aria-label="行业筛选" title="可多选行业，或排除某些行业" className={`input flex !min-h-8 !w-auto cursor-pointer list-none items-center gap-1 !py-1 !text-xs [&::-webkit-details-marker]:hidden ${count > 0 ? 'border-brand-300 bg-brand-50/60 font-medium text-brand-800' : ''}`}>
       <svg aria-hidden="true" viewBox="0 0 12 12" className="h-3 w-3 flex-none fill-none stroke-current stroke-[1.4]"><path d="M1.5 2h9l-3.4 4v3.2l-2.2 1V6L1.5 2Z" /></svg>
-      <span>{summarize(included, excluded)}</span>
+      <span>{summarize(included, excluded, options.length)}</span>
       {count > 0 && <span aria-hidden="true" className="rounded bg-brand-100 px-1 text-[10px] tabular-nums text-brand-700">{count}</span>}
       <span aria-hidden="true" className={`text-[9px] text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
     </summary>
     <div className="absolute left-0 top-full z-40 mt-1 w-64 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
       <input aria-label="搜索行业" placeholder="搜索行业" value={query} onChange={event => setQuery(event.target.value)} className="input !min-h-7 w-full !py-1 !text-xs" />
+      <div className="mt-2 flex items-center gap-3 px-1 text-xs"><button type="button" onClick={() => { onExcludedChange([]); onIncludedChange(options.map(option => option.name)); }} className="text-brand-700">全选</button><button type="button" onClick={() => { onIncludedChange([]); onExcludedChange([]); }} className="text-slate-500 hover:text-brand-700">取消全选</button></div>
       <div className="mt-2 max-h-56 space-y-2 overflow-auto">
         {([
           { key: 'in' as const, label: '只看这些行业', hint: '不勾选表示不限行业', list: included, apply: onIncludedChange, active: 'border-brand-200 bg-brand-50/40' },
           { key: 'out' as const, label: '排除这些行业', hint: '排除优先于包含', list: excluded, apply: onExcludedChange, active: 'border-amber-200 bg-amber-50/40' },
         ]).map(group => <fieldset key={group.key}>
           <legend className="px-1 text-[11px] font-medium text-slate-500">{group.label}</legend>
-          <p className="px-1 text-[10px] text-slate-400">{group.hint}</p>
           <div className="mt-1 grid grid-cols-1 gap-0.5">
             {visible.map(option => {
               const checked = group.list.includes(option.name);

@@ -27,6 +27,8 @@ export interface ScreenerDraft {
   ocfToProfitMin: string;
   cashflowPositive: boolean;
   deductedProfitPositive: boolean;
+  excludeST: boolean;
+  excludeLoss: boolean;
 }
 
 export function emptyScreenerDraft(period: string): ScreenerDraft {
@@ -51,6 +53,8 @@ export function emptyScreenerDraft(period: string): ScreenerDraft {
     ocfToProfitMin: '',
     cashflowPositive: false,
     deductedProfitPositive: false,
+    excludeST: false,
+    excludeLoss: false,
   };
 }
 
@@ -243,6 +247,10 @@ function readCriteria(
   criteria.excludedIndustries = excludedIndustries;
   criteria.cashflowPositive = raw.cashflowPositive;
   criteria.deductedProfitPositive = raw.deductedProfitPositive;
+  for (const key of ['excludeST', 'excludeLoss'] as const) {
+    if (raw[key] !== undefined && typeof raw[key] !== 'boolean') return null;
+    criteria[key] = raw[key] === true;
+  }
   for (const key of NUMBER_FIELDS) {
     const value = numberString(raw[key]);
     if (value === null) return null;

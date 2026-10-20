@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Modal from '@/components/Modal';
 import WatchlistButton from '@/components/WatchlistButton';
+import StockScopeFilter from '@/components/StockScopeFilter';
 import IndustryMultiSelect from '@/components/IndustryMultiSelect';
 import { useWatchlist } from '@/components/WatchlistProvider';
 import { normalizeStockCode } from '@/lib/datasource/codes';
@@ -19,7 +20,7 @@ import {
 } from '@/lib/screenerPreferences';
 import type { ValueScreenCriteria, ValueScreenMeta, ValueScreenResult, ValueScreenRow } from '@/lib/valueScreen';
 
-type NumericField = Exclude<keyof ScreenerDraft, 'scope' | 'industries' | 'excludedIndustries' | 'period' | 'cashflowPositive' | 'deductedProfitPositive'>;
+type NumericField = Exclude<keyof ScreenerDraft, 'scope' | 'industries' | 'excludedIndustries' | 'period' | 'cashflowPositive' | 'deductedProfitPositive' | 'excludeST' | 'excludeLoss'>;
 const NUMERIC_FIELDS: NumericField[] = ['peMin', 'peMax', 'pbMin', 'pbMax', 'roeMin', 'netMarginMin', 'revenueGrowthMin', 'profitGrowthMin', 'deductedGrowthMin', 'debtRatioMax', 'marketCapMin', 'marketCapMax', 'ocfMin', 'ocfToProfitMin'];
 const PRESETS: { name: string; title: string; values: Partial<ScreenerDraft> }[] = [
   { name: '低估值', title: '0 < PE ≤ 20，0 < PB ≤ 2', values: { peMin: '0', peMax: '20', pbMin: '0', pbMax: '2' } },
@@ -28,9 +29,10 @@ const PRESETS: { name: string; title: string; values: Partial<ScreenerDraft> }[]
   { name: '现金流', title: '经营现金流为正，且不低于同期净利润', values: { cashflowPositive: true, ocfToProfitMin: '100' } },
 ];
 const number = (value: unknown, digits = 2) => typeof value !== 'number' || !Number.isFinite(value) ? '—' : value.toLocaleString('zh-CN', { minimumFractionDigits: digits, maximumFractionDigits: digits });
-const periodLabel = (period: string) => period === SCREEN_AUTO_PERIOD ? '自动（最新年报）' : `${period.slice(0, 4)}年报`;
+const periodLabel = (period: string) => period === SCREEN_AUTO_PERIOD ? '最新披露财报' : period;
 const toneClass = { valuation: 'text-blue-700', quality: 'text-teal-800', growth: 'text-teal-700', cash: 'text-cyan-800', risk: 'text-amber-800', neutral: 'text-slate-500' };
 function draftError(draft: ScreenerDraft): string | null {
+  if (!draft.industries.length) return '请选择至少一个行业';
   for (const key of NUMERIC_FIELDS) if (draft[key].trim() && !Number.isFinite(Number(draft[key]))) return '条件需填写有效数字';
   for (const [low, high, label] of [['peMin', 'peMax', 'PE'], ['pbMin', 'pbMax', 'PB'], ['marketCapMin', 'marketCapMax', '总市值']] as const)
     if (draft[low].trim() && draft[high].trim() && Number(draft[low]) > Number(draft[high])) return `${label}下限不能大于上限`;
@@ -46,21 +48,21 @@ function activeConditions(draft: ScreenerDraft): string[] {
     ...(draft.deductedProfitPositive ? ['扣非利润为正'] : []),
     ...industryTags(draft.industries, '行业'),
     ...industryTags(draft.excludedIndustries, '排除'),
-    ...(draft.period === SCREEN_AUTO_PERIOD ? ['财报自动取最新'] : []),
+    ...(draft.excludeST ? ['排除 ST'] : []), ...(draft.excludeLoss ? ['排除亏损'] : []),
   ];
 }
 function NumericInput({ label, value, onChange, suffix = '%', operator = '≥', title }: { label: string; value: string; onChange: (value: string) => void; suffix?: string; operator?: string; title?: string }) {
-  return <label className="block min-w-0 text-[11px] text-slate-500" title={title}><span className="mb-1 block truncate">{label}</span><span className="flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 focus-within:border-brand-300 focus-within:ring-2 focus-within:ring-brand-100"><span className="text-xs text-slate-400" aria-hidden="true">{operator}</span><input type="number" step="any" aria-label={label} value={value} onChange={event => onChange(event.target.value)} placeholder="不限" className="min-w-0 flex-1 bg-transparent text-xs tabular-nums text-slate-800 outline-none placeholder:text-slate-300" /><span className="text-[11px] text-slate-400">{suffix}</span></span></label>;
+  return <label className="block min-w-0 text-[11px] text-slate-500" title={title}><span className="mb-0.5 block whitespace-nowrap">{label}</span><span className="flex h-7 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-1.5 focus-within:border-brand-300 focus-within:ring-2 focus-within:ring-brand-100"><span className="text-xs text-slate-400" aria-hidden="true">{operator}</span><input type="number" step="any" aria-label={label} value={value} onChange={event => onChange(event.target.value)} placeholder="不限" className="min-w-0 flex-1 bg-transparent text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none text-slate-800 outline-none placeholder:text-slate-300" /><span className="text-[11px] text-slate-400">{suffix}</span></span></label>;
 }
 function RangeInput({ label, min, max, onMin, onMax, suffix = '' }: { label: string; min: string; max: string; onMin: (value: string) => void; onMax: (value: string) => void; suffix?: string }) {
-  return <div className="min-w-0 text-[11px] text-slate-500"><span className="mb-1 block">{label}{suffix && `（${suffix}）`}</span><div className="flex h-8 min-w-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 focus-within:border-brand-300 focus-within:ring-2 focus-within:ring-brand-100"><input type="number" step="any" aria-label={`${label}下限`} value={min} onChange={event => onMin(event.target.value)} placeholder="最低" className="w-0 min-w-0 flex-1 bg-transparent text-xs tabular-nums text-slate-800 outline-none placeholder:text-slate-300" /><span aria-hidden="true" className="text-slate-300">至</span><input type="number" step="any" aria-label={`${label}上限`} value={max} onChange={event => onMax(event.target.value)} placeholder="最高" className="w-0 min-w-0 flex-1 bg-transparent text-right text-xs tabular-nums text-slate-800 outline-none placeholder:text-slate-300" /></div></div>;
+  return <div className="min-w-0 text-[11px] text-slate-500"><span className="mb-0.5 block">{label}{suffix && `（${suffix}）`}</span><div className="flex h-7 min-w-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 focus-within:border-brand-300 focus-within:ring-2 focus-within:ring-brand-100"><input type="number" step="any" aria-label={`${label}下限`} value={min} onChange={event => onMin(event.target.value)} placeholder="最低" className="w-0 min-w-0 flex-1 bg-transparent text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none text-slate-800 outline-none placeholder:text-slate-300" /><span aria-hidden="true" className="text-slate-300">至</span><input type="number" step="any" aria-label={`${label}上限`} value={max} onChange={event => onMax(event.target.value)} placeholder="最高" className="w-0 min-w-0 flex-1 bg-transparent text-right text-xs tabular-nums text-slate-800 outline-none placeholder:text-slate-300" /></div></div>;
 }
 const downloadCsv = (rows: ValueScreenRow[], columns: ScreenColumnId[], period: string) => {
   const catalog = columns.map(id => SCREEN_COLUMNS.find(column => column.id === id)!);
   const escape = (value: unknown) => { let text = value == null ? '' : String(value); if (typeof value === 'string' && /^[=+@-]/.test(text)) text = `'${text}`; return `"${text.replaceAll('"', '""')}"`; };
   const data = [['公司', '代码', '行业', ...catalog.map(column => `${column.label}${column.kind === 'percent' ? '（%）' : ''}`), '公告日', '行情时间'], ...rows.map(row => [row.name, `\t${row.code}`, row.industry, ...catalog.map(column => row[column.id]), row.noticeDate, row.quoteTime])];
   const url = URL.createObjectURL(new Blob(['\uFEFF' + data.map(row => row.map(escape).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
-  const link = document.createElement('a'); link.href = url; link.download = `基本面选股-${period === SCREEN_AUTO_PERIOD ? '最新年报' : period}.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const link = document.createElement('a'); link.href = url; link.download = `基本面选股-${period === SCREEN_AUTO_PERIOD ? '最新数据' : period}.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 export default function ScreenerPage() {
   return <Suspense fallback={<p className="text-xs text-slate-500">加载选股条件…</p>}><ScreenerContent /></Suspense>;
@@ -73,8 +75,8 @@ function ScreenerContent() {
   const [preferences, setPreferences] = useState<ScreenerPreferences>(() => readScreenerPreferences(null));
   const [preferencesReady, setPreferencesReady] = useState(false), [schemes, setSchemes] = useState<ScreenerScheme[]>([]), [schemeId, setSchemeId] = useState('');
   const [schemeOpen, setSchemeOpen] = useState(false), [schemeName, setSchemeName] = useState(''), [schemeError, setSchemeError] = useState('');
-  const [columnsOpen, setColumnsOpen] = useState(false), [more, setMore] = useState(false);
-  const [loading, setLoading] = useState(true), [error, setError] = useState(''), [status, setStatus] = useState('');
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  const [loading, setLoading] = useState(false), [error, setError] = useState(''), [status, setStatus] = useState('');
   const [selected, setSelected] = useState<string[]>([]), [targetGroup, setTargetGroup] = useState(UNGROUPED);
   const [page, setPage] = useState(1), [pageSize, setPageSize] = useState(20), [jump, setJump] = useState(''), [height, setHeight] = useState<number | undefined>();
   const rootRef = useRef<HTMLDivElement>(null), tableRef = useRef<HTMLDivElement>(null), checkboxRef = useRef<HTMLInputElement>(null);
@@ -89,7 +91,7 @@ function ScreenerContent() {
   const setValue = <K extends keyof ScreenerDraft>(key: K, value: ScreenerDraft[K]) => setDraft(previous => ({ ...previous, [key]: value }));
   const performScreen = async (next: ScreenerDraft) => {
     const invalid = draftError(next); if (invalid) { setError(invalid); return; }
-    const payload: ValueScreenCriteria = { period: next.period, scope: next.scope === 'all' ? 'all' : 'watchlist', cashflowPositive: next.cashflowPositive, deductedProfitPositive: next.deductedProfitPositive };
+    const payload: ValueScreenCriteria = { period: SCREEN_AUTO_PERIOD, excludeST: next.excludeST, excludeLoss: next.excludeLoss, scope: next.scope === 'all' ? 'all' : 'watchlist', cashflowPositive: next.cashflowPositive, deductedProfitPositive: next.deductedProfitPositive };
     if (next.industries.length) payload.industries = next.industries;
     if (next.excludedIndustries.length) payload.excludedIndustries = next.excludedIndustries;
     for (const key of NUMERIC_FIELDS) if (next[key].trim()) payload[key] = Number(next[key]);
@@ -104,13 +106,12 @@ function ScreenerContent() {
     } catch (issue) { if (!controller.signal.aborted) setError(issue instanceof Error ? issue.message : '筛选失败'); }
     finally { if (!controller.signal.aborted) setLoading(false); }
   };
-  const performRef = useRef(performScreen); performRef.current = performScreen;
   useEffect(() => {
     const loadPersonal = (reset = false) => {
-      try { setPreferences(readScreenerPreferences(JSON.parse(personalStorage.getItem(SCREEN_PREFERENCES_KEY) ?? 'null'))); } catch { setPreferences(readScreenerPreferences(null)); }
+      try { setPreferences({ ...readScreenerPreferences(JSON.parse(personalStorage.getItem(SCREEN_PREFERENCES_KEY) ?? 'null')), filtersCollapsed: false }); } catch { setPreferences(readScreenerPreferences(null)); }
       try { setSchemes(readScreenerSchemes(JSON.parse(personalStorage.getItem(SCREEN_SCHEMES_KEY) ?? 'null'), SCREEN_AUTO_PERIOD)); } catch { setSchemes([]); }
       setPreferencesReady(true); setSchemeId('');
-      if (reset) { requestRef.current?.abort(); setResult(null); setApplied(null); setSelected([]); setStatus(''); setError(''); if (metaRef.current) { const next = emptyScreenerDraft(SCREEN_AUTO_PERIOD); setDraft(next); void performRef.current(next); } }
+      if (reset) { requestRef.current?.abort(); setResult(null); setApplied(null); setSelected([]); setStatus(''); setError(''); if (metaRef.current) { setDraft({ ...emptyScreenerDraft(SCREEN_AUTO_PERIOD), industries: metaRef.current.industries.map(item => item.name) }); setLoading(false); } }
     };
     loadPersonal(); const onAccount = () => loadPersonal(true); window.addEventListener(AUTH_CHANGE, onAccount);
     return () => { window.removeEventListener(AUTH_CHANGE, onAccount); requestRef.current?.abort(); if (statusTimer.current) clearTimeout(statusTimer.current); };
@@ -122,8 +123,8 @@ function ScreenerContent() {
       if (!json.ok) throw Error(json.error ?? '选股目录加载失败'); if (controller.signal.aborted) return;
       const nextMeta = json.data as ValueScreenMeta; setMeta(nextMeta); metaRef.current = nextMeta;
       const requested = initialIndustry.current;
-      const next = { ...emptyScreenerDraft(SCREEN_AUTO_PERIOD), industries: requested && nextMeta.industries.some(industry => industry.name === requested) ? [requested] : [] };
-      setDraft(next); void performRef.current(next);
+      const next = { ...emptyScreenerDraft(SCREEN_AUTO_PERIOD), industries: requested && nextMeta.industries.some(industry => industry.name === requested) ? [requested] : nextMeta.industries.map(item => item.name) };
+      setDraft(next);
     }).catch(issue => { if (!controller.signal.aborted) { setError(issue.message ?? '选股目录加载失败'); setLoading(false); } });
     return () => controller.abort();
   }, []);
@@ -147,7 +148,7 @@ function ScreenerContent() {
   const updateSort = (key: ScreenerSort['key']) => { setPreferences(previous => ({ ...previous, sort: { key, direction: previous.sort.key === key ? previous.sort.direction === 'asc' ? 'desc' : 'asc' : key === 'name' || key === 'industry' || key === 'pe' || key === 'pb' ? 'asc' : 'desc' } })); setPage(1); };
   const updateColumns = (columns: ScreenColumnId[]) => setPreferences(previous => readScreenerPreferences({ ...previous, columns }));
   const applyPreset = (values: Partial<ScreenerDraft>) => { setDraft(previous => ({ ...emptyScreenerDraft(previous.period), scope: previous.scope, industries: previous.industries, excludedIndustries: previous.excludedIndustries, ...values })); setSchemeId(''); };
-  const applyScheme = (id: string) => { setSchemeId(id); const scheme = schemes.find(item => item.id === id); if (!scheme) return; setDraft({ ...scheme.criteria }); setPreferences(previous => readScreenerPreferences({ ...previous, columns: scheme.columns, sort: scheme.sort })); void performRef.current(scheme.criteria); };
+  const applyScheme = (id: string) => { setSchemeId(id); const scheme = schemes.find(item => item.id === id); if (!scheme) return; setDraft({ ...scheme.criteria, period: SCREEN_AUTO_PERIOD, industries: scheme.criteria.industries.length ? scheme.criteria.industries : (meta?.industries ?? []).map(item => item.name).filter(name => !scheme.criteria.excludedIndustries.includes(name)) }); setPreferences(previous => readScreenerPreferences({ ...previous, columns: scheme.columns, sort: scheme.sort })); };
   const saveSchemes = (next: ScreenerScheme[]): boolean => {
     try { personalStorage.setItem(SCREEN_SCHEMES_KEY, JSON.stringify(next)); setSchemes(next); return true; }
     catch { setSchemeError('保存失败，请检查浏览器存储'); return false; }
@@ -171,19 +172,14 @@ function ScreenerContent() {
   const head = (key: ScreenerSort['key'], label: string, tone = 'text-slate-500') => <button type="button" onClick={() => updateSort(key)} aria-label={`按${label}排序`} className={`inline-flex min-h-7 items-center gap-1 whitespace-nowrap font-medium ${preferences.sort.key === key ? 'text-brand-700' : tone}`}>{label}<span aria-hidden="true" className={preferences.sort.key === key ? 'text-brand-600' : 'text-slate-300'}>{preferences.sort.key === key ? preferences.sort.direction === 'asc' ? '↑' : '↓' : '↕'}</span></button>;
   const sortAria = (key: ScreenerSort['key']) => preferences.sort.key === key ? preferences.sort.direction === 'asc' ? 'ascending' as const : 'descending' as const : 'none' as const;
   const columns = preferences.columns.map(id => SCREEN_COLUMNS.find(column => column.id === id)!);
-  const periods = [...new Set([...(meta?.periods ?? []), ...(draft.period && draft.period !== SCREEN_AUTO_PERIOD ? [draft.period] : [])])].sort().reverse();
   const selectedScopeMissing = draft.scope.startsWith('group:') && !watchlist.groups.some(group => `group:${group.id}` === draft.scope);
   return <div ref={rootRef} style={{ height: height ?? 'calc(100dvh - 68px)' }} className="flex min-h-[420px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <h1 className="mr-1 text-base font-semibold text-slate-900">条件选股</h1>
-        <select aria-label="股票范围" value={draft.scope} onChange={event => setValue('scope', event.target.value)} className="input !min-h-8 !w-auto !max-w-40 !py-1 !text-xs">
-          <option value="all">全部A股</option><option value="watchlist">我的自选 · A股</option>
-          {watchlist.groups.map(group => <option key={group.id} value={`group:${group.id}`}>{group.name} · A股</option>)}
-          {selectedScopeMissing && <option value={draft.scope}>原分组已删除</option>}
-        </select>
+        <StockScopeFilter value={{ onlyWatched: draft.scope !== 'all', excludeST: draft.excludeST, excludeLoss: draft.excludeLoss }} onChange={value => setDraft(previous => ({ ...previous, scope: value.onlyWatched ? previous.scope === 'all' ? 'watchlist' : previous.scope : 'all', excludeST: value.excludeST, excludeLoss: value.excludeLoss }))} />
+        {draft.scope !== 'all' && <select aria-label="自选范围" value={draft.scope} onChange={event => setValue('scope', event.target.value)} className="input !min-h-8 !w-auto !max-w-40 !py-1 !text-xs"><option value="watchlist">全部自选</option>{watchlist.groups.map(group => <option key={group.id} value={`group:${group.id}`}>{group.name}</option>)}{selectedScopeMissing && <option value={draft.scope}>原分组已删除</option>}</select>}
         <IndustryMultiSelect options={meta?.industries ?? []} included={draft.industries} excluded={draft.excludedIndustries} onIncludedChange={value => setValue('industries', value)} onExcludedChange={value => setValue('excludedIndustries', value)} />
-        <select aria-label="财报期间" value={draft.period} onChange={event => setValue('period', event.target.value)} className="input !min-h-8 !w-auto !py-1 !text-xs"><option value={SCREEN_AUTO_PERIOD}>自动 · 最新年报</option>{!periods.length && <option value="">加载年报期…</option>}{periods.filter(period => period !== SCREEN_AUTO_PERIOD).map(period => <option key={period} value={period}>{periodLabel(period)}</option>)}</select>
       </div>
       <div className="ml-auto flex items-center gap-2">
         <select aria-label="我的选股方案" value={schemeId} onChange={event => applyScheme(event.target.value)} className="input !min-h-8 !w-auto !max-w-36 !py-1 !text-xs"><option value="">我的方案</option>{schemes.map(scheme => <option key={scheme.id} value={scheme.id}>{scheme.name}</option>)}</select>
@@ -193,25 +189,23 @@ function ScreenerContent() {
     </div>
     <form onSubmit={event => { event.preventDefault(); void performScreen(draft); }} className="shrink-0 border-b border-slate-200/70 bg-slate-50/40 px-3 py-2">
       {!preferences.filtersCollapsed && <>
-        <div className="grid grid-cols-2 gap-x-2.5 gap-y-2 sm:grid-cols-3 xl:grid-cols-6">
+        <div className="overflow-x-auto pb-1"><div className="grid min-w-[1140px] grid-cols-[repeat(11,minmax(0,1fr))] gap-1.5">
           <RangeInput label="PE-TTM" min={draft.peMin} max={draft.peMax} onMin={value => setValue('peMin', value)} onMax={value => setValue('peMax', value)} />
           <RangeInput label="PB" min={draft.pbMin} max={draft.pbMax} onMin={value => setValue('pbMin', value)} onMax={value => setValue('pbMax', value)} />
-          <NumericInput label="加权ROE" value={draft.roeMin} onChange={value => setValue('roeMin', value)} title="所选年报披露的加权净资产收益率" />
+          <NumericInput label="加权ROE" value={draft.roeMin} onChange={value => setValue('roeMin', value)} title="最新报告期披露的加权净资产收益率" />
           <NumericInput label="营收同比" value={draft.revenueGrowthMin} onChange={value => setValue('revenueGrowthMin', value)} />
           <NumericInput label="扣非净利同比" value={draft.deductedGrowthMin} onChange={value => setValue('deductedGrowthMin', value)} />
           <NumericInput label="资产负债率" value={draft.debtRatioMax} onChange={value => setValue('debtRatioMax', value)} operator="≤" />
-        </div>
-        {more && <div className="mt-2 grid grid-cols-2 gap-x-2.5 gap-y-2 sm:grid-cols-3 xl:grid-cols-5">
+
           <NumericInput label="销售净利率" value={draft.netMarginMin} onChange={value => setValue('netMarginMin', value)} />
           <NumericInput label="归母净利同比" value={draft.profitGrowthMin} onChange={value => setValue('profitGrowthMin', value)} />
           <RangeInput label="总市值" suffix="亿元" min={draft.marketCapMin} max={draft.marketCapMax} onMin={value => setValue('marketCapMin', value)} onMax={value => setValue('marketCapMax', value)} />
           <NumericInput label="经营现金流" value={draft.ocfMin} onChange={value => setValue('ocfMin', value)} suffix="亿" />
           <NumericInput label="现金净利比" value={draft.ocfToProfitMin} onChange={value => setValue('ocfToProfitMin', value)} title="同期经营现金流 / 全体净利润 × 100；100%为1倍，净利润非正时留空" />
-        </div>}
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-slate-600">
+        </div></div>
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-slate-600">
           <label className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap"><input type="checkbox" checked={draft.cashflowPositive} onChange={event => setValue('cashflowPositive', event.target.checked)} className="h-3.5 w-3.5 accent-blue-600" />经营现金流为正</label>
           <label className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap"><input type="checkbox" checked={draft.deductedProfitPositive} onChange={event => setValue('deductedProfitPositive', event.target.checked)} className="h-3.5 w-3.5 accent-blue-600" />扣非利润为正</label>
-          <button type="button" onClick={() => setMore(previous => !previous)} className="text-brand-700">{more ? '收起更多' : '更多条件'}</button>
         </div>
       </>}
       <div className={`flex flex-wrap items-center justify-between gap-2 ${preferences.filtersCollapsed ? '' : 'mt-2'}`}>
@@ -226,7 +220,7 @@ function ScreenerContent() {
     {error && <div role="alert" className="flex shrink-0 items-center justify-between gap-2 border-b border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800"><span>{error}{result ? '，保留上次结果' : ''}</span><button type="button" onClick={() => meta ? void performScreen(draft) : window.location.reload()} className="shrink-0 underline">重试</button></div>}
     <div className="flex min-h-10 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-slate-100 px-3 py-1.5 text-xs">
       <div className="flex flex-wrap items-center gap-2 text-slate-500">
-        <strong className="font-semibold text-slate-800">{result ? `匹配 ${result.total.toLocaleString()} 家` : loading ? '读取财报与行情…' : '暂无结果'}</strong>
+        <strong className="font-semibold text-slate-800">{result ? `匹配 ${result.total.toLocaleString()} 家` : loading ? '读取财报与行情…' : '尚未筛选'}</strong>
         {selected.length > 0 && <><span className="text-brand-700">已选 {selected.length} 家</span><button type="button" onClick={() => setSelected([])}>清空</button><button type="button" onClick={() => setSelected(sorted.map(row => row.symbol))} className="text-brand-700">全选结果</button><select aria-label="批量加入分组" value={groupId} onChange={event => setTargetGroup(event.target.value)} className="input !min-h-7 !w-auto !max-w-32 !py-0.5 !text-xs">{watchlist.groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select><button type="button" onClick={addSelected} disabled={!watchlist.ready} className="btn-primary !min-h-7 !px-2 !py-0.5 !text-xs">加入自选</button></>}
         <span role="status" className="text-teal-700">{status}</span>
       </div>
@@ -251,18 +245,18 @@ function ScreenerContent() {
           })}
           <td className="whitespace-nowrap px-3 py-1"><div className="flex items-center justify-end gap-3 text-xs"><Link href={`/stock/${row.symbol}`} prefetch={false} className="text-brand-700 hover:underline">估值</Link><Link href={`/stock/${row.symbol}/finance`} prefetch={false} className="text-brand-700 hover:underline">财报</Link><WatchlistButton compact code={row.symbol} name={row.name} /></div></td>
         </tr>)}
-        {!visibleRows.length && <tr><td colSpan={columns.length + 4} className="px-3 py-16 text-center text-xs text-slate-500">{loading ? '读取所选年报与行情…' : result?.universeCount === 0 ? '当前范围没有 A 股公司' : error ? '数据暂未取得' : '没有符合条件的公司'}{!loading && !error && <button type="button" onClick={() => { const next = { ...emptyScreenerDraft(SCREEN_AUTO_PERIOD), scope: draft.scope }; setDraft(next); void performScreen(next); }} className="ml-2 text-brand-700">查看全部A股</button>}</td></tr>}
+        {!visibleRows.length && <tr><td colSpan={columns.length + 4} className="px-3 py-16 text-center text-xs text-slate-500">{loading ? '读取最新财报与行情…' : error ? '数据暂未取得' : !result ? '设置条件后，点击筛选' : result.universeCount === 0 ? '当前范围没有 A 股公司' : '没有符合条件的公司'}</td></tr>}
         </tbody>
       </table>
     </div>
     <div className="flex min-h-8 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-slate-200 bg-slate-50/50 px-3 py-1 text-[11px] text-slate-500">
-      <span>{result ? <>{periodLabel(result.period)} · 财报 {result.financialCount}/{result.universeCount} 家 · 行情 {result.quoteCount}/{result.scannedCount} 家{result.requestedPeriod === SCREEN_AUTO_PERIOD && !!result.fallbackCount && <span className="ml-2 text-amber-700">{result.fallbackCount} 家用更早年报</span>}</> : '—'}{!!result?.unknownConditionCount && <span className="ml-2 text-amber-700">条件缺值 {result.unknownConditionCount} 家</span>}<button type="button" onClick={() => setColumnsOpen(true)} className="ml-3 text-slate-400 hover:text-brand-700">数据口径</button></span>
+      <span>{result ? <>{periodLabel(result.period)} · 财报 {result.financialCount}/{result.universeCount} 家 · 行情 {result.quoteCount}/{result.scannedCount} 家{result.requestedPeriod === SCREEN_AUTO_PERIOD && !!result.fallbackCount && <span className="ml-2 text-amber-700">{result.fallbackCount} 家使用较早报告期</span>}</> : '—'}{!!result?.unknownConditionCount && <span className="ml-2 text-amber-700">条件缺值 {result.unknownConditionCount} 家</span>}<button type="button" onClick={() => setColumnsOpen(true)} className="ml-3 text-slate-400 hover:text-brand-700">数据口径</button></span>
       <div className="ml-auto flex items-center gap-2"><span>{page}/{pageCount} 页 · 每页 {pageSize} 家</span><button type="button" disabled={page <= 1} onClick={() => movePage(page - 1)} className="btn !min-h-6 !px-2 !py-0 !text-[11px]">上一页</button><button type="button" disabled={page >= pageCount} onClick={() => movePage(page + 1)} className="btn !min-h-6 !px-2 !py-0 !text-[11px]">下一页</button><input type="number" min={1} max={pageCount} aria-label="跳转页码" value={jump} onChange={event => setJump(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && jump && Number.isInteger(Number(jump))) movePage(Number(jump)); }} placeholder="页码" className="h-6 w-12 rounded border border-slate-200 bg-white px-1 text-center text-[11px] tabular-nums outline-none focus:border-brand-300" /></div>
     </div>
     <Modal open={columnsOpen} title="显示列" onClose={() => setColumnsOpen(false)}>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{SCREEN_COLUMNS.map(column => <label key={column.id} className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-xs ${preferences.columns.includes(column.id) ? 'border-brand-200 bg-brand-50/40' : 'border-slate-200'} ${toneClass[column.tone]}`}><input type="checkbox" checked={preferences.columns.includes(column.id)} onChange={event => updateColumns(event.target.checked ? SCREEN_COLUMNS.filter(item => item.id === column.id || preferences.columns.includes(item.id)).map(item => item.id) : preferences.columns.filter(id => id !== column.id))} className="h-3.5 w-3.5 accent-blue-600" />{column.label}</label>)}</div>
       <div className="mt-4 flex items-center justify-between"><button type="button" onClick={() => updateColumns([...DEFAULT_SCREEN_COLUMNS])} className="text-xs text-slate-500">恢复默认列</button><button type="button" onClick={() => setColumnsOpen(false)} className="btn-primary">完成</button></div>
-      <details className="mt-4 border-t border-slate-100 pt-3 text-xs leading-6 text-slate-500"><summary>指标与数据口径</summary><p className="mt-2">股票范围为本地申万分类中的A股。行业可多选「只看这些行业」，也可多选「排除这些行业」；同一行业同时出现在两组时，勾选其中一组会自动取消另一组，避免条件互相抵消。</p><p className="mt-2">财务条件使用已经披露的年报：ROE为披露的加权ROE，增长率为年度同比；经营现金流和市值以亿元计。现金净利比为经营现金流除以同期全体净利润，净利润非正时不计算。财报期选「自动」时，每家公司各自取其最新的已披露年报，未披露最新年报的公司自动回退到上一期，因此「报告期」列会出现不同年份；底栏会统计用了更早年报的家数。</p><p className="mt-2">PE-TTM、PB和市值来自当前行情，不使用PB÷PE推算财报ROE。未取得的数据留空，已启用条件的缺失值不会通过筛选。表尾分别列出财报与行情覆盖数量。</p></details>
+      <details className="mt-4 border-t border-slate-100 pt-3 text-xs leading-6 text-slate-500"><summary>指标与数据口径</summary><p className="mt-2">股票范围为本地申万分类中的A股。行业可多选「只看这些行业」，也可多选「排除这些行业」；同一行业同时出现在两组时，勾选其中一组会自动取消另一组，避免条件互相抵消。</p><p className="mt-2">财务条件采用截至当天已披露的最新报告，报告期逐公司选择并在结果中显示。ROE为披露的累计加权ROE，不自行年化；增长率为累计同比。经营现金流和市值以亿元计，现金净利比使用同一报告期的经营现金流和全体净利润，净利润非正时不计算。</p><p className="mt-2">PE-TTM、PB和市值来自当前行情，不使用PB÷PE推算财报ROE。未取得的数据留空，已启用条件的缺失值不会通过筛选。表尾分别列出财报与行情覆盖数量。</p></details>
     </Modal>
     <Modal open={schemeOpen} title="保存选股方案" onClose={() => setSchemeOpen(false)}>
       <form onSubmit={event => { event.preventDefault(); saveScheme(); }}>

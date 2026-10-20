@@ -75,7 +75,7 @@ export function getValueScreenMeta(now = new Date()): ValueScreenMeta {
       count: universe.filter(candidate => candidate.industry === industry.name).length,
     })),
     universeCount: universe.length,
-    defaultPeriod: periods[0],
+    defaultPeriod: 'auto',
   };
 }
 
@@ -98,35 +98,35 @@ export async function fetchValueScreenReportPages(
     const params = new URLSearchParams({
       reportName, columns,
       filter: `(REPORT_DATE in (${inList}))(NOTICE_DATE<='${today} 23:59:59')`,
-      sortColumns: 'SECURITY_CODE,UPDATE_DATE', sortTypes: '1,-1',
+      sortColumns: 'SECURITY_CODE,REPORT_DATE,UPDATE_DATE,NOTICE_DATE,CURRENCY', sortTypes: '1,-1,-1,-1,1',
       pageNumber: String(page), pageSize: String(PAGE_SIZE),
     });
     const response = await fetcher(`${DC_URL}?${params}`);
     const result = response.result;
     if (!response.success || !result || !Array.isArray(result.data))
-      throw Error('年报数据暂不可用，请稍后重试');
+      throw Error('财报数据暂不可用，请稍后重试');
     const pages = Number(result.pages), count = Number(result.count);
     if (!Number.isInteger(pages) || pages < 0 || pages > pageCeiling ||
       !Number.isInteger(count) || count < 0 ||
       (count > 0 && pages < 1) || (count === 0 && result.data.length > 0))
-      throw Error('年报分页信息不完整，请稍后重试');
+      throw Error('财报分页信息不完整，请稍后重试');
     return { rows: result.data, pages, count };
   };
   const first = await read(1);
   const remaining = await mapLimit(Array.from({ length: Math.max(0, first.pages - 1) }, (_, index) => index + 2), PAGE_CONCURRENCY, read);
   if (remaining.some(page => page.pages !== first.pages || page.count !== first.count))
-    throw Error('年报分页数据发生变化，请重新筛选');
+    throw Error('财报分页数据发生变化，请重新筛选');
   const rows = [first, ...remaining].flatMap(page => page.rows);
-  if (rows.length !== first.count) throw Error('年报数据分页不完整，请重新筛选');
+  if (rows.length !== first.count) throw Error('财报数据分页不完整，请重新筛选');
   const identities = new Set(rows.map(row => `${row.SECURITY_CODE}|${row.REPORT_DATE}|${row.UPDATE_DATE}|${row.NOTICE_DATE}`));
-  if (identities.size !== rows.length) throw Error('年报分页出现重复记录，请重新筛选');
+  if (identities.size !== rows.length) throw Error('财报分页出现重复记录，请重新筛选');
   return rows;
 }
 
 /** Cache only raw reports. Prices and final valuation/filter results never use this TTL. */
 export async function fetchValueScreenReports(periods: string[], today: string): Promise<ValueScreenReports> {
   const key = [...new Set(periods)].sort().join('~');
-  return cached(`value-screen-reports-v1:${key}:${today}`, 3600e3, async () => {
+  return cached(`value-screen-reports-v2:${key}:${today}`, 300e3, async () => {
     const [main, income] = await Promise.all([
       fetchValueScreenReportPages('RPT_F10_FINANCE_MAINFINADATA', MAIN_COLUMNS, periods, today),
       fetchValueScreenReportPages('RPT_F10_FINANCE_GINCOME', INCOME_COLUMNS, periods, today),
@@ -167,7 +167,7 @@ function latestReports(rows: RawRow[], allowedPeriods: Set<string>, today: strin
 export function parseValueScreenFinancials(reports: ValueScreenReports, periods: string[], today: string): Map<string, ValueScreenFinancial> {
   const allowedPeriods = new Set(periods);
   const main = latestReports(reports.main, allowedPeriods, today);
-  const income = latestReports(reports.income, allowedPeriods, today);
+  const income = latestReports(reports.income.filter(row => dateOnly(row.REPORT_DATE) === main.get(String(row.SECURITY_CODE))?.period), allowedPeriods, today);
   return new Map([...main].map(([code, entry]) => {
     const row = entry.row;
     const cashFlow = finite(row.NETCASH_OPERATE_PK);

@@ -7,8 +7,6 @@ export interface ScreenerDraft {
   scope: string;
   /** Included industries; empty means all. */
   industries: string[];
-  /** Excluded industries; exclusion always wins over inclusion. */
-  excludedIndustries: string[];
   /** 'auto' means newest available annual report, falling back per company. */
   period: string;
   peMin: string;
@@ -35,7 +33,6 @@ export function emptyScreenerDraft(period: string): ScreenerDraft {
   return {
     scope: 'all',
     industries: [],
-    excludedIndustries: [],
     period,
     peMin: '',
     peMax: '',
@@ -232,8 +229,7 @@ function readCriteria(
   )
     return null;
   const industries = normalizeIndustries(raw.industries, raw.industry);
-  const excludedIndustries = normalizeIndustries(raw.excludedIndustries);
-  if (!industries || !excludedIndustries) return null;
+  if (!industries) return null;
   const period = raw.period === undefined ? defaultPeriod : raw.period;
   if (
     (period !== SCREEN_AUTO_PERIOD && !validDate(period)) ||
@@ -244,7 +240,6 @@ function readCriteria(
   const criteria = emptyScreenerDraft(period);
   criteria.scope = raw.scope;
   criteria.industries = industries;
-  criteria.excludedIndustries = excludedIndustries;
   criteria.cashflowPositive = raw.cashflowPositive;
   criteria.deductedProfitPositive = raw.deductedProfitPositive;
   for (const key of ['excludeST', 'excludeLoss'] as const) {

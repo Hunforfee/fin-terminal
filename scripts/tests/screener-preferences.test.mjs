@@ -38,7 +38,7 @@ test('empty draft, typed column catalog and default preferences have stable inde
   assert.equal(first.cashflowPositive, false);
   assert.equal(first.deductedProfitPositive, false);
   assert.deepEqual(first.industries, []);
-  assert.deepEqual(first.excludedIndustries, []);
+  assert.ok(!('excludedIndustries' in first));
   assert.ok(
     Object.entries(first)
       .filter(
@@ -141,7 +141,7 @@ test('schemes preserve finite numeric drafts including negative/zero/empty and r
   const [read] = readScreenerSchemes([incoming], period);
   assert.equal(read.criteria.scope, incoming.criteria.scope);
   assert.deepEqual(read.criteria.industries, ['食品饮料', '银行']);
-  assert.deepEqual(read.criteria.excludedIndustries, ['银行']);
+  assert.ok(!('excludedIndustries' in read.criteria), 'removed exclusion filters do not survive saved scheme loading');
   assert.equal(read.criteria.peMin, '-5');
   assert.equal(read.criteria.peMax, '0');
   assert.equal(read.criteria.pbMin, '-0');
@@ -164,7 +164,7 @@ test('legacy single-industry schemes upgrade to arrays instead of being silently
   });
   const [upgraded] = readScreenerSchemes([legacy], period);
   assert.deepEqual(upgraded.criteria.industries, ['食品饮料']);
-  assert.deepEqual(upgraded.criteria.excludedIndustries, []);
+  assert.ok(!('excludedIndustries' in upgraded.criteria));
   assert.ok(!('industry' in upgraded.criteria), 'the legacy key never persists forward');
   // An empty legacy value meant "all industries".
   assert.deepEqual(

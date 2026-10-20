@@ -20,7 +20,7 @@ import {
 } from '@/lib/screenerPreferences';
 import type { ValueScreenCriteria, ValueScreenMeta, ValueScreenResult, ValueScreenRow } from '@/lib/valueScreen';
 
-type NumericField = Exclude<keyof ScreenerDraft, 'scope' | 'industries' | 'excludedIndustries' | 'period' | 'cashflowPositive' | 'deductedProfitPositive' | 'excludeST' | 'excludeLoss'>;
+type NumericField = Exclude<keyof ScreenerDraft, 'scope' | 'industries' | 'period' | 'cashflowPositive' | 'deductedProfitPositive' | 'excludeST' | 'excludeLoss'>;
 const NUMERIC_FIELDS: NumericField[] = ['peMin', 'peMax', 'pbMin', 'pbMax', 'roeMin', 'netMarginMin', 'revenueGrowthMin', 'profitGrowthMin', 'deductedGrowthMin', 'debtRatioMax', 'marketCapMin', 'marketCapMax', 'ocfMin', 'ocfToProfitMin'];
 const PRESETS: { name: string; title: string; values: Partial<ScreenerDraft> }[] = [
   { name: '低估值', title: '0 < PE ≤ 20，0 < PB ≤ 2', values: { peMin: '0', peMax: '20', pbMin: '0', pbMax: '2' } },
@@ -47,7 +47,6 @@ function activeConditions(draft: ScreenerDraft): string[] {
     ...(draft.cashflowPositive ? ['经营现金流为正'] : []),
     ...(draft.deductedProfitPositive ? ['扣非利润为正'] : []),
     ...industryTags(draft.industries, '行业'),
-    ...industryTags(draft.excludedIndustries, '排除'),
     ...(draft.excludeST ? ['排除 ST'] : []), ...(draft.excludeLoss ? ['排除亏损'] : []),
   ];
 }
@@ -93,7 +92,6 @@ function ScreenerContent() {
     const invalid = draftError(next); if (invalid) { setError(invalid); return; }
     const payload: ValueScreenCriteria = { period: SCREEN_AUTO_PERIOD, excludeST: next.excludeST, excludeLoss: next.excludeLoss, scope: next.scope === 'all' ? 'all' : 'watchlist', cashflowPositive: next.cashflowPositive, deductedProfitPositive: next.deductedProfitPositive };
     if (next.industries.length) payload.industries = next.industries;
-    if (next.excludedIndustries.length) payload.excludedIndustries = next.excludedIndustries;
     for (const key of NUMERIC_FIELDS) if (next[key].trim()) payload[key] = Number(next[key]);
     if (next.scope !== 'all') payload.codes = scopeCodes(next.scope);
     const scopeKey = next.scope === 'all' ? 'all' : payload.codes!.join(',');
@@ -147,8 +145,8 @@ function ScreenerContent() {
   useEffect(() => { if (checkboxRef.current) checkboxRef.current.indeterminate = pageSelected > 0 && pageSelected < visibleRows.length; }, [pageSelected, visibleRows.length]);
   const updateSort = (key: ScreenerSort['key']) => { setPreferences(previous => ({ ...previous, sort: { key, direction: previous.sort.key === key ? previous.sort.direction === 'asc' ? 'desc' : 'asc' : key === 'name' || key === 'industry' || key === 'pe' || key === 'pb' ? 'asc' : 'desc' } })); setPage(1); };
   const updateColumns = (columns: ScreenColumnId[]) => setPreferences(previous => readScreenerPreferences({ ...previous, columns }));
-  const applyPreset = (values: Partial<ScreenerDraft>) => { setDraft(previous => ({ ...emptyScreenerDraft(previous.period), scope: previous.scope, industries: previous.industries, excludedIndustries: previous.excludedIndustries, ...values })); setSchemeId(''); };
-  const applyScheme = (id: string) => { setSchemeId(id); const scheme = schemes.find(item => item.id === id); if (!scheme) return; setDraft({ ...scheme.criteria, period: SCREEN_AUTO_PERIOD, industries: scheme.criteria.industries.length ? scheme.criteria.industries : (meta?.industries ?? []).map(item => item.name).filter(name => !scheme.criteria.excludedIndustries.includes(name)) }); setPreferences(previous => readScreenerPreferences({ ...previous, columns: scheme.columns, sort: scheme.sort })); };
+  const applyPreset = (values: Partial<ScreenerDraft>) => { setDraft(previous => ({ ...emptyScreenerDraft(previous.period), scope: previous.scope, industries: previous.industries, ...values })); setSchemeId(''); };
+  const applyScheme = (id: string) => { setSchemeId(id); const scheme = schemes.find(item => item.id === id); if (!scheme) return; setDraft({ ...scheme.criteria, period: SCREEN_AUTO_PERIOD, industries: scheme.criteria.industries.length ? scheme.criteria.industries : (meta?.industries ?? []).map(item => item.name) }); setPreferences(previous => readScreenerPreferences({ ...previous, columns: scheme.columns, sort: scheme.sort })); };
   const saveSchemes = (next: ScreenerScheme[]): boolean => {
     try { personalStorage.setItem(SCREEN_SCHEMES_KEY, JSON.stringify(next)); setSchemes(next); return true; }
     catch { setSchemeError('保存失败，请检查浏览器存储'); return false; }
@@ -179,7 +177,7 @@ function ScreenerContent() {
         <h1 className="mr-1 text-base font-semibold text-slate-900">条件选股</h1>
         <StockScopeFilter value={{ onlyWatched: draft.scope !== 'all', excludeST: draft.excludeST, excludeLoss: draft.excludeLoss }} onChange={value => setDraft(previous => ({ ...previous, scope: value.onlyWatched ? previous.scope === 'all' ? 'watchlist' : previous.scope : 'all', excludeST: value.excludeST, excludeLoss: value.excludeLoss }))} />
         {draft.scope !== 'all' && <select aria-label="自选范围" value={draft.scope} onChange={event => setValue('scope', event.target.value)} className="input !min-h-8 !w-auto !max-w-40 !py-1 !text-xs"><option value="watchlist">全部自选</option>{watchlist.groups.map(group => <option key={group.id} value={`group:${group.id}`}>{group.name}</option>)}{selectedScopeMissing && <option value={draft.scope}>原分组已删除</option>}</select>}
-        <IndustryMultiSelect options={meta?.industries ?? []} included={draft.industries} excluded={draft.excludedIndustries} onIncludedChange={value => setValue('industries', value)} onExcludedChange={value => setValue('excludedIndustries', value)} />
+        <IndustryMultiSelect options={meta?.industries ?? []} included={draft.industries} onIncludedChange={value => setValue('industries', value)} />
       </div>
       <div className="ml-auto flex items-center gap-2">
         <select aria-label="我的选股方案" value={schemeId} onChange={event => applyScheme(event.target.value)} className="input !min-h-8 !w-auto !max-w-36 !py-1 !text-xs"><option value="">我的方案</option>{schemes.map(scheme => <option key={scheme.id} value={scheme.id}>{scheme.name}</option>)}</select>
@@ -212,7 +210,7 @@ function ScreenerContent() {
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">{preferences.filtersCollapsed ? conditions.map(condition => <button key={condition} type="button" onClick={() => setPreferences(previous => ({ ...previous, filtersCollapsed: false }))} className="rounded border border-brand-100 bg-brand-50/60 px-2 py-1 text-[11px] text-brand-800">{condition}</button>) : PRESETS.map(preset => <button key={preset.name} type="button" title={preset.title} onClick={() => applyPreset(preset.values)} className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600 hover:border-brand-200 hover:text-brand-700">{preset.name}</button>)}</div>
         <div className="ml-auto flex items-center gap-3">
           {dirty && result && <span className="text-[11px] text-amber-700">条件未应用</span>}
-          <button type="button" onClick={() => { setDraft(previous => ({ ...emptyScreenerDraft(previous.period), scope: previous.scope, industries: previous.industries, excludedIndustries: previous.excludedIndustries })); setSchemeId(''); setError(''); }} className="text-xs text-slate-500 hover:text-slate-900">清空条件</button>
+          <button type="button" onClick={() => { setDraft(previous => ({ ...emptyScreenerDraft(previous.period), scope: previous.scope, industries: previous.industries })); setSchemeId(''); setError(''); }} className="text-xs text-slate-500 hover:text-slate-900">清空条件</button>
           <button type="submit" disabled={loading || !meta} className="btn-primary !min-h-8 !px-4 !py-1 !text-xs">{loading ? '筛选中…' : '筛选'}</button>
         </div>
       </div>
@@ -256,7 +254,7 @@ function ScreenerContent() {
     <Modal open={columnsOpen} title="显示列" onClose={() => setColumnsOpen(false)}>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{SCREEN_COLUMNS.map(column => <label key={column.id} className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-xs ${preferences.columns.includes(column.id) ? 'border-brand-200 bg-brand-50/40' : 'border-slate-200'} ${toneClass[column.tone]}`}><input type="checkbox" checked={preferences.columns.includes(column.id)} onChange={event => updateColumns(event.target.checked ? SCREEN_COLUMNS.filter(item => item.id === column.id || preferences.columns.includes(item.id)).map(item => item.id) : preferences.columns.filter(id => id !== column.id))} className="h-3.5 w-3.5 accent-blue-600" />{column.label}</label>)}</div>
       <div className="mt-4 flex items-center justify-between"><button type="button" onClick={() => updateColumns([...DEFAULT_SCREEN_COLUMNS])} className="text-xs text-slate-500">恢复默认列</button><button type="button" onClick={() => setColumnsOpen(false)} className="btn-primary">完成</button></div>
-      <details className="mt-4 border-t border-slate-100 pt-3 text-xs leading-6 text-slate-500"><summary>指标与数据口径</summary><p className="mt-2">股票范围为本地申万分类中的A股。行业可多选「只看这些行业」，也可多选「排除这些行业」；同一行业同时出现在两组时，勾选其中一组会自动取消另一组，避免条件互相抵消。</p><p className="mt-2">财务条件采用截至当天已披露的最新报告，报告期逐公司选择并在结果中显示。ROE为披露的累计加权ROE，不自行年化；增长率为累计同比。经营现金流和市值以亿元计，现金净利比使用同一报告期的经营现金流和全体净利润，净利润非正时不计算。</p><p className="mt-2">PE-TTM、PB和市值来自当前行情，不使用PB÷PE推算财报ROE。未取得的数据留空，已启用条件的缺失值不会通过筛选。表尾分别列出财报与行情覆盖数量。</p></details>
+      <details className="mt-4 border-t border-slate-100 pt-3 text-xs leading-6 text-slate-500"><summary>指标与数据口径</summary><p className="mt-2">股票范围为本地申万分类中的A股。行业支持多选，仅筛选勾选的行业；使用同一个按钮切换全选和取消全选，至少选择一个行业后再开始筛选。</p><p className="mt-2">财务条件采用截至当天已披露的最新报告，报告期逐公司选择并在结果中显示。ROE为披露的累计加权ROE，不自行年化；增长率为累计同比。经营现金流和市值以亿元计，现金净利比使用同一报告期的经营现金流和全体净利润，净利润非正时不计算。</p><p className="mt-2">PE-TTM、PB和市值来自当前行情，不使用PB÷PE推算财报ROE。未取得的数据留空，已启用条件的缺失值不会通过筛选。表尾分别列出财报与行情覆盖数量。</p></details>
     </Modal>
     <Modal open={schemeOpen} title="保存选股方案" onClose={() => setSchemeOpen(false)}>
       <form onSubmit={event => { event.preventDefault(); saveScheme(); }}>

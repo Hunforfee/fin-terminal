@@ -6,6 +6,16 @@
 import c601398 from './601398.json';
 import c600415 from './600415.json';
 import c600660 from './600660.json';
+import c000792 from './000792.json';
+import c603448 from './603448.json';
+import c002299 from './002299.json';
+import c600933 from './600933.json';
+import c000612 from './000612.json';
+import c601065 from './601065.json';
+import c603187 from './603187.json';
+import c603367 from './603367.json';
+import c002128 from './002128.json';
+import c300918 from './300918.json';
 import c601288 from './601288.json';
 import c601939 from './601939.json';
 import c601988 from './601988.json';
@@ -109,6 +119,561 @@ import c600585 from './600585.json';
 import c002271 from './002271.json';
 import c603605 from './603605.json';
 import c600398 from './600398.json';
+import c300415 from './300415.json';
+import c301301 from './301301.json';
+import c600489 from './600489.json';
+import c603606 from './603606.json';
+import c600458 from './600458.json';
+import c688187 from './688187.json';
+import c001206 from './001206.json';
+import c688712 from './688712.json';
+import c002557 from './002557.json';
+import c601083 from './601083.json';
+import c000415 from './000415.json';
+import c000425 from './000425.json';
+import c000426 from './000426.json';
+import c000525 from './000525.json';
+import c000581 from './000581.json';
+import c000690 from './000690.json';
+import c000726 from './000726.json';
+import c000729 from './000729.json';
+import c000921 from './000921.json';
+import c001248 from './001248.json';
+import c001280 from './001280.json';
+import c002001 from './002001.json';
+import c002011 from './002011.json';
+import c002014 from './002014.json';
+import c002091 from './002091.json';
+import c002120 from './002120.json';
+import c002216 from './002216.json';
+import c002258 from './002258.json';
+import c002293 from './002293.json';
+import c002327 from './002327.json';
+import c002616 from './002616.json';
+import c300470 from './300470.json';
+import c301039 from './301039.json';
+import c301061 from './301061.json';
+import c301296 from './301296.json';
+import c600256 from './600256.json';
+import c600406 from './600406.json';
+import c600486 from './600486.json';
+import c600499 from './600499.json';
+import c600548 from './600548.json';
+import c600563 from './600563.json';
+import c600572 from './600572.json';
+import c600761 from './600761.json';
+import c601000 from './601000.json';
+import c601098 from './601098.json';
+import c601107 from './601107.json';
+import c601163 from './601163.json';
+import c601298 from './601298.json';
+import c601598 from './601598.json';
+import c601811 from './601811.json';
+import c601928 from './601928.json';
+import c603167 from './603167.json';
+import c603298 from './603298.json';
+import c603345 from './603345.json';
+import c603529 from './603529.json';
+import c603558 from './603558.json';
+import c603565 from './603565.json';
+import c603680 from './603680.json';
+import c603697 from './603697.json';
+import c603871 from './603871.json';
+import c603967 from './603967.json';
+import c605338 from './605338.json';
+import c688520 from './688520.json';
+import c688570 from './688570.json';
+import c688825 from './688825.json';
+import c688836 from './688836.json';
+import c601816 from './601816.json';
+import c601333 from './601333.json';
+import c600801 from './600801.json';
+import c002884 from './002884.json';
+import c603279 from './603279.json';
+import c01787 from './01787.json';
+import c603889 from './603889.json';
+import c00639 from './00639.json';
+import c600346 from './600346.json';
+import c600757 from './600757.json';
+import c600425 from './600425.json';
+import c600026 from './600026.json';
+import c600428 from './600428.json';
+import c605259 from './605259.json';
+import c601019 from './601019.json';
+import c601872 from './601872.json';
+import c603596 from './603596.json';
+import c600968 from './600968.json';
+import c600704 from './600704.json';
+import c600582 from './600582.json';
+import c300770 from './300770.json';
+import c601975 from './601975.json';
+import c600598 from './600598.json';
+import c603049 from './603049.json';
+import c600587 from './600587.json';
+import c600096 from './600096.json';
+import c600085 from './600085.json';
+import c600007 from './600007.json';
+import c002749 from './002749.json';
+import c002895 from './002895.json';
+import c600993 from './600993.json';
+import c002056 from './002056.json';
+import c600210 from './600210.json';
+import c002170 from './002170.json';
+import c600782 from './600782.json';
+import c600108 from './600108.json';
+import c600941 from './600941.json';
+import c605499 from './605499.json';
+import c600861 from './600861.json';
+import c000709 from './000709.json';
+import c002136 from './002136.json';
+import c300401 from './300401.json';
+import c002204 from './002204.json';
+import c603706 from './603706.json';
+import c600859 from './600859.json';
+import c301498 from './301498.json';
+import c600073 from './600073.json';
+import c600004 from './600004.json';
+import c603393 from './603393.json';
+import c600507 from './600507.json';
+import c601567 from './601567.json';
+import c600971 from './600971.json';
+import c688334 from './688334.json';
+import c000537 from './000537.json';
+import c000825 from './000825.json';
+import c001203 from './001203.json';
+import c002543 from './002543.json';
+import c000543 from './000543.json';
+import c000719 from './000719.json';
+import c000408 from './000408.json';
+import c601369 from './601369.json';
+import c600901 from './600901.json';
+import c000791 from './000791.json';
+import c002340 from './002340.json';
+import c601311 from './601311.json';
+import c600727 from './600727.json';
+import c600739 from './600739.json';
+import c000902 from './000902.json';
+import c600502 from './600502.json';
+import c300428 from './300428.json';
+import c002588 from './002588.json';
+import c300908 from './300908.json';
+import c002032 from './002032.json';
+import c300568 from './300568.json';
+import c002746 from './002746.json';
+import c603317 from './603317.json';
+import c600612 from './600612.json';
+import c000883 from './000883.json';
+import c000933 from './000933.json';
+import c300595 from './300595.json';
+import c603305 from './603305.json';
+import c000950 from './000950.json';
+import c300294 from './300294.json';
+import c600141 from './600141.json';
+import c002007 from './002007.json';
+import c603444 from './603444.json';
+import c600161 from './600161.json';
+import c601921 from './601921.json';
+import c002252 from './002252.json';
+import c600867 from './600867.json';
+import c601158 from './601158.json';
+import c603515 from './603515.json';
+import c601607 from './601607.json';
+import c300741 from './300741.json';
+import c000807 from './000807.json';
+import c002318 from './002318.json';
+import c000028 from './000028.json';
+import c002756 from './002756.json';
+import c002416 from './002416.json';
+import c603600 from './603600.json';
+import c000959 from './000959.json';
+import c600010 from './600010.json';
+import c601608 from './601608.json';
+import c00883 from './00883.json';
+import c02333 from './02333.json';
+import c02005 from './02005.json';
+import c03759 from './03759.json';
+import c00819 from './00819.json';
+import c601021 from './601021.json';
+import c002532 from './002532.json';
+import c603737 from './603737.json';
+import c000968 from './000968.json';
+import c002394 from './002394.json';
+import c605138 from './605138.json';
+import c002847 from './002847.json';
+import c000589 from './000589.json';
+import c002320 from './002320.json';
+import c02880 from './02880.json';
+import c603162 from './603162.json';
+import c000411 from './000411.json';
+import c01186 from './01186.json';
+import c600798 from './600798.json';
+import c06613 from './06613.json';
+import c003000 from './003000.json';
+import c01066 from './01066.json';
+import c001205 from './001205.json';
+import c002043 from './002043.json';
+import c603165 from './603165.json';
+import c01405 from './01405.json';
+import c603209 from './603209.json';
+import c601022 from './601022.json';
+import c603519 from './603519.json';
+import c600179 from './600179.json';
+import c002763 from './002763.json';
+import c301238 from './301238.json';
+import c600388 from './600388.json';
+import c688819 from './688819.json';
+import c689009 from './689009.json';
+import c601518 from './601518.json';
+import c300832 from './300832.json';
+import c603658 from './603658.json';
+import c601952 from './601952.json';
+import c600642 from './600642.json';
+import c600710 from './600710.json';
+import c600694 from './600694.json';
+import c09985 from './09985.json';
+import c603055 from './603055.json';
+import c06049 from './06049.json';
+import c603877 from './603877.json';
+import c02669 from './02669.json';
+import c605337 from './605337.json';
+import c00696 from './00696.json';
+import c600886 from './600886.json';
+import c688425 from './688425.json';
+import c00506 from './00506.json';
+import c600930 from './600930.json';
+import c300866 from './300866.json';
+import c002003 from './002003.json';
+import c601156 from './601156.json';
+import c601339 from './601339.json';
+import c603303 from './603303.json';
+import c301207 from './301207.json';
+import c06078 from './06078.json';
+import c002078 from './002078.json';
+import c00291 from './00291.json';
+import c600066 from './600066.json';
+import c06862 from './06862.json';
+import c600329 from './600329.json';
+import c002567 from './002567.json';
+import c02610 from './02610.json';
+import c603027 from './603027.json';
+import c600063 from './600063.json';
+import c00788 from './00788.json';
+import c002661 from './002661.json';
+import c002555 from './002555.json';
+import c002668 from './002668.json';
+import c600273 from './600273.json';
+import c603799 from './603799.json';
+import c601963 from './601963.json';
+import c600985 from './600985.json';
+import c002539 from './002539.json';
+import c600380 from './600380.json';
+import c002615 from './002615.json';
+import c601868 from './601868.json';
+import c002478 from './002478.json';
+import c603611 from './603611.json';
+import c002440 from './002440.json';
+import c300873 from './300873.json';
+import c601886 from './601886.json';
+import c600894 from './600894.json';
+import c600885 from './600885.json';
+import c001201 from './001201.json';
+import c002244 from './002244.json';
+import c603365 from './603365.json';
+import c002852 from './002852.json';
+import c600546 from './600546.json';
+import c000598 from './000598.json';
+import c601336 from './601336.json';
+import c002832 from './002832.json';
+import c603868 from './603868.json';
+import c600323 from './600323.json';
+import c02580 from './02580.json';
+import c301398 from './301398.json';
+import c01999 from './01999.json';
+import c600022 from './600022.json';
+import c601991 from './601991.json';
+import c601827 from './601827.json';
+import c301101 from './301101.json';
+import c06826 from './06826.json';
+import c601808 from './601808.json';
+import c002920 from './002920.json';
+import c000550 from './000550.json';
+import c02313 from './02313.json';
+import c002236 from './002236.json';
+import c002891 from './002891.json';
+import c00371 from './00371.json';
+import c600300 from './600300.json';
+import c688036 from './688036.json';
+import c01513 from './01513.json';
+import c002850 from './002850.json';
+import c600717 from './600717.json';
+import c600483 from './600483.json';
+import c301327 from './301327.json';
+import c300777 from './300777.json';
+import c600529 from './600529.json';
+import c603508 from './603508.json';
+import c002273 from './002273.json';
+import c300400 from './300400.json';
+import c002463 from './002463.json';
+import c600123 from './600123.json';
+import c002461 from './002461.json';
+import c600461 from './600461.json';
+import c000498 from './000498.json';
+import c002061 from './002061.json';
+import c00960 from './00960.json';
+import c601016 from './601016.json';
+import c688050 from './688050.json';
+import c000685 from './000685.json';
+import c02145 from './02145.json';
+import c600059 from './600059.json';
+import c01368 from './01368.json';
+import c001872 from './001872.json';
+import c688314 from './688314.json';
+import c002507 from './002507.json';
+import c01448 from './01448.json';
+import c003816 from './003816.json';
+import c600008 from './600008.json';
+import c002083 from './002083.json';
+import c600674 from './600674.json';
+import c01810 from './01810.json';
+import c601168 from './601168.json';
+import c09988 from './09988.json';
+import c601995 from './601995.json';
+import c601699 from './601699.json';
+import c600348 from './600348.json';
+import c603380 from './603380.json';
+import c600098 from './600098.json';
+import c601881 from './601881.json';
+import c600057 from './600057.json';
+import c000833 from './000833.json';
+import c601880 from './601880.json';
+import c002540 from './002540.json';
+import c600017 from './600017.json';
+import c600368 from './600368.json';
+import c600125 from './600125.json';
+import c002984 from './002984.json';
+import c001338 from './001338.json';
+import c600742 from './600742.json';
+import c002597 from './002597.json';
+import c600765 from './600765.json';
+import c603816 from './603816.json';
+import c300146 from './300146.json';
+import c00700 from './00700.json';
+import c688439 from './688439.json';
+import c000582 from './000582.json';
+import c600039 from './600039.json';
+import c00467 from './00467.json';
+import c605588 from './605588.json';
+import c603599 from './603599.json';
+import c09699 from './09699.json';
+import c000923 from './000923.json';
+import c002601 from './002601.json';
+import c000895 from './000895.json';
+import c601058 from './601058.json';
+import c002215 from './002215.json';
+import c600803 from './600803.json';
+import c002690 from './002690.json';
+import c00811 from './00811.json';
+import c600987 from './600987.json';
+import c600600 from './600600.json';
+import c000932 from './000932.json';
+import c600132 from './600132.json';
+import c02666 from './02666.json';
+import c603195 from './603195.json';
+import c002372 from './002372.json';
+import c02196 from './02196.json';
+import c002705 from './002705.json';
+import c603408 from './603408.json';
+import c600741 from './600741.json';
+import c603035 from './603035.json';
+import c601966 from './601966.json';
+import c000999 from './000999.json';
+import c09896 from './09896.json';
+import c300119 from './300119.json';
+import c00100 from './00100.json';
+import c02513 from './02513.json';
+import c002223 from './002223.json';
+import c03323 from './03323.json';
+import c600332 from './600332.json';
+import c02186 from './02186.json';
+import c000786 from './000786.json';
+import c02331 from './02331.json';
+import c002019 from './002019.json';
+import c300979 from './300979.json';
+import c600219 from './600219.json';
+import c000963 from './000963.json';
+import c601600 from './601600.json';
+import c600216 from './600216.json';
+import c600795 from './600795.json';
+import c600299 from './600299.json';
+import c600011 from './600011.json';
+import c001965 from './001965.json';
+import c601018 from './601018.json';
+import c600027 from './600027.json';
+import c600023 from './600023.json';
+import c600575 from './600575.json';
+import c001286 from './001286.json';
+import c600018 from './600018.json';
+import c600312 from './600312.json';
+import c02020 from './02020.json';
+import c001914 from './001914.json';
+import c01024 from './01024.json';
+import c601669 from './601669.json';
+import c01361 from './01361.json';
+import c000031 from './000031.json';
+import c00425 from './00425.json';
+import c02233 from './02233.json';
+import c000672 from './000672.json';
+import c688349 from './688349.json';
+import c605305 from './605305.json';
+import c01858 from './01858.json';
+import c000821 from './000821.json';
+import c601717 from './601717.json';
+import c603092 from './603092.json';
+import c002397 from './002397.json';
+import c000157 from './000157.json';
+import c601689 from './601689.json';
+import c601100 from './601100.json';
+import c000528 from './000528.json';
+import c002468 from './002468.json';
+import c600970 from './600970.json';
+import c600744 from './600744.json';
+import c600827 from './600827.json';
+import c600236 from './600236.json';
+import c688213 from './688213.json';
+import c600820 from './600820.json';
+import c300676 from './300676.json';
+import c300783 from './300783.json';
+import c600703 from './600703.json';
+import c300251 from './300251.json';
+import c000563 from './000563.json';
+import c300779 from './300779.json';
+import c300622 from './300622.json';
+import c002511 from './002511.json';
+import c300316 from './300316.json';
+import c02097 from './02097.json';
+import c603402 from './603402.json';
+import c688518 from './688518.json';
+import c601882 from './601882.json';
+import c600583 from './600583.json';
+import c01618 from './01618.json';
+import c002455 from './002455.json';
+import c300821 from './300821.json';
+import c300806 from './300806.json';
+import c600961 from './600961.json';
+import c02648 from './02648.json';
+import c002709 from './002709.json';
+import c603088 from './603088.json';
+import c688114 from './688114.json';
+import c000930 from './000930.json';
+import c002379 from './002379.json';
+import c300355 from './300355.json';
+import c300896 from './300896.json';
+import c002959 from './002959.json';
+import c601003 from './601003.json';
+import c603379 from './603379.json';
+import c06855 from './06855.json';
+import c301373 from './301373.json';
+import c600310 from './600310.json';
+import c300972 from './300972.json';
+import c002812 from './002812.json';
+import c002788 from './002788.json';
+import c600882 from './600882.json';
+import c688559 from './688559.json';
+import c301363 from './301363.json';
+import c00548 from './00548.json';
+import c600150 from './600150.json';
+import c688110 from './688110.json';
+import c300967 from './300967.json';
+import c601118 from './601118.json';
+import c688063 from './688063.json';
+import c02016 from './02016.json';
+import c301239 from './301239.json';
+import c002541 from './002541.json';
+import c688273 from './688273.json';
+import c688234 from './688234.json';
+import c603979 from './603979.json';
+import c002444 from './002444.json';
+import c002978 from './002978.json';
+import c000969 from './000969.json';
+import c00144 from './00144.json';
+import c002028 from './002028.json';
+import c002048 from './002048.json';
+import c002092 from './002092.json';
+import c002126 from './002126.json';
+import c002241 from './002241.json';
+import c002245 from './002245.json';
+import c002335 from './002335.json';
+import c002353 from './002353.json';
+import c002518 from './002518.json';
+import c002609 from './002609.json';
+import c002625 from './002625.json';
+import c002636 from './002636.json';
+import c002706 from './002706.json';
+import c002782 from './002782.json';
+import c002851 from './002851.json';
+import c002885 from './002885.json';
+import c002979 from './002979.json';
+import c00316 from './00316.json';
+import c00390 from './00390.json';
+import c00551 from './00551.json';
+import c00552 from './00552.json';
+import c00586 from './00586.json';
+import c00916 from './00916.json';
+import c01866 from './01866.json';
+import c02128 from './02128.json';
+import c02232 from './02232.json';
+import c02602 from './02602.json';
+import c03306 from './03306.json';
+import c03311 from './03311.json';
+import c06098 from './06098.json';
+import c06186 from './06186.json';
+import c06655 from './06655.json';
+import c300001 from './300001.json';
+import c300019 from './300019.json';
+import c300042 from './300042.json';
+import c300045 from './300045.json';
+import c300115 from './300115.json';
+import c300433 from './300433.json';
+import c300681 from './300681.json';
+import c300693 from './300693.json';
+import c300811 from './300811.json';
+import c300926 from './300926.json';
+import c301251 from './301251.json';
+import c301488 from './301488.json';
+import c600105 from './600105.json';
+import c600114 from './600114.json';
+import c600189 from './600189.json';
+import c600862 from './600862.json';
+import c601127 from './601127.json';
+import c601231 from './601231.json';
+import c603019 from './603019.json';
+import c603067 from './603067.json';
+import c603283 from './603283.json';
+import c603318 from './603318.json';
+import c603626 from './603626.json';
+import c603893 from './603893.json';
+import c688002 from './688002.json';
+import c688041 from './688041.json';
+import c688047 from './688047.json';
+import c688052 from './688052.json';
+import c688084 from './688084.json';
+import c688127 from './688127.json';
+import c688143 from './688143.json';
+import c688190 from './688190.json';
+import c688220 from './688220.json';
+import c688226 from './688226.json';
+import c688279 from './688279.json';
+import c688333 from './688333.json';
+import c688368 from './688368.json';
+import c688403 from './688403.json';
+import c688433 from './688433.json';
+import c688456 from './688456.json';
+import c688536 from './688536.json';
+import c688582 from './688582.json';
+import c688653 from './688653.json';
+import c688676 from './688676.json';
+import c688721 from './688721.json';
+import c688783 from './688783.json';
 
 /** 竞争对手/可比公司 */
 export interface Competitor {
@@ -268,6 +833,571 @@ export const ANALYSES: Record<string, PreAnalysis> = {
   '600398': c600398 as PreAnalysis,
   '600415': c600415 as PreAnalysis,
   '600660': c600660 as PreAnalysis,
+  '000792': c000792 as PreAnalysis,
+  '603448': c603448 as PreAnalysis,
+  '002299': c002299 as PreAnalysis,
+  '600933': c600933 as PreAnalysis,
+  '000612': c000612 as PreAnalysis,
+  '601065': c601065 as PreAnalysis,
+  '603187': c603187 as PreAnalysis,
+  '603367': c603367 as PreAnalysis,
+  '002128': c002128 as PreAnalysis,
+  '300918': c300918 as PreAnalysis,
+  '300415': c300415 as PreAnalysis,
+  '301301': c301301 as PreAnalysis,
+  '600489': c600489 as PreAnalysis,
+  '603606': c603606 as PreAnalysis,
+  '600458': c600458 as PreAnalysis,
+  '688187': c688187 as PreAnalysis,
+  '001206': c001206 as PreAnalysis,
+  '688712': c688712 as PreAnalysis,
+  '002557': c002557 as PreAnalysis,
+  '601083': c601083 as PreAnalysis,
+  '000415': c000415 as PreAnalysis,
+  '000425': c000425 as PreAnalysis,
+  '000426': c000426 as PreAnalysis,
+  '000525': c000525 as PreAnalysis,
+  '000581': c000581 as PreAnalysis,
+  '000690': c000690 as PreAnalysis,
+  '000726': c000726 as PreAnalysis,
+  '000729': c000729 as PreAnalysis,
+  '000921': c000921 as PreAnalysis,
+  '001248': c001248 as PreAnalysis,
+  '001280': c001280 as PreAnalysis,
+  '002001': c002001 as PreAnalysis,
+  '002011': c002011 as PreAnalysis,
+  '002014': c002014 as PreAnalysis,
+  '002091': c002091 as PreAnalysis,
+  '002120': c002120 as PreAnalysis,
+  '002216': c002216 as PreAnalysis,
+  '002258': c002258 as PreAnalysis,
+  '002293': c002293 as PreAnalysis,
+  '002327': c002327 as PreAnalysis,
+  '002616': c002616 as PreAnalysis,
+  '300470': c300470 as PreAnalysis,
+  '301039': c301039 as PreAnalysis,
+  '301061': c301061 as PreAnalysis,
+  '301296': c301296 as PreAnalysis,
+  '600256': c600256 as PreAnalysis,
+  '600406': c600406 as PreAnalysis,
+  '600486': c600486 as PreAnalysis,
+  '600499': c600499 as PreAnalysis,
+  '600548': c600548 as PreAnalysis,
+  '600563': c600563 as PreAnalysis,
+  '600572': c600572 as PreAnalysis,
+  '600761': c600761 as PreAnalysis,
+  '601000': c601000 as PreAnalysis,
+  '601098': c601098 as PreAnalysis,
+  '601107': c601107 as PreAnalysis,
+  '601163': c601163 as PreAnalysis,
+  '601298': c601298 as PreAnalysis,
+  '601598': c601598 as PreAnalysis,
+  '601811': c601811 as PreAnalysis,
+  '601928': c601928 as PreAnalysis,
+  '603167': c603167 as PreAnalysis,
+  '603298': c603298 as PreAnalysis,
+  '603345': c603345 as PreAnalysis,
+  '603529': c603529 as PreAnalysis,
+  '603558': c603558 as PreAnalysis,
+  '603565': c603565 as PreAnalysis,
+  '603680': c603680 as PreAnalysis,
+  '603697': c603697 as PreAnalysis,
+  '603871': c603871 as PreAnalysis,
+  '603967': c603967 as PreAnalysis,
+  '605338': c605338 as PreAnalysis,
+  '688520': c688520 as PreAnalysis,
+  '688570': c688570 as PreAnalysis,
+  '688825': c688825 as PreAnalysis,
+  '688836': c688836 as PreAnalysis,
+  '601816': c601816 as PreAnalysis,
+  '601333': c601333 as PreAnalysis,
+  '600801': c600801 as PreAnalysis,
+  '002884': c002884 as PreAnalysis,
+  '603279': c603279 as PreAnalysis,
+  '01787': c01787 as PreAnalysis,
+  '603889': c603889 as PreAnalysis,
+  '00639': c00639 as PreAnalysis,
+  '600346': c600346 as PreAnalysis,
+  '600757': c600757 as PreAnalysis,
+  '600425': c600425 as PreAnalysis,
+  '600026': c600026 as PreAnalysis,
+  '600428': c600428 as PreAnalysis,
+  '605259': c605259 as PreAnalysis,
+  '601019': c601019 as PreAnalysis,
+  '601872': c601872 as PreAnalysis,
+  '603596': c603596 as PreAnalysis,
+  '600968': c600968 as PreAnalysis,
+  '600704': c600704 as PreAnalysis,
+  '600582': c600582 as PreAnalysis,
+  '300770': c300770 as PreAnalysis,
+  '601975': c601975 as PreAnalysis,
+  '600598': c600598 as PreAnalysis,
+  '603049': c603049 as PreAnalysis,
+  '600587': c600587 as PreAnalysis,
+  '600096': c600096 as PreAnalysis,
+  '600085': c600085 as PreAnalysis,
+  '600007': c600007 as PreAnalysis,
+  '002749': c002749 as PreAnalysis,
+  '002895': c002895 as PreAnalysis,
+  '600993': c600993 as PreAnalysis,
+  '002056': c002056 as PreAnalysis,
+  '600210': c600210 as PreAnalysis,
+  '002170': c002170 as PreAnalysis,
+  '600782': c600782 as PreAnalysis,
+  '600108': c600108 as PreAnalysis,
+  '600941': c600941 as PreAnalysis,
+  '605499': c605499 as PreAnalysis,
+  '600861': c600861 as PreAnalysis,
+  '000709': c000709 as PreAnalysis,
+  '002136': c002136 as PreAnalysis,
+  '300401': c300401 as PreAnalysis,
+  '002204': c002204 as PreAnalysis,
+  '603706': c603706 as PreAnalysis,
+  '600859': c600859 as PreAnalysis,
+  '301498': c301498 as PreAnalysis,
+  '600073': c600073 as PreAnalysis,
+  '600004': c600004 as PreAnalysis,
+  '603393': c603393 as PreAnalysis,
+  '600507': c600507 as PreAnalysis,
+  '601567': c601567 as PreAnalysis,
+  '600971': c600971 as PreAnalysis,
+  '688334': c688334 as PreAnalysis,
+  '000537': c000537 as PreAnalysis,
+  '000825': c000825 as PreAnalysis,
+  '001203': c001203 as PreAnalysis,
+  '002543': c002543 as PreAnalysis,
+  '000543': c000543 as PreAnalysis,
+  '000719': c000719 as PreAnalysis,
+  '000408': c000408 as PreAnalysis,
+  '601369': c601369 as PreAnalysis,
+  '600901': c600901 as PreAnalysis,
+  '000791': c000791 as PreAnalysis,
+  '002340': c002340 as PreAnalysis,
+  '601311': c601311 as PreAnalysis,
+  '600727': c600727 as PreAnalysis,
+  '600739': c600739 as PreAnalysis,
+  '000902': c000902 as PreAnalysis,
+  '600502': c600502 as PreAnalysis,
+  '300428': c300428 as PreAnalysis,
+  '002588': c002588 as PreAnalysis,
+  '300908': c300908 as PreAnalysis,
+  '002032': c002032 as PreAnalysis,
+  '300568': c300568 as PreAnalysis,
+  '002746': c002746 as PreAnalysis,
+  '603317': c603317 as PreAnalysis,
+  '600612': c600612 as PreAnalysis,
+  '000883': c000883 as PreAnalysis,
+  '000933': c000933 as PreAnalysis,
+  '300595': c300595 as PreAnalysis,
+  '603305': c603305 as PreAnalysis,
+  '000950': c000950 as PreAnalysis,
+  '300294': c300294 as PreAnalysis,
+  '600141': c600141 as PreAnalysis,
+  '002007': c002007 as PreAnalysis,
+  '603444': c603444 as PreAnalysis,
+  '600161': c600161 as PreAnalysis,
+  '601921': c601921 as PreAnalysis,
+  '002252': c002252 as PreAnalysis,
+  '600867': c600867 as PreAnalysis,
+  '601158': c601158 as PreAnalysis,
+  '603515': c603515 as PreAnalysis,
+  '601607': c601607 as PreAnalysis,
+  '300741': c300741 as PreAnalysis,
+  '000807': c000807 as PreAnalysis,
+  '002318': c002318 as PreAnalysis,
+  '000028': c000028 as PreAnalysis,
+  '002756': c002756 as PreAnalysis,
+  '002416': c002416 as PreAnalysis,
+  '603600': c603600 as PreAnalysis,
+  '000959': c000959 as PreAnalysis,
+  '600010': c600010 as PreAnalysis,
+  '601608': c601608 as PreAnalysis,
+  '00883': c00883 as PreAnalysis,
+  '02333': c02333 as PreAnalysis,
+  '02005': c02005 as PreAnalysis,
+  '03759': c03759 as PreAnalysis,
+  '00819': c00819 as PreAnalysis,
+  '601021': c601021 as PreAnalysis,
+  '002532': c002532 as PreAnalysis,
+  '603737': c603737 as PreAnalysis,
+  '000968': c000968 as PreAnalysis,
+  '002394': c002394 as PreAnalysis,
+  '605138': c605138 as PreAnalysis,
+  '002847': c002847 as PreAnalysis,
+  '000589': c000589 as PreAnalysis,
+  '002320': c002320 as PreAnalysis,
+  '02880': c02880 as PreAnalysis,
+  '603162': c603162 as PreAnalysis,
+  '000411': c000411 as PreAnalysis,
+  '01186': c01186 as PreAnalysis,
+  '600798': c600798 as PreAnalysis,
+  '06613': c06613 as PreAnalysis,
+  '003000': c003000 as PreAnalysis,
+  '01066': c01066 as PreAnalysis,
+  '001205': c001205 as PreAnalysis,
+  '002043': c002043 as PreAnalysis,
+  '603165': c603165 as PreAnalysis,
+  '01405': c01405 as PreAnalysis,
+  '603209': c603209 as PreAnalysis,
+  '601022': c601022 as PreAnalysis,
+  '603519': c603519 as PreAnalysis,
+  '600179': c600179 as PreAnalysis,
+  '002763': c002763 as PreAnalysis,
+  '301238': c301238 as PreAnalysis,
+  '600388': c600388 as PreAnalysis,
+  '688819': c688819 as PreAnalysis,
+  '689009': c689009 as PreAnalysis,
+  '601518': c601518 as PreAnalysis,
+  '300832': c300832 as PreAnalysis,
+  '603658': c603658 as PreAnalysis,
+  '601952': c601952 as PreAnalysis,
+  '600642': c600642 as PreAnalysis,
+  '600710': c600710 as PreAnalysis,
+  '600694': c600694 as PreAnalysis,
+  '09985': c09985 as PreAnalysis,
+  '603055': c603055 as PreAnalysis,
+  '06049': c06049 as PreAnalysis,
+  '603877': c603877 as PreAnalysis,
+  '02669': c02669 as PreAnalysis,
+  '605337': c605337 as PreAnalysis,
+  '00696': c00696 as PreAnalysis,
+  '600886': c600886 as PreAnalysis,
+  '688425': c688425 as PreAnalysis,
+  '00506': c00506 as PreAnalysis,
+  '600930': c600930 as PreAnalysis,
+  '300866': c300866 as PreAnalysis,
+  '002003': c002003 as PreAnalysis,
+  '601156': c601156 as PreAnalysis,
+  '601339': c601339 as PreAnalysis,
+  '603303': c603303 as PreAnalysis,
+  '301207': c301207 as PreAnalysis,
+  '06078': c06078 as PreAnalysis,
+  '002078': c002078 as PreAnalysis,
+  '00291': c00291 as PreAnalysis,
+  '600066': c600066 as PreAnalysis,
+  '06862': c06862 as PreAnalysis,
+  '600329': c600329 as PreAnalysis,
+  '002567': c002567 as PreAnalysis,
+  '02610': c02610 as PreAnalysis,
+  '603027': c603027 as PreAnalysis,
+  '600063': c600063 as PreAnalysis,
+  '00788': c00788 as PreAnalysis,
+  '002661': c002661 as PreAnalysis,
+  '002555': c002555 as PreAnalysis,
+  '002668': c002668 as PreAnalysis,
+  '600273': c600273 as PreAnalysis,
+  '603799': c603799 as PreAnalysis,
+  '601963': c601963 as PreAnalysis,
+  '600985': c600985 as PreAnalysis,
+  '002539': c002539 as PreAnalysis,
+  '600380': c600380 as PreAnalysis,
+  '002615': c002615 as PreAnalysis,
+  '601868': c601868 as PreAnalysis,
+  '002478': c002478 as PreAnalysis,
+  '603611': c603611 as PreAnalysis,
+  '002440': c002440 as PreAnalysis,
+  '300873': c300873 as PreAnalysis,
+  '601886': c601886 as PreAnalysis,
+  '600894': c600894 as PreAnalysis,
+  '600885': c600885 as PreAnalysis,
+  '001201': c001201 as PreAnalysis,
+  '002244': c002244 as PreAnalysis,
+  '603365': c603365 as PreAnalysis,
+  '002852': c002852 as PreAnalysis,
+  '600546': c600546 as PreAnalysis,
+  '000598': c000598 as PreAnalysis,
+  '601336': c601336 as PreAnalysis,
+  '002832': c002832 as PreAnalysis,
+  '603868': c603868 as PreAnalysis,
+  '600323': c600323 as PreAnalysis,
+  '02580': c02580 as PreAnalysis,
+  '301398': c301398 as PreAnalysis,
+  '01999': c01999 as PreAnalysis,
+  '600022': c600022 as PreAnalysis,
+  '601991': c601991 as PreAnalysis,
+  '601827': c601827 as PreAnalysis,
+  '301101': c301101 as PreAnalysis,
+  '06826': c06826 as PreAnalysis,
+  '601808': c601808 as PreAnalysis,
+  '002920': c002920 as PreAnalysis,
+  '000550': c000550 as PreAnalysis,
+  '02313': c02313 as PreAnalysis,
+  '002236': c002236 as PreAnalysis,
+  '002891': c002891 as PreAnalysis,
+  '00371': c00371 as PreAnalysis,
+  '600300': c600300 as PreAnalysis,
+  '688036': c688036 as PreAnalysis,
+  '01513': c01513 as PreAnalysis,
+  '002850': c002850 as PreAnalysis,
+  '600717': c600717 as PreAnalysis,
+  '600483': c600483 as PreAnalysis,
+  '301327': c301327 as PreAnalysis,
+  '300777': c300777 as PreAnalysis,
+  '600529': c600529 as PreAnalysis,
+  '603508': c603508 as PreAnalysis,
+  '002273': c002273 as PreAnalysis,
+  '300400': c300400 as PreAnalysis,
+  '002463': c002463 as PreAnalysis,
+  '600123': c600123 as PreAnalysis,
+  '002461': c002461 as PreAnalysis,
+  '600461': c600461 as PreAnalysis,
+  '000498': c000498 as PreAnalysis,
+  '002061': c002061 as PreAnalysis,
+  '00960': c00960 as PreAnalysis,
+  '601016': c601016 as PreAnalysis,
+  '688050': c688050 as PreAnalysis,
+  '000685': c000685 as PreAnalysis,
+  '02145': c02145 as PreAnalysis,
+  '600059': c600059 as PreAnalysis,
+  '01368': c01368 as PreAnalysis,
+  '001872': c001872 as PreAnalysis,
+  '688314': c688314 as PreAnalysis,
+  '002507': c002507 as PreAnalysis,
+  '01448': c01448 as PreAnalysis,
+  '003816': c003816 as PreAnalysis,
+  '600008': c600008 as PreAnalysis,
+  '002083': c002083 as PreAnalysis,
+  '600674': c600674 as PreAnalysis,
+  '01810': c01810 as PreAnalysis,
+  '601168': c601168 as PreAnalysis,
+  '09988': c09988 as PreAnalysis,
+  '601995': c601995 as PreAnalysis,
+  '601699': c601699 as PreAnalysis,
+  '600348': c600348 as PreAnalysis,
+  '603380': c603380 as PreAnalysis,
+  '600098': c600098 as PreAnalysis,
+  '601881': c601881 as PreAnalysis,
+  '600057': c600057 as PreAnalysis,
+  '000833': c000833 as PreAnalysis,
+  '601880': c601880 as PreAnalysis,
+  '002540': c002540 as PreAnalysis,
+  '600017': c600017 as PreAnalysis,
+  '600368': c600368 as PreAnalysis,
+  '600125': c600125 as PreAnalysis,
+  '002984': c002984 as PreAnalysis,
+  '001338': c001338 as PreAnalysis,
+  '600742': c600742 as PreAnalysis,
+  '002597': c002597 as PreAnalysis,
+  '600765': c600765 as PreAnalysis,
+  '603816': c603816 as PreAnalysis,
+  '300146': c300146 as PreAnalysis,
+  '00700': c00700 as PreAnalysis,
+  '688439': c688439 as PreAnalysis,
+  '000582': c000582 as PreAnalysis,
+  '600039': c600039 as PreAnalysis,
+  '00467': c00467 as PreAnalysis,
+  '605588': c605588 as PreAnalysis,
+  '603599': c603599 as PreAnalysis,
+  '09699': c09699 as PreAnalysis,
+  '000923': c000923 as PreAnalysis,
+  '002601': c002601 as PreAnalysis,
+  '000895': c000895 as PreAnalysis,
+  '601058': c601058 as PreAnalysis,
+  '002215': c002215 as PreAnalysis,
+  '600803': c600803 as PreAnalysis,
+  '002690': c002690 as PreAnalysis,
+  '00811': c00811 as PreAnalysis,
+  '600987': c600987 as PreAnalysis,
+  '600600': c600600 as PreAnalysis,
+  '000932': c000932 as PreAnalysis,
+  '600132': c600132 as PreAnalysis,
+  '02666': c02666 as PreAnalysis,
+  '603195': c603195 as PreAnalysis,
+  '002372': c002372 as PreAnalysis,
+  '02196': c02196 as PreAnalysis,
+  '002705': c002705 as PreAnalysis,
+  '603408': c603408 as PreAnalysis,
+  '600741': c600741 as PreAnalysis,
+  '603035': c603035 as PreAnalysis,
+  '601966': c601966 as PreAnalysis,
+  '000999': c000999 as PreAnalysis,
+  '09896': c09896 as PreAnalysis,
+  '300119': c300119 as PreAnalysis,
+  '00100': c00100 as PreAnalysis,
+  '02513': c02513 as PreAnalysis,
+  '002223': c002223 as PreAnalysis,
+  '03323': c03323 as PreAnalysis,
+  '600332': c600332 as PreAnalysis,
+  '02186': c02186 as PreAnalysis,
+  '000786': c000786 as PreAnalysis,
+  '02331': c02331 as PreAnalysis,
+  '002019': c002019 as PreAnalysis,
+  '300979': c300979 as PreAnalysis,
+  '600219': c600219 as PreAnalysis,
+  '000963': c000963 as PreAnalysis,
+  '601600': c601600 as PreAnalysis,
+  '600216': c600216 as PreAnalysis,
+  '600795': c600795 as PreAnalysis,
+  '600299': c600299 as PreAnalysis,
+  '600011': c600011 as PreAnalysis,
+  '001965': c001965 as PreAnalysis,
+  '601018': c601018 as PreAnalysis,
+  '600027': c600027 as PreAnalysis,
+  '600023': c600023 as PreAnalysis,
+  '600575': c600575 as PreAnalysis,
+  '001286': c001286 as PreAnalysis,
+  '600018': c600018 as PreAnalysis,
+  '600312': c600312 as PreAnalysis,
+  '02020': c02020 as PreAnalysis,
+  '001914': c001914 as PreAnalysis,
+  '01024': c01024 as PreAnalysis,
+  '601669': c601669 as PreAnalysis,
+  '01361': c01361 as PreAnalysis,
+  '000031': c000031 as PreAnalysis,
+  '00425': c00425 as PreAnalysis,
+  '02233': c02233 as PreAnalysis,
+  '000672': c000672 as PreAnalysis,
+  '688349': c688349 as PreAnalysis,
+  '605305': c605305 as PreAnalysis,
+  '01858': c01858 as PreAnalysis,
+  '000821': c000821 as PreAnalysis,
+  '601717': c601717 as PreAnalysis,
+  '603092': c603092 as PreAnalysis,
+  '002397': c002397 as PreAnalysis,
+  '000157': c000157 as PreAnalysis,
+  '601689': c601689 as PreAnalysis,
+  '601100': c601100 as PreAnalysis,
+  '000528': c000528 as PreAnalysis,
+  '002468': c002468 as PreAnalysis,
+  '600970': c600970 as PreAnalysis,
+  '600744': c600744 as PreAnalysis,
+  '600827': c600827 as PreAnalysis,
+  '600236': c600236 as PreAnalysis,
+  '688213': c688213 as PreAnalysis,
+  '600820': c600820 as PreAnalysis,
+  '300676': c300676 as PreAnalysis,
+  '300783': c300783 as PreAnalysis,
+  '600703': c600703 as PreAnalysis,
+  '300251': c300251 as PreAnalysis,
+  '000563': c000563 as PreAnalysis,
+  '300779': c300779 as PreAnalysis,
+  '300622': c300622 as PreAnalysis,
+  '002511': c002511 as PreAnalysis,
+  '300316': c300316 as PreAnalysis,
+  '02097': c02097 as PreAnalysis,
+  '603402': c603402 as PreAnalysis,
+  '688518': c688518 as PreAnalysis,
+  '601882': c601882 as PreAnalysis,
+  '600583': c600583 as PreAnalysis,
+  '01618': c01618 as PreAnalysis,
+  '002455': c002455 as PreAnalysis,
+  '300821': c300821 as PreAnalysis,
+  '300806': c300806 as PreAnalysis,
+  '600961': c600961 as PreAnalysis,
+  '02648': c02648 as PreAnalysis,
+  '002709': c002709 as PreAnalysis,
+  '603088': c603088 as PreAnalysis,
+  '688114': c688114 as PreAnalysis,
+  '000930': c000930 as PreAnalysis,
+  '002379': c002379 as PreAnalysis,
+  '300355': c300355 as PreAnalysis,
+  '300896': c300896 as PreAnalysis,
+  '002959': c002959 as PreAnalysis,
+  '601003': c601003 as PreAnalysis,
+  '603379': c603379 as PreAnalysis,
+  '06855': c06855 as PreAnalysis,
+  '301373': c301373 as PreAnalysis,
+  '600310': c600310 as PreAnalysis,
+  '300972': c300972 as PreAnalysis,
+  '002812': c002812 as PreAnalysis,
+  '002788': c002788 as PreAnalysis,
+  '600882': c600882 as PreAnalysis,
+  '688559': c688559 as PreAnalysis,
+  '301363': c301363 as PreAnalysis,
+  '00548': c00548 as PreAnalysis,
+  '600150': c600150 as PreAnalysis,
+  '688110': c688110 as PreAnalysis,
+  '300967': c300967 as PreAnalysis,
+  '601118': c601118 as PreAnalysis,
+  '688063': c688063 as PreAnalysis,
+  '02016': c02016 as PreAnalysis,
+  '301239': c301239 as PreAnalysis,
+  '002541': c002541 as PreAnalysis,
+  '688273': c688273 as PreAnalysis,
+  '688234': c688234 as PreAnalysis,
+  '603979': c603979 as PreAnalysis,
+  '002444': c002444 as PreAnalysis,
+  '002978': c002978 as PreAnalysis,
+  '000969': c000969 as PreAnalysis,
+  '00144': c00144 as PreAnalysis,
+  '002028': c002028 as PreAnalysis,
+  '002048': c002048 as PreAnalysis,
+  '002092': c002092 as PreAnalysis,
+  '002126': c002126 as PreAnalysis,
+  '002241': c002241 as PreAnalysis,
+  '002245': c002245 as PreAnalysis,
+  '002335': c002335 as PreAnalysis,
+  '002353': c002353 as PreAnalysis,
+  '002518': c002518 as PreAnalysis,
+  '002609': c002609 as PreAnalysis,
+  '002625': c002625 as PreAnalysis,
+  '002636': c002636 as PreAnalysis,
+  '002706': c002706 as PreAnalysis,
+  '002782': c002782 as PreAnalysis,
+  '002851': c002851 as PreAnalysis,
+  '002885': c002885 as PreAnalysis,
+  '002979': c002979 as PreAnalysis,
+  '00316': c00316 as PreAnalysis,
+  '00390': c00390 as PreAnalysis,
+  '00551': c00551 as PreAnalysis,
+  '00552': c00552 as PreAnalysis,
+  '00586': c00586 as PreAnalysis,
+  '00916': c00916 as PreAnalysis,
+  '01866': c01866 as PreAnalysis,
+  '02128': c02128 as PreAnalysis,
+  '02232': c02232 as PreAnalysis,
+  '02602': c02602 as PreAnalysis,
+  '03306': c03306 as PreAnalysis,
+  '03311': c03311 as PreAnalysis,
+  '06098': c06098 as PreAnalysis,
+  '06186': c06186 as PreAnalysis,
+  '06655': c06655 as PreAnalysis,
+  '300001': c300001 as PreAnalysis,
+  '300019': c300019 as PreAnalysis,
+  '300042': c300042 as PreAnalysis,
+  '300045': c300045 as PreAnalysis,
+  '300115': c300115 as PreAnalysis,
+  '300433': c300433 as PreAnalysis,
+  '300681': c300681 as PreAnalysis,
+  '300693': c300693 as PreAnalysis,
+  '300811': c300811 as PreAnalysis,
+  '300926': c300926 as PreAnalysis,
+  '301251': c301251 as PreAnalysis,
+  '301488': c301488 as PreAnalysis,
+  '600105': c600105 as PreAnalysis,
+  '600114': c600114 as PreAnalysis,
+  '600189': c600189 as PreAnalysis,
+  '600862': c600862 as PreAnalysis,
+  '601127': c601127 as PreAnalysis,
+  '601231': c601231 as PreAnalysis,
+  '603019': c603019 as PreAnalysis,
+  '603067': c603067 as PreAnalysis,
+  '603283': c603283 as PreAnalysis,
+  '603318': c603318 as PreAnalysis,
+  '603626': c603626 as PreAnalysis,
+  '603893': c603893 as PreAnalysis,
+  '688002': c688002 as PreAnalysis,
+  '688041': c688041 as PreAnalysis,
+  '688047': c688047 as PreAnalysis,
+  '688052': c688052 as PreAnalysis,
+  '688084': c688084 as PreAnalysis,
+  '688127': c688127 as PreAnalysis,
+  '688143': c688143 as PreAnalysis,
+  '688190': c688190 as PreAnalysis,
+  '688220': c688220 as PreAnalysis,
+  '688226': c688226 as PreAnalysis,
+  '688279': c688279 as PreAnalysis,
+  '688333': c688333 as PreAnalysis,
+  '688368': c688368 as PreAnalysis,
+  '688403': c688403 as PreAnalysis,
+  '688433': c688433 as PreAnalysis,
+  '688456': c688456 as PreAnalysis,
+  '688536': c688536 as PreAnalysis,
+  '688582': c688582 as PreAnalysis,
+  '688653': c688653 as PreAnalysis,
+  '688676': c688676 as PreAnalysis,
+  '688721': c688721 as PreAnalysis,
+  '688783': c688783 as PreAnalysis,
 };
 
 export function getPreAnalysis(code: string): PreAnalysis | undefined {

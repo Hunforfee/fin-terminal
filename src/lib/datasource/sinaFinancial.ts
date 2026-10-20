@@ -11,6 +11,7 @@
  */
 
 import { fetchText } from './http';
+import { fetchDebtRatios } from './debtRatios';
 
 const URL_TEMPLATE =
   'https://money.finance.sina.com.cn/corp/go.php/vFD_FinancialGuideLine/stockid/{code}/ctrl/{year}/displaytype/4.phtml';
@@ -48,6 +49,7 @@ export const INDICATORS: IndicatorDef[] = [
   { key: 'assetGrowth', sina: '总资产增长率(%)', label: '总资产增长率', group: 'growth', unit: 'pct' },
   // 偿债能力
   { key: 'debtRatio', sina: '资产负债率(%)', label: '资产负债率', group: 'solvency', unit: 'pct', lowerBetter: true },
+  { key: 'interestDebtRatio', sina: '', label: '有息负债率', group: 'solvency', unit: 'pct', lowerBetter: true },
   { key: 'currentRatio', sina: '流动比率', label: '流动比率', group: 'solvency', unit: 'ratio' },
   { key: 'quickRatio', sina: '速动比率', label: '速动比率', group: 'solvency', unit: 'ratio' },
   { key: 'cashRatio', sina: '现金比率(%)', label: '现金比率', group: 'solvency', unit: 'pct' },
@@ -180,6 +182,12 @@ export async function fetchSinaFinancial(
     }
   }
 
+  const debt = await fetchDebtRatios(code, years).catch(() => new Map<string, number | null>());
+  for (const [date, value] of debt) {
+    const rec = byDate.get(date) ?? {};
+    rec.interestDebtRatio = value;
+    byDate.set(date, rec);
+  }
   const periods = Array.from(byDate.keys()).sort();
   const series: Record<string, (number | null)[]> = {};
   for (const def of INDICATORS) {

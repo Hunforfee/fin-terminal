@@ -21,6 +21,11 @@ export interface DividendEvent {
   perShare: number;
   /** 每股送转股（元/股口径）：送股 + 转增，用于复权价格序列 */
   perShareStock?: number;
+  /** Monetary resolution of this source's displayed amount, CNY/share. */
+  precisionPerShare?: number;
+  cashSource?: 'sina' | 'sina+eastmoney-rounding-reconciled';
+  /** Unresolved values remain evidence, and MUST NOT enter rolling cash-yield sums. */
+  cashConflict?: { sina: number; eastmoney: number };
 }
 
 /** 抓取并解析分红事件（仅「实施」），按除权日升序 */
@@ -32,6 +37,8 @@ export async function fetchDividends(code: string): Promise<DividendEvent[]> {
 
 export function parseBonusPage(html: string): DividendEvent[] {
   const out: DividendEvent[] = [];
+  const seenRows = new Set<string>();
+  const identityAmounts = new Map<string, string>();
   const trRe = /<tr[^>]*>([\s\S]*?)<\/tr>/g;
   let m: RegExpExecArray | null;
   while ((m = trRe.exec(html)) !== null) {
@@ -43,6 +50,15 @@ export function parseBonusPage(html: string): DividendEvent[] {
     const announce = tds[0];
     if (!/^\d{4}-\d{2}-\d{2}$/.test(announce)) continue;
     if (!/实施/.test(tds[4])) continue;
+    const signature = JSON.stringify(tds.slice(0, 6));
+    if (seenRows.has(signature)) continue;
+    seenRows.add(signature);
+    const identity = `${announce}:${tds[5]}`;
+    const amounts = JSON.stringify([tds[1], tds[2], tds[3]]);
+    if (identityAmounts.has(identity) && identityAmounts.get(identity) !== amounts)
+      throw Error('同一分红实施记录出现不同金额，暂不合并');
+    identityAmounts.set(identity, amounts);
+    if (!tds[3].trim() || tds[3] === '--') continue;
     const per10 = Number(tds[3]);
     if (!Number.isFinite(per10) || per10 < 0) continue;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(tds[5])) continue;
@@ -51,9 +67,11 @@ export function parseBonusPage(html: string): DividendEvent[] {
     const zhuan = Number(tds[2]);
     const perShareStock =
       (Number.isFinite(song) && song > 0 ? song : 0) + (Number.isFinite(zhuan) && zhuan > 0 ? zhuan : 0);
-    out.push({ exDate, perShare: per10 / 10, perShareStock: perShareStock / 10 });
+    const decimals = tds[3].replace(/,/g, '').split('.')[1]?.length ?? 0;
+    out.push({ exDate, perShare: per10 / 10, perShareStock: perShareStock / 10,
+      precisionPerShare: 10 ** (-decimals - 1), cashSource: 'sina' });
   }
-  // 同日可能多条（罕见），去重求和
+  // Only distinct implementation records may be aggregated; exact duplicates above are ignored.
   const byDate = new Map<string, DividendEvent>();
   for (const e of out) {
     const prev = byDate.get(e.exDate);
@@ -61,6 +79,8 @@ export function parseBonusPage(html: string): DividendEvent[] {
       exDate: e.exDate,
       perShare: (prev?.perShare ?? 0) + e.perShare,
       perShareStock: (prev?.perShareStock ?? 0) + (e.perShareStock ?? 0),
+      precisionPerShare: (prev?.precisionPerShare ?? 0) + (e.precisionPerShare ?? 0),
+      cashSource: 'sina',
     });
   }
   return [...byDate.values()].sort((a, b) => a.exDate.localeCompare(b.exDate));

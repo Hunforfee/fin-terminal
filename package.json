@@ -17,10 +17,11 @@
   "dependencies": {
     "@tencent-ai/workbuddy-cloud-sdk": "dev",
     "@types/nodemailer": "^8.0.2",
-    "echarts": "^5.5.1",
+    "echarts": "6.1.0",
     "next": "15.5.28",
     "nodemailer": "^10.1.2",
     "opencc-js": "1.4.2",
+    "pg": "^8.23.1",
     "react": "19.2.5",
     "react-dom": "19.2.5",
     "xlsx": "npm:@e965/xlsx@0.20.3"
@@ -31,9 +32,12 @@
     "@types/react-dom": "^19.0.3",
     "autoprefixer": "^10.4.20",
     "playwright": "^1.64.1",
-    "postcss": "^8.4.49",
+    "postcss": "8.5.31",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.3"
+  },
+  "overrides": {
+    "postcss": "$postcss"
   },
   "engines": {
     "node": ">=20.0.0"

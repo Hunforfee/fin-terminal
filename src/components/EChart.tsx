@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import * as echarts from 'echarts/core';
+import chartThemeV5 from '@/lib/chartThemeV5';
 import {
   BarChart,
   CandlestickChart,
@@ -23,6 +24,7 @@ import {
 import { CanvasRenderer } from 'echarts/renderers';
 import { LabelLayout } from 'echarts/features';
 
+echarts.registerTheme('fin-v5', chartThemeV5);
 echarts.use([
   BarChart,
   CandlestickChart,
@@ -73,7 +75,7 @@ export default function EChart({
 
   useEffect(() => {
     if (!boxRef.current) return;
-    const chart = echarts.init(boxRef.current, undefined, {
+    const chart = echarts.init(boxRef.current, 'fin-v5', {
       renderer: 'canvas',
     });
     instRef.current = chart;

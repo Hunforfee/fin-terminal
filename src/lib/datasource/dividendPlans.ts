@@ -9,6 +9,7 @@ export interface DividendPlan {
   scheduleKnownDate: string | null;
   special: boolean;
   cancelled: boolean;
+  implemented?: boolean;
 }
 
 type Row = Record<string, unknown>;
@@ -34,7 +35,7 @@ export function parseDividendPlans(rows: Row[]): DividendPlan[] {
     const perShare = cancelled || noDividend ? 0 : cash !== null && Number.isFinite(cash) && cash >= 0 ? cash / 10 : null;
     // 政策性预披露（例如“金额不超过半年利润”）并非具体分红方案，不新增一个未知金额的派息。
     if (/预披露/.test(progress) && perShare === null) return [];
-    return [{ reportDate, announceDate, perShare, cancelled,
+    return [{ reportDate, announceDate, perShare, cancelled, implemented: !cancelled && /实施/.test(progress),
       exDate: date(row.EX_DIVIDEND_DATE), scheduleKnownDate: date(row.NOTICE_DATE),
       special: /特别|特殊|special/i.test(profile) }];
   }).sort((a, b) => a.announceDate.localeCompare(b.announceDate));

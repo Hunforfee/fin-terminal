@@ -1,4 +1,5 @@
 import { fetchJson } from './http';
+import { numOrNull } from './codes';
 import type { StatementCatalog } from './sinaStatements';
 
 export const INTEREST_FIELDS = ['pl_利润总额', 'pl_利息费用'] as const;
@@ -17,7 +18,7 @@ export function withInterestFields(catalogs: StatementCatalog[]): StatementCatal
 
 export function parseInterestExpenses(rows: Record<string, unknown>[]): Map<string, Map<string, number | null>> {
   const out = new Map<string, Map<string, number | null>>();
-  const number = (v: unknown) => v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v) / 1e4;
+  const number = (v: unknown) => { const n = numOrNull(v); return n === null ? null : n / 1e4; };
   for (const r of rows) {
     const d = String(r.REPORT_DATE ?? '').slice(0,10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;

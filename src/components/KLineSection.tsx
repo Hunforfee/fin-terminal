@@ -39,7 +39,7 @@ export default function KLineSection({ code, isIndex = false, prevClose = null }
   const [adjust, setAdjust] = useState<Adjust>(isHk ? 'none' : 'qfq');
   const [range, setRange] = useState(RANGES[1]);
   const [candles, setCandles] = useState<Candle[]>([]);
-  const [meta, setMeta] = useState<{ source: string; stale: boolean; adjust: Adjust } | null>(null);
+  const [meta, setMeta] = useState<{ source: string; stale: boolean; adjust: Adjust; warnings?: string[]; complete?: boolean; acquiredAt?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -61,7 +61,7 @@ export default function KLineSection({ code, isIndex = false, prevClose = null }
           if (!alive) return;
           if (j.ok) {
             setCandles((j.data.candles ?? []) as Candle[]);
-            setMeta({ source: j.data.source, stale: j.data.stale, adjust: j.data.adjust });
+            setMeta({ source: j.data.source, stale: j.data.stale, adjust: j.data.adjust, warnings: j.data.warnings, complete: j.data.complete, acquiredAt: j.data.storage?.acquiredAt });
             setLoading(false);
             return;
           }
@@ -184,8 +184,9 @@ export default function KLineSection({ code, isIndex = false, prevClose = null }
       )}
       {!err && !loading && !showMinute && candles.length > 0 && (
         <>
-          <div className="mb-2 text-xs text-slate-500">{candles[0].date} 至 {candles.at(-1)?.date} · 实际 {candles.length} 根 · {ADJUSTS.find(a => a.key === meta?.adjust)?.label} · {meta?.source}{meta?.stale ? ' · 历史快照，非实时' : ''}</div>
-          <KLineChart candles={candles} height={430} />
+          <div className="mb-2 text-xs text-slate-500">{candles[0].date} 至 {candles.at(-1)?.date} · 实际 {candles.length} 根 · {ADJUSTS.find(a => a.key === meta?.adjust)?.label} · {meta?.source}{meta?.stale ? ' · 使用旧数据' : ''}{meta?.complete === false ? ' · 区间未完整取得' : ''}</div>
+          {!!meta?.warnings?.length && <div role="status" className="mb-2 text-xs text-amber-700">{meta.warnings.join(' ')}</div>}
+          <KLineChart candles={candles} height={430} showVolume={false} />
         </>
       )}
     </div>

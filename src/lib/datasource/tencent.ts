@@ -232,6 +232,7 @@ export async function fetchKLine(
   if (count > 640) {
     const byDate = new Map<string, Candle>();
     let end = endDate;
+    let complete = true;
     const pages = Math.ceil(count / 640) + 1;
     for (let page = 0; page < pages; page++) {
       // 单页多重试几次：WAF 挑战与限频都是瞬时的；仍失败则保留已取得的页，优雅截断
@@ -244,7 +245,7 @@ export async function fetchKLine(
           if (attempt < 2) await sleep(500 * (attempt + 1));
         }
       }
-      if (!part) break; // 已取得的页保留，优雅截断而非整体报错
+      if (!part) { complete = false; break; }
       const rows = part.candles;
       if (!rows.length) break;
       const oldest = rows[0].date;
@@ -258,7 +259,7 @@ export async function fetchKLine(
     if (byDate.size === 0) throw new Error(`tencent kline: empty series (${adjust})`);
     return { symbol, code: symbol.slice(2), period, adjust,
       candles: [...byDate.values()].sort((a,b) => a.date.localeCompare(b.date))
-        .filter(c => !startDate || c.date >= startDate).slice(-count), source: PROVIDER_NAME, stale: false };
+        .filter(c => !startDate || c.date >= startDate).slice(-count), source: PROVIDER_NAME, stale: false, complete, ...(complete ? {} : { warnings: ['历史分页中断，当前仅展示已取得区间。'] }) };
   }
   const p = period === 'minute' ? 'day' : period;
   const param = [symbol, p, startDate ?? '', endDate ?? '', String(count), adjust === 'none' ? '' : adjust].join(',');
@@ -276,17 +277,17 @@ export async function fetchKLine(
   // 腾讯行序： [date, open, close, high, low, volume]
   const candles: Candle[] = raw.map((r) => {
     const a = r as (string | number)[];
-    const open = Number(a[1]);
-    const close = Number(a[2]);
-    const high = Number(a[3]);
-    const low = Number(a[4]);
+    const open = numOrNull(a[1]) ?? NaN;
+    const close = numOrNull(a[2]) ?? NaN;
+    const high = numOrNull(a[3]) ?? NaN;
+    const low = numOrNull(a[4]) ?? NaN;
     return {
       date: String(a[0]),
       open,
       close,
-      high: Number.isFinite(high) ? Math.max(high, open, close) : Math.max(open, close),
-      low: Number.isFinite(low) ? Math.min(low, open, close) : Math.min(open, close),
-      volume: (Number(a[5]) || 0) / (symbol.startsWith('hk') ? 100 : 1),
+      high,
+      low,
+      volume: (a[5] == null || String(a[5]).trim() === '' ? NaN : Number(a[5])) / (symbol.startsWith('hk') ? 100 : 1),
     };
   });
 

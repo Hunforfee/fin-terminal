@@ -15,6 +15,7 @@
 
 import { fetchText } from './http';
 import { fetchInterestExpenses, INTEREST_FIELDS, withInterestFields } from './interestExpenses';
+import { fetchDebtRatios } from './debtRatios';
 import { statementFieldUnit, type StatementFieldUnit } from '../financeFieldSemantics';
 
 export const PROVIDER_NAME = 'sina-statements';
@@ -315,9 +316,19 @@ export async function fetchCustomFinancials(
   const byDate = new Map<string, Map<string, number | null>>();
 
   const statementFields = fields.filter((k) => /^(bs|pl|cf)_/.test(k) && !INTEREST_FIELDS.some(f => f === k));
-  const indicatorKeys = fields.filter((k) => !/^(bs|pl|cf)_/.test(k));
+  const indicatorKeys = fields.filter((k) => !/^(bs|pl|cf)_/.test(k) && k !== 'interestDebtRatio');
 
   const tasks: Promise<void>[] = [];
+  if (fields.includes('interestDebtRatio')) {
+    tasks.push((async () => {
+      const rows = await fetchDebtRatios(code, years).catch(() => new Map<string, number | null>());
+      for (const [date, value] of rows) {
+        const rec = byDate.get(date) ?? new Map<string, number | null>();
+        rec.set('interestDebtRatio', value);
+        byDate.set(date, rec);
+      }
+    })());
+  }
   const statementIds = new Set(statementFields.map(key =>
     (key.startsWith('bs_') ? 'balance' : key.startsWith('pl_') ? 'profit' : 'cashflow') as StatementId));
   for (const id of statementIds) {

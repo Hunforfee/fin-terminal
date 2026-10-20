@@ -99,8 +99,8 @@ export interface Candle {
   close: number;
   high: number;
   low: number;
-  /** 成交量（手） */
-  volume: number;
+  /** Optional transient volume in 100-share units; not persisted with price history. */
+  volume?: number | null;
 }
 
 /** K 线序列响应 */
@@ -112,6 +112,11 @@ export interface KLineSeries {
   candles: Candle[];
   source: string;
   stale: boolean;
+  /** False when an upstream paging chain stopped before its requested boundary. */
+  complete?: boolean;
+  warnings?: string[];
+  storage?: { backend: 'persistent' | 'upstream'; acquiredAt: string; validation: 'structural' };
+  quality?: { level: 'cross-source-sample'; sources: string[]; matchedBars: number; checkedThrough?: string; sampleOnly: true };
 }
 
 /** 分时点 */

@@ -1,3 +1,8 @@
+import { crossCheckMainlandRaw, MarketDataConflict } from '../klineCrossCheck';
+import { getMarketStore } from '../marketStore';
+import { getValuationPlans, getValuationDividends } from '../valuationInputs';
+import { cachedMarketInput as storedMarketInput, validateDatedRows } from '../marketInputs';
+import { storedKLine, validateKLine } from '../klineStorage';
 import { fetchDisclosureDates } from './disclosures';
 /**
  * 数据源编排层 —— 全站唯一的数据入口。
@@ -206,7 +211,7 @@ export async function getIndustryQuotes(inputs: string[]): Promise<Quote[]> {
   let batch: Promise<Map<string, HkFundamental | null>> | undefined;
   const fundamentals = Promise.all(
     hk.map(async (n) => {
-      const f = await cached(`hk-main-currency-v3:${n.symbol}`, 6 * 3600e3, async () => {
+      const f = await storedMarketInput(`hk-main-currency-v4:${n.symbol}`, 'latest-hk-financials', 'eastmoney:main:CNY-input:HKD-book-normalized:provider-implied-fx', 1800e3, async () => {
         batch ??= cached(
           `hk-industry-main-v1:${hk.map((item) => item.code).sort().join(',')}`,
           60_000,
@@ -215,7 +220,7 @@ export async function getIndustryQuotes(inputs: string[]): Promise<Quote[]> {
         const value = (await batch).get(n.code);
         if (!value) throw new Error('港股财务指标暂缺');
         return value;
-      }).catch(() => null);
+      }, value => validateDatedRows([value as unknown as Record<string, unknown>], 'reportDate', ['bps', 'peTTM'])).catch(() => null);
       return [n.symbol, f] as const;
     }),
   );
@@ -273,12 +278,12 @@ export async function getHkCurrentValuation(symbol: string, price: number | null
   const n = normalizeStockCode(symbol);
   if (!n || n.market !== 'HK') throw new Error('港股代码无效');
   const [fundamental, dividends] = await Promise.all([
-    cached(`hk-main-currency-v3:${n.symbol}`, 6 * 3600e3, async () => {
+    storedMarketInput(`hk-main-currency-v4:${n.symbol}`, 'latest-hk-financials', 'eastmoney:main:CNY-input:HKD-book-normalized:provider-implied-fx', 1800e3, async () => {
       const value = await fetchHkFundamental(n.code);
       if (!value) throw new Error('港股财务指标暂缺');
       return value;
-    }).catch(() => null),
-    cached(`hk-dividend-events-v3:${n.symbol}`, 3600e3, () => fetchHkDividends(n.code)).catch(() => null),
+    }, value => validateDatedRows([value as unknown as Record<string, unknown>], 'reportDate', ['bps', 'peTTM'])).catch(() => null),
+    storedMarketInput(`hk-dividend-events-v4:${n.symbol}`, 'hk-recent-dividend-events', 'eastmoney:HKD-confirmed-DPS:tax-before:recent-100-events', 1800e3, () => fetchHkDividends(n.code), rows => { if (!rows.length || rows.some(r => r.dps != null && (!Number.isFinite(r.dps) || r.dps < 0))) throw Error('港股分红输入缺失或金额无效'); }).catch(() => null),
   ]);
   return computeHkValuation(fundamental, dividends, price, asOf);
 }
@@ -336,23 +341,38 @@ export async function getKLine(
   const n = normalizeCode(input);
   if (!n) throw new Error(`无法解析代码 ${input}`);
   const key = `kline:${n.symbol}:${period}:${adjust}:${count}:${startDate ?? ''}`;
-  return cached(key, defaultTtl() * 6, async () => {
-    try {
-      return await tencent.fetchKLine(n.symbol, period, adjust, count, startDate);
-    } catch {
-      /* 落到下一级 */
-    }
-    try {
-      if (adjust !== 'none') throw new Error('新浪仅提供不复权价格');
-      const series = await sina.fetchKLine(n.symbol, period, count);
-      return { ...series, candles: series.candles.filter(c => !startDate || c.date >= startDate).slice(-count) };
-    } catch {
-      /* 落到下一级 */
-    }
-    const snap = await snapshot.snapshotKLine(n.symbol, period);
-    if (snap && snap.adjust === adjust) return { ...snap, candles: snap.candles.filter(c => !startDate || c.date >= startDate).slice(-count) };
-    throw new Error(`无法获取 ${n.symbol} 的 ${period} 线数据（${adjust}）`);
-  });
+  return cached(key, Math.min(defaultTtl(n.market === 'HK' ? 'HK' : 'A'), 60_000), () =>
+    storedKLine({ symbol: n.symbol, period, adjust, count, start: startDate }, async request => {
+      try {
+        const value = await tencent.fetchKLine(n.symbol, period, adjust, request.count, request.start, request.end);
+        validateKLine(value, request);
+        if (adjust === 'none' && n.market !== 'HK' && n.kind === 'stock' && !request.end) {
+          try {
+            const comparison = await sina.fetchKLine(n.symbol, period, Math.min(80, request.count));
+            validateKLine(comparison, request);
+            return crossCheckMainlandRaw(value, comparison, new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10));
+          } catch (error) {
+            if (error instanceof MarketDataConflict) {
+              try { await getMarketStore()?.incident(n.symbol, 'cross_source_conflict', error.differences); } catch {}
+              throw error;
+            }
+            return { ...value, warnings: [...(value.warnings ?? []), '备用来源暂不可核对；当前仅通过结构校验。'] };
+          }
+        }
+        return value;
+      } catch (error) { if (error instanceof MarketDataConflict) throw error; /* semantic-preserving fallback only */ }
+      if (adjust === 'none' && !request.end) {
+        try {
+          const series = await sina.fetchKLine(n.symbol, period, request.count);
+          validateKLine(series, request);
+          return { ...series, candles: series.candles.filter(c => !request.start || c.date >= request.start).slice(-request.count) };
+        } catch { /* historical snapshot remains explicitly stale */ }
+      }
+      const snap = await snapshot.snapshotKLine(n.symbol, period);
+      if (snap && snap.adjust === adjust) return { ...snap, stale: true, complete: false,
+        candles: snap.candles.filter(c => (!request.start || c.date >= request.start) && (!request.end || c.date <= request.end)).slice(-request.count) };
+      throw new Error(`无法获取 ${n.symbol} 的 ${period} 线数据（${adjust}）`);
+    }));
 }
 
 export async function getMinute(input: string): Promise<MinutePoint[]> {
@@ -398,12 +418,12 @@ export async function getValuation(input: string, years = 10, method: ValuationM
     // qfq 失败时用 raw 兜底占位（下方会因口径不匹配报错，但至少给出明确信息）
     const [q, points, shares, dates, dividends, plans] = await Promise.all([
       getQuote(n.symbol),
-      cached(`statements-v2:${n.code}`, 864e5, () => sinaFinStmt.fetchStatementHistory(n.code, span + 2)),
-      cached(`shares-v2:${n.code}`, 864e5, () => sinaFinance.fetchShareHistory(n.code)),
-      cached(`disclosures:${n.code}`, 864e5, () => fetchDisclosureDates(n.code, new Date().getUTCFullYear() - span - 2)),
-      cached(`dividends-v2:${n.code}`, 864e5, () => sinaBonus.fetchDividends(n.code)).catch(() => null),
-      cached(`dividend-plans-v1:${n.code}`, 3600e3, () => fetchDividendPlans(n.code)).catch(() => null),
-    ]);
+      storedMarketInput(`statements-v3:${n.code}:${span + 2}`, 'financial-history', 'sina-statements:CNY:yuan:current-revisions', 1800e3, () => sinaFinStmt.fetchStatementHistory(n.code, span + 2), rows => validateDatedRows(rows as unknown as Record<string, unknown>[], 'date', ['npParent', 'equityParent'])),
+      storedMarketInput(`shares-v3:${n.code}`, 'share-events', 'sina-shares:10000shares', 1800e3, () => sinaFinance.fetchShareHistory(n.code), rows => { validateDatedRows(rows as unknown as Record<string, unknown>[], 'date', ['sharesWan']); if (rows.some(r => !(r.sharesWan > 0))) throw Error('股本数值无效'); }),
+      storedMarketInput(`disclosures-v3:${n.code}:${span + 2}`, 'disclosure-dates', 'sina+eastmoney:first-original-publication', 1800e3, () => fetchDisclosureDates(n.code, new Date().getUTCFullYear() - span - 2), dates => { if (!dates.size) throw Error('缺少原始公告日期'); const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10); for (const [report, published] of dates) if (!/^\d{4}-\d{2}-\d{2}$/.test(published) || published <= report || published > today) throw Error('公告日期无效'); }),
+      getValuationDividends(n.code).catch(() => null),
+      getValuationPlans(n.code).catch(() => null),
+    ]).catch(error => { throw Error(`财报数据不可用或股本/公告输入未通过核验：${error instanceof Error ? error.message : String(error)}`); });
     const raw = await getKLine(n.symbol, 'day', 'none', 3200, start);
     const adjusted = await getKLine(n.symbol, 'day', 'qfq', 3200, start);
     if (!q) throw new Error('行情获取失败');
@@ -447,6 +467,7 @@ export async function getValuation(input: string, years = 10, method: ValuationM
     if (history.length < candles.length) warnings.push('部分交易日缺少可对齐的前复权价格或已披露财报，已排除。');
     if (history[0].date > cutoff && history[0].date > candles[0]?.date) warnings.push('数据覆盖不足所选区间，请以实际起止日期和样本数为准。');
     if (dividends === null) warnings.push('分红数据源不可用，股息率暂不计算。');
+    if (dividends?.some(e => e.cashConflict)) warnings.push('部分历史分红来源金额有冲突，相关十二个月静态股息率留空，不将争议金额计入。');
     if (plans === null) warnings.push('分红方案数据不可用，预期股息率暂不计算；静态值仍按可取得的已实施分红计算。');
     if (raw.stale || adjusted.stale || q.stale) warnings.push('部分行情来自历史快照，请留意数据日期。');
     warnings.push('财务金额为数据源当前披露版本，可能包含后续重述；历史序列不能替代严格的时点回测数据。');

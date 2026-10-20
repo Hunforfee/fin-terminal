@@ -9,6 +9,7 @@ const source = await load('datasource/index');
 const cache = await load('datasource/cache');
 const { clearCache } = cache;
 const codes = await load('datasource/codes');
+const valuationInputs = await load('valuationInputs');
 const route = {};
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/app/api/dividend-yield/route.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -22,6 +23,7 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/app/api/dividend-yiel
     if (name === '@/lib/datasource') return source;
     if (name === '@/lib/datasource/cache') return cache;
     if (name === '@/lib/datasource/codes') return codes;
+    if (name === '@/lib/valuationInputs') return valuationInputs;
     if (['@/lib/datasource/dividendPlans', '@/lib/datasource/sinaBonus', '@/lib/dividends'].includes(name)) return {};
     throw new Error(`Unexpected import: ${name}`);
   },

@@ -252,7 +252,12 @@ export function buildDividendYieldByDate(
   for (const c of rawCandles) {
     if (!(c.close > 0)) continue;
     const time = Date.parse(c.date);
-    const perShare = events.filter(e => e.perShare > 0 && e.exDate <= c.date && Date.parse(e.exDate) > time - 365.25 * 864e5)
+      const current = new Date(time);
+      const from = new Date(Date.UTC(current.getUTCFullYear() - 1, current.getUTCMonth(), 1));
+      const last = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + 1, 0)).getUTCDate();
+      from.setUTCDate(Math.min(current.getUTCDate(), last));
+      if (events.some(e => e.cashConflict && e.exDate <= c.date && Date.parse(e.exDate) > from.getTime())) continue;
+      const perShare = events.filter(e => e.perShare > 0 && e.exDate <= c.date && Date.parse(e.exDate) > from.getTime())
       .reduce((sum,e) => {
         const split = events.filter(x => x.exDate >= e.exDate && x.exDate <= c.date)
           .reduce((factor,x) => factor * (1 + (x.perShareStock ?? 0)), 1);
@@ -274,6 +279,8 @@ export function adjustCandlesForChart(
   dividends: DividendEvent[],
 ): { candles: Candle[]; gaps: number } {
   if (candles.length === 0) return { candles, gaps: 0 };
+  if (dividends.some(e => e.cashConflict && e.exDate >= candles[0].date && e.exDate <= candles.at(-1)!.date))
+    throw Error('分红金额存在冲突，不能自行生成复权价格');
   const events = dividends
     .filter((e) => (e.perShare > 0 || (e.perShareStock ?? 0) > 0) && /^\d{4}-\d{2}-\d{2}$/.test(e.exDate))
     .sort((a, b) => a.exDate.localeCompare(b.exDate));

@@ -1,3 +1,5 @@
+import { storedScreenFinancials } from '../screenFinancialStorage';
+import { getMarketStore } from '../marketStore';
 import { SW2021 } from '../sw2021';
 import {
   emptyValueScreenRow, valueScreenFinancialStatus, valueScreenQuoteStatus,
@@ -134,7 +136,7 @@ export async function fetchValueScreenReportPages(
 }
 
 /** Cache only raw reports. Prices and final valuation/filter results never use this TTL. */
-export async function fetchValueScreenReports(periods: string[], today: string, codes?: string[]): Promise<ValueScreenReports> {
+async function fetchFreshValueScreenReports(periods: string[], today: string, codes?: string[]): Promise<ValueScreenReports> {
   if (periods.length === 0 || codes?.length === 0) return { main: [], income: [] };
   if (codes?.some(code => !/^\d{6}$/.test(code))) throw Error('财报股票范围无效');
   const key = [...new Set(periods)].sort().join('~');
@@ -151,6 +153,18 @@ export async function fetchValueScreenReports(periods: string[], today: string, 
       return { main, income };
     }));
   return { main: results.flatMap(result => result.main), income: results.flatMap(result => result.income) };
+}
+
+export async function fetchValueScreenReports(periods: string[], today: string, codes?: string[]): Promise<ValueScreenReports> {
+  const store = getMarketStore();
+  if (!store) return fetchFreshValueScreenReports(periods, today, codes);
+  const targets = codes ?? universe.map(row => row.code);
+  return storedScreenFinancials(targets, periods, async missing => {
+    const reports = await fetchFreshValueScreenReports(periods, today, !codes && missing.length === targets.length ? undefined : missing);
+    const identities = new Set(missing), allowed = new Set(periods);
+    const accept = (row: RawRow) => identities.has(String(row.SECURITY_CODE)) && validReport(row, allowed, today);
+    return { main: reports.main.filter(accept), income: reports.income.filter(accept) };
+  }, store);
 }
 
 function validReport(row: RawRow, allowedPeriods: Set<string>, today: string): boolean {

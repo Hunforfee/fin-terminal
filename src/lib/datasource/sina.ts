@@ -36,17 +36,17 @@ export async function fetchKLine(
   }
   // 新浪行序： { day, open, high, low, close, volume }
   const candles: Candle[] = parsed.map((r) => {
-    const open = Number(r.open);
-    const close = Number(r.close);
-    const high = Number(r.high);
-    const low = Number(r.low);
+    const open = numOrNull(r.open) ?? NaN;
+    const close = numOrNull(r.close) ?? NaN;
+    const high = numOrNull(r.high) ?? NaN;
+    const low = numOrNull(r.low) ?? NaN;
     return {
       date: String(r.day).slice(0, 10),
       open,
       close,
-      high: Number.isFinite(high) ? Math.max(high, open, close) : Math.max(open, close),
-      low: Number.isFinite(low) ? Math.min(low, open, close) : Math.min(open, close),
-      volume: (Number(r.volume) || 0) / 100, // 新浪给的是股，换算成手
+      high,
+      low,
+      volume: (r.volume == null || String(r.volume).trim() === '' ? NaN : Number(r.volume)) / 100, // 新浪给的是股，换算成手
     };
   });
   return { symbol, code: symbol.slice(2), period, adjust: 'none', candles, source: PROVIDER_NAME, stale: false };

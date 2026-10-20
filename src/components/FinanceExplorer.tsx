@@ -827,9 +827,14 @@ export default function FinanceExplorer({ code }: { code: string }) {
                         {e.label}
                       </h3>
                       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                        <span className="min-w-0 break-words text-[11px] text-slate-500">
+                        <span title={formulas.find(f => formulaKey(f.id) === e.key)?.description}
+                          className="min-w-0 break-words text-[11px] text-slate-500">
                           {e.key === 'fx_p-interest-coverage'
                             ? '倍 · 费用化利息口径（东方财富）'
+                            : ['pl_利润总额', 'pl_利息费用'].includes(e.key) && !primary?.source.includes('hkf10')
+                            ? `${unitText(e.unit)} · 东方财富（利润表）`
+                            : ['fx_p-interest-debt-ratio', 'interestDebtRatio'].includes(e.key)
+                            ? '% · 东方财富（有息负债 / 总资产）'
                             : `${unitText(e.unit)} · ${primary?.source.includes('hkf10') ? `东方财富（${primary.currency ?? '原币'}）` : '新浪财经（披露口径）'}`}
                         </span>
                         <button
@@ -854,7 +859,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
                       />
                     ) : (
                       <div className="py-10 text-center text-sm text-slate-400">
-                        该科目暂未披露
+                        暂无可用数据
                       </div>
                     )}
                   </div>

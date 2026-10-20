@@ -40,10 +40,10 @@ export const PRESET_FORMULAS: Formula[] = [
   {
     id: 'p-interest-debt-ratio',
     name: '有息负债率',
-    expr:
-      '(bs_短期借款 + bs_一年内到期的非流动负债 + bs_长期借款 + bs_应付债券 + bs_租赁负债) / bs_资产总计 * 100',
+    expr: 'interestDebtRatio',
     unit: 'pct',
     preset: true,
+    description: '采用东方财富 INTEREST_DEBT_RATIO（有息负债 / 总资产），按报告期对齐；不是只加总五项借款的窄口径。合并范围含金融子公司时可能包含其融资负债，缺失不按零处理。',
   },
   {
     id: 'p-cash-to-debt',

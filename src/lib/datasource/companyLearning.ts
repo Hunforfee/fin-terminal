@@ -64,7 +64,7 @@ export async function getLearningBrief(input:string):Promise<LearningBrief> {
   const stock=normalizeStockCode(input);if(!stock||stock.kind!=='stock')throw Error('请选择股票');
   return cached(`company-learning-brief-v3:${stock.symbol}:${todayResearchDate()}`,86400e3,async()=>{
     const hk=stock.market==='HK';
-    const prepared=hk?undefined:getPreAnalysis(stock.code);
+    const prepared=getPreAnalysis(stock.code);
     const [quote,business]=await Promise.all([getQuote(stock.symbol).catch(()=>null),(hk?hkBusiness(stock.code):fetchBusiness(stock.code,'A')).catch(()=>null)]);
     if(!quote&&!business?.summary&&!business?.scope&&!prepared)throw Error('公司资料暂不可用，请重试或换一家公司');
     const meta=candidate(stock.symbol,'universe')!;
@@ -97,7 +97,7 @@ export async function getLearningDigest(input:string):Promise<LearningDigest> {
     if(brief.status==='rejected')throw brief.reason;
     const latestReport=annual.status==='fulfilled'?annual.value.latest:null;
     return {...brief.value,annual:annual.status==='fulfilled'?annual.value.annual:[],latestReport,
-      research:makeLearningResearch(hk?undefined:getPreAnalysis(stock.code),today,brief.value.business,latestReport),
+      research:makeLearningResearch(getPreAnalysis(stock.code),today,brief.value.business,latestReport),
       reports:reports.status==='fulfilled'?reports.value.filter(r=>r.date&&learningDate(r.date)&&r.date<=today):[],
       announcements:announcements.status==='fulfilled'?announcements.value.filter(r=>/^AN[\w-]+$/.test(r.artCode)&&learningDate(r.date)&&r.date<=today):[],
       unavailable:[annual.status==='rejected'?'年报指标':'',reports.status==='rejected'?'研报':'',announcements.status==='rejected'?'公告':''].filter(Boolean),

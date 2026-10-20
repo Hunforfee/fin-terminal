@@ -1,0 +1,9666 @@
+{
+  "version": 1,
+  "scope": "watchlist-and-builtin-companies",
+  "scopeNote": "仓库自选清单快照、内置STOCKS公司池及已有解析；不代表浏览器实时自选，不包含全市场及指数/基金。",
+  "companies": [
+    {
+      "code": "000002",
+      "market": "A",
+      "name": "万科A",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "00001",
+      "market": "HK",
+      "name": "长江和记实业有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "000028",
+      "market": "A",
+      "name": "国药集团一致药业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "00003",
+      "market": "HK",
+      "name": "香港中华煤气有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "000031",
+      "market": "A",
+      "name": "大悦城控股集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "00005",
+      "market": "HK",
+      "name": "汇丰控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "000063",
+      "market": "A",
+      "name": "中兴通讯",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "00012",
+      "market": "HK",
+      "name": "恒基兆业地产有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00013",
+      "market": "HK",
+      "name": "和黄医药(中国)有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "000157",
+      "market": "A",
+      "name": "中联重科股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "00016",
+      "market": "HK",
+      "name": "新鸿基地产发展有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00019",
+      "market": "HK",
+      "name": "太古股份有限公司A",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00023",
+      "market": "HK",
+      "name": "东亚银行有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00027",
+      "market": "HK",
+      "name": "银河娱乐集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "000333",
+      "market": "A",
+      "name": "美的集团",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "000408",
+      "market": "A",
+      "name": "藏格矿业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究",
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "000411",
+      "market": "A",
+      "name": "浙江英特集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "000415",
+      "market": "A",
+      "name": "渤海租赁股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "000425",
+      "market": "A",
+      "name": "徐工集团工程机械股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "000426",
+      "market": "A",
+      "name": "内蒙古兴业银锡矿业股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "000498",
+      "market": "A",
+      "name": "山东高速路桥集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "000525",
+      "market": "A",
+      "name": "南京红太阳股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "000528",
+      "market": "A",
+      "name": "广西柳工机械股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "000537",
+      "market": "A",
+      "name": "天津绿发电力集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "000538",
+      "market": "A",
+      "name": "云南白药",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "000543",
+      "market": "A",
+      "name": "安徽省皖能股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "000550",
+      "market": "A",
+      "name": "江铃汽车股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "000563",
+      "market": "A",
+      "name": "陕西省国际信托股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "000568",
+      "market": "A",
+      "name": "泸州老窖",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "000581",
+      "market": "A",
+      "name": "无锡威孚高科技集团股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "000582",
+      "market": "A",
+      "name": "北部湾港股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "000589",
+      "market": "A",
+      "name": "贵州轮胎股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "000596",
+      "market": "A",
+      "name": "古井贡酒",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "000598",
+      "market": "A",
+      "name": "成都市兴蓉环境股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "000612",
+      "market": "A",
+      "name": "焦作万方铝业股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "000625",
+      "market": "A",
+      "name": "长安汽车",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "000651",
+      "market": "A",
+      "name": "格力电器",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "000672",
+      "market": "A",
+      "name": "甘肃上峰材料股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "000685",
+      "market": "A",
+      "name": "中山公用事业集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "000690",
+      "market": "A",
+      "name": "广东宝丽华新能源股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "000709",
+      "market": "A",
+      "name": "河钢股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "000719",
+      "market": "A",
+      "name": "中原大地传媒股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "000725",
+      "market": "A",
+      "name": "京东方A",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "000726",
+      "market": "A",
+      "name": "鲁泰纺织股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "000729",
+      "market": "A",
+      "name": "北京燕京啤酒股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "000776",
+      "market": "A",
+      "name": "广发证券",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "000786",
+      "market": "A",
+      "name": "北新集团建材股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "000791",
+      "market": "A",
+      "name": "甘肃电投能源发展股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "000792",
+      "market": "A",
+      "name": "青海盐湖工业股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "000807",
+      "market": "A",
+      "name": "云南铝业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "000821",
+      "market": "A",
+      "name": "湖北京山轻工机械股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "000825",
+      "market": "A",
+      "name": "山西太钢不锈钢股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "000833",
+      "market": "A",
+      "name": "广西粤桂广业控股股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究",
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "000858",
+      "market": "A",
+      "name": "五粮液",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "000883",
+      "market": "A",
+      "name": "湖北能源集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "000895",
+      "market": "A",
+      "name": "河南双汇投资发展股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "000898",
+      "market": "A",
+      "name": "鞍钢股份",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "000902",
+      "market": "A",
+      "name": "新洋丰农业科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "000921",
+      "market": "A",
+      "name": "海信家电集团股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "000923",
+      "market": "A",
+      "name": "河钢资源股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "000930",
+      "market": "A",
+      "name": "中粮生物科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "000932",
+      "market": "A",
+      "name": "湖南华菱钢铁股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "000933",
+      "market": "A",
+      "name": "河南神火煤电股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "000950",
+      "market": "A",
+      "name": "重药控股股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "000959",
+      "market": "A",
+      "name": "北京首钢股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究",
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "000963",
+      "market": "A",
+      "name": "华东医药股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "000968",
+      "market": "A",
+      "name": "山西蓝焰控股股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "000969",
+      "market": "A",
+      "name": "安泰科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "000999",
+      "market": "A",
+      "name": "华润三九医药股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "00100",
+      "market": "HK",
+      "name": "上海稀宇科技有限公司（MiniMax Group Inc.）",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00116",
+      "market": "HK",
+      "name": "周生生集团国际有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "001201",
+      "market": "A",
+      "name": "东瑞食品集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "001203",
+      "market": "A",
+      "name": "大中矿业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "001205",
+      "market": "A",
+      "name": "南京盛航海运股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "001206",
+      "market": "A",
+      "name": "天津市依依卫生用品股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "001248",
+      "market": "A",
+      "name": "华润新能源控股有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "001280",
+      "market": "A",
+      "name": "中国铀业股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "001286",
+      "market": "A",
+      "name": "陕西能源投资集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "001338",
+      "market": "A",
+      "name": "粤海永顺泰集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "00135",
+      "market": "HK",
+      "name": "昆仑能源有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00142",
+      "market": "HK",
+      "name": "第一太平有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00144",
+      "market": "HK",
+      "name": "招商局港口控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00148",
+      "market": "HK",
+      "name": "建滔集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00151",
+      "market": "HK",
+      "name": "中国旺旺控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00175",
+      "market": "HK",
+      "name": "吉利汽车控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "001872",
+      "market": "A",
+      "name": "招商局港口集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "00189",
+      "market": "HK",
+      "name": "东岳集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "001914",
+      "market": "A",
+      "name": "招商局积余产业运营服务股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "001965",
+      "market": "A",
+      "name": "招商局公路网络科技控股股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "001979",
+      "market": "A",
+      "name": "招商蛇口",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "00200",
+      "market": "HK",
+      "name": "新濠国际发展有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "002001",
+      "market": "A",
+      "name": "浙江新和成股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002003",
+      "market": "A",
+      "name": "浙江伟星实业发展股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002007",
+      "market": "A",
+      "name": "华兰生物工程股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002011",
+      "market": "A",
+      "name": "浙江盾安人工环境股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002014",
+      "market": "A",
+      "name": "黄山永新股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002019",
+      "market": "A",
+      "name": "亿帆医药股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "002027",
+      "market": "A",
+      "name": "分众传媒",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002028",
+      "market": "A",
+      "name": "思源电气股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002032",
+      "market": "A",
+      "name": "浙江苏泊尔股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002043",
+      "market": "A",
+      "name": "德华兔宝宝装饰新材股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002048",
+      "market": "A",
+      "name": "宁波华翔电子股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002050",
+      "market": "A",
+      "name": "三花智控",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002056",
+      "market": "A",
+      "name": "横店集团东磁股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002061",
+      "market": "A",
+      "name": "浙江交通科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002078",
+      "market": "A",
+      "name": "山东太阳纸业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002083",
+      "market": "A",
+      "name": "孚日集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002091",
+      "market": "A",
+      "name": "江苏国泰国际集团股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002092",
+      "market": "A",
+      "name": "新疆中泰化学股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002120",
+      "market": "A",
+      "name": "韵达控股集团股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002126",
+      "market": "A",
+      "name": "浙江银轮机械股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002128",
+      "market": "A",
+      "name": "内蒙古电投能源股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002129",
+      "market": "A",
+      "name": "TCL中环",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002136",
+      "market": "A",
+      "name": "安徽安纳达钛业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002142",
+      "market": "A",
+      "name": "宁波银行",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002170",
+      "market": "A",
+      "name": "深圳市芭田生态工程股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002179",
+      "market": "A",
+      "name": "中航光电",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "00220",
+      "market": "HK",
+      "name": "统一企业中国控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "002204",
+      "market": "A",
+      "name": "大连华锐重工集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002215",
+      "market": "A",
+      "name": "深圳诺普信作物科学股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "002216",
+      "market": "A",
+      "name": "三全食品股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002223",
+      "market": "A",
+      "name": "江苏鱼跃医疗设备股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "002230",
+      "market": "A",
+      "name": "科大讯飞",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002236",
+      "market": "A",
+      "name": "浙江大华技术股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002241",
+      "market": "A",
+      "name": "歌尔股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002244",
+      "market": "A",
+      "name": "杭州滨江房产集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002245",
+      "market": "A",
+      "name": "江苏蔚蓝锂芯集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002252",
+      "market": "A",
+      "name": "上海莱士血液制品股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002258",
+      "market": "A",
+      "name": "利尔化学股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002271",
+      "market": "A",
+      "name": "东方雨虹",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002273",
+      "market": "A",
+      "name": "浙江水晶光电科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002293",
+      "market": "A",
+      "name": "罗莱生活科技股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002299",
+      "market": "A",
+      "name": "福建圣农发展股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002304",
+      "market": "A",
+      "name": "洋河股份",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002318",
+      "market": "A",
+      "name": "浙江久立特材科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002320",
+      "market": "A",
+      "name": "海南海峡航运股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002327",
+      "market": "A",
+      "name": "深圳市富安娜家居用品股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002335",
+      "market": "A",
+      "name": "科华数据股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002340",
+      "market": "A",
+      "name": "格林美股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002352",
+      "market": "A",
+      "name": "顺丰控股",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002353",
+      "market": "A",
+      "name": "烟台杰瑞石油服务集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002371",
+      "market": "A",
+      "name": "北方华创",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002372",
+      "market": "A",
+      "name": "浙江伟星新型建材股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "002379",
+      "market": "A",
+      "name": "山东宏桥铝业控股股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002394",
+      "market": "A",
+      "name": "江苏联发纺织股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002397",
+      "market": "A",
+      "name": "湖南梦洁家纺股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002415",
+      "market": "A",
+      "name": "海康威视",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002416",
+      "market": "A",
+      "name": "深圳市爱施德股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002440",
+      "market": "A",
+      "name": "浙江闰土股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002444",
+      "market": "A",
+      "name": "杭州巨星科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002455",
+      "market": "A",
+      "name": "江苏百川高科新材料股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002461",
+      "market": "A",
+      "name": "广州珠江啤酒股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002463",
+      "market": "A",
+      "name": "沪士电子股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002468",
+      "market": "A",
+      "name": "申通快递股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002472",
+      "market": "A",
+      "name": "双环传动",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002475",
+      "market": "A",
+      "name": "立讯精密",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002478",
+      "market": "A",
+      "name": "江苏常宝钢管股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002507",
+      "market": "A",
+      "name": "重庆市涪陵榨菜集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002508",
+      "market": "A",
+      "name": "老板电器",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002511",
+      "market": "A",
+      "name": "中顺洁柔纸业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002518",
+      "market": "A",
+      "name": "深圳科士达科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002532",
+      "market": "A",
+      "name": "天山铝业集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002539",
+      "market": "A",
+      "name": "成都云图控股股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002540",
+      "market": "A",
+      "name": "江苏亚太轻合金科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002541",
+      "market": "A",
+      "name": "安徽鸿路钢结构(集团)股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002543",
+      "market": "A",
+      "name": "广东万和新电气股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002555",
+      "market": "A",
+      "name": "三七互娱网络科技集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002557",
+      "market": "A",
+      "name": "洽洽食品股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002567",
+      "market": "A",
+      "name": "唐人神集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "00257",
+      "market": "HK",
+      "name": "中国光大环境(集团)有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "002588",
+      "market": "A",
+      "name": "史丹利农业集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002594",
+      "market": "A",
+      "name": "比亚迪",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002597",
+      "market": "A",
+      "name": "安徽金禾实业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002601",
+      "market": "A",
+      "name": "龙佰集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "002609",
+      "market": "A",
+      "name": "深圳市捷顺科技实业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002615",
+      "market": "A",
+      "name": "浙江哈尔斯真空器皿股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002616",
+      "market": "A",
+      "name": "广东长青(集团)股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002625",
+      "market": "A",
+      "name": "光启技术股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002636",
+      "market": "A",
+      "name": "金安国纪集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002648",
+      "market": "A",
+      "name": "卫星化学",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002661",
+      "market": "A",
+      "name": "陈克明食品股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002668",
+      "market": "A",
+      "name": "广东TCL智慧家电股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002690",
+      "market": "A",
+      "name": "合肥美亚光电技术股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "00270",
+      "market": "HK",
+      "name": "粤海投资有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "002705",
+      "market": "A",
+      "name": "广东新宝电器股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "002706",
+      "market": "A",
+      "name": "上海良信电器股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002709",
+      "market": "A",
+      "name": "广州天赐高新材料股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002714",
+      "market": "A",
+      "name": "牧原股份",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "002746",
+      "market": "A",
+      "name": "山东仙坛股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002749",
+      "market": "A",
+      "name": "四川国光农化股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002756",
+      "market": "A",
+      "name": "永兴特种材料科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002763",
+      "market": "A",
+      "name": "深圳汇洁集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002782",
+      "market": "A",
+      "name": "深圳可立克科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002788",
+      "market": "A",
+      "name": "鹭燕医药股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002812",
+      "market": "A",
+      "name": "云南恩捷新材料(集团)股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002832",
+      "market": "A",
+      "name": "比音勒芬服饰股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002847",
+      "market": "A",
+      "name": "盐津铺子食品股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究",
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002850",
+      "market": "A",
+      "name": "深圳市科达利实业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002851",
+      "market": "A",
+      "name": "深圳麦格米特电气股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002852",
+      "market": "A",
+      "name": "道道全粮油股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "00288",
+      "market": "HK",
+      "name": "万洲国际有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "002884",
+      "market": "A",
+      "name": "广东凌霄泵业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002885",
+      "market": "A",
+      "name": "深圳市京泉华科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002891",
+      "market": "A",
+      "name": "烟台中宠食品股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "002895",
+      "market": "A",
+      "name": "贵州川恒化工股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "00291",
+      "market": "HK",
+      "name": "华润啤酒（控股）有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股持仓"
+      ]
+    },
+    {
+      "code": "002920",
+      "market": "A",
+      "name": "惠州市德赛西威汽车电子股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "00293",
+      "market": "HK",
+      "name": "国泰航空有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "002959",
+      "market": "A",
+      "name": "小熊电器股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "00297",
+      "market": "HK",
+      "name": "中化化肥控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "002978",
+      "market": "A",
+      "name": "四川安宁铁钛股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002979",
+      "market": "A",
+      "name": "深圳市雷赛智能控制股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "002984",
+      "market": "A",
+      "name": "青岛森麒麟轮胎股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "003000",
+      "market": "A",
+      "name": "劲仔食品集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "00303",
+      "market": "HK",
+      "name": "伟易达集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00316",
+      "market": "HK",
+      "name": "东方海外(国际)有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00317",
+      "market": "HK",
+      "name": "中船海洋与防务装备股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00322",
+      "market": "HK",
+      "name": "康师傅控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00338",
+      "market": "HK",
+      "name": "中国石化上海石油化工股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00347",
+      "market": "HK",
+      "name": "鞍钢股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00363",
+      "market": "HK",
+      "name": "上海实业控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00371",
+      "market": "HK",
+      "name": "北控水务集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股持仓",
+        "港股"
+      ]
+    },
+    {
+      "code": "003816",
+      "market": "A",
+      "name": "中国广核电力股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "00384",
+      "market": "HK",
+      "name": "中国燃气控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00386",
+      "market": "HK",
+      "name": "中国石油化工股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00390",
+      "market": "HK",
+      "name": "中国中铁股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00392",
+      "market": "HK",
+      "name": "北京控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00425",
+      "market": "HK",
+      "name": "敏实集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00467",
+      "market": "HK",
+      "name": "联合能源集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00506",
+      "market": "HK",
+      "name": "中国食品有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股持仓"
+      ]
+    },
+    {
+      "code": "00525",
+      "market": "HK",
+      "name": "广深铁路股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00546",
+      "market": "HK",
+      "name": "阜丰集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00548",
+      "market": "HK",
+      "name": "深圳高速公路集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00551",
+      "market": "HK",
+      "name": "裕元工业（集团）有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00552",
+      "market": "HK",
+      "name": "中国通信服务股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00570",
+      "market": "HK",
+      "name": "中国中药控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00576",
+      "market": "HK",
+      "name": "浙江沪杭甬高速公路股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00579",
+      "market": "HK",
+      "name": "北京京能清洁能源电力股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00586",
+      "market": "HK",
+      "name": "海螺创业能源股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00598",
+      "market": "HK",
+      "name": "中国外运股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00631",
+      "market": "HK",
+      "name": "三一重装国际控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00639",
+      "market": "HK",
+      "name": "首钢福山资源集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "00667",
+      "market": "HK",
+      "name": "中国东方教育控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00669",
+      "market": "HK",
+      "name": "创科实业有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00696",
+      "market": "HK",
+      "name": "中国民航信息网络股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股持仓"
+      ]
+    },
+    {
+      "code": "00697",
+      "market": "HK",
+      "name": "首程控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00700",
+      "market": "HK",
+      "name": "腾讯控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00762",
+      "market": "HK",
+      "name": "中国联合网络通信(香港)股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00772",
+      "market": "HK",
+      "name": "阅文集团",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00788",
+      "market": "HK",
+      "name": "中国铁塔股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股持仓"
+      ]
+    },
+    {
+      "code": "00811",
+      "market": "HK",
+      "name": "新华文轩出版传媒股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00819",
+      "market": "HK",
+      "name": "天能动力国际有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "00836",
+      "market": "HK",
+      "name": "华润电力控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00853",
+      "market": "HK",
+      "name": "微创医疗科学有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00874",
+      "market": "HK",
+      "name": "广州白云山医药集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00880",
+      "market": "HK",
+      "name": "澳门博彩控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00883",
+      "market": "HK",
+      "name": "中国海洋石油有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "00902",
+      "market": "HK",
+      "name": "华能国际电力股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00916",
+      "market": "HK",
+      "name": "龙源电力集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00934",
+      "market": "HK",
+      "name": "中石化冠德控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00956",
+      "market": "HK",
+      "name": "新天绿色能源股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00960",
+      "market": "HK",
+      "name": "龙湖集团控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股持仓"
+      ]
+    },
+    {
+      "code": "00966",
+      "market": "HK",
+      "name": "中国太平保险控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00981",
+      "market": "HK",
+      "name": "中芯国际集成电路制造有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00991",
+      "market": "HK",
+      "name": "大唐国际发电股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00992",
+      "market": "HK",
+      "name": "联想集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "00999",
+      "market": "HK",
+      "name": "小菜园国际控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01024",
+      "market": "HK",
+      "name": "快手科技",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01030",
+      "market": "HK",
+      "name": "新城发展控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01036",
+      "market": "HK",
+      "name": "万科海外投资控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01044",
+      "market": "HK",
+      "name": "恒安国际集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01052",
+      "market": "HK",
+      "name": "越秀交通基建有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01066",
+      "market": "HK",
+      "name": "山东威高集团医用高分子制品股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股持仓"
+      ]
+    },
+    {
+      "code": "01070",
+      "market": "HK",
+      "name": "TCL电子控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01071",
+      "market": "HK",
+      "name": "华电国际电力股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01083",
+      "market": "HK",
+      "name": "港华智慧能源有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01099",
+      "market": "HK",
+      "name": "国药控股股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01113",
+      "market": "HK",
+      "name": "长江实业集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01114",
+      "market": "HK",
+      "name": "华晨中国汽车控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01117",
+      "market": "HK",
+      "name": "中国现代牧业控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01126",
+      "market": "HK",
+      "name": "德林国际有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01179",
+      "market": "HK",
+      "name": "华住集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01186",
+      "market": "HK",
+      "name": "中国铁建股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "01193",
+      "market": "HK",
+      "name": "华润燃气控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01199",
+      "market": "HK",
+      "name": "中远海运港口有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01209",
+      "market": "HK",
+      "name": "华润万象生活有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01308",
+      "market": "HK",
+      "name": "海丰国际控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01336",
+      "market": "HK",
+      "name": "新华人寿保险股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01359",
+      "market": "HK",
+      "name": "中国信达资产管理股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01361",
+      "market": "HK",
+      "name": "361度国际有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01364",
+      "market": "HK",
+      "name": "古茗控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01368",
+      "market": "HK",
+      "name": "特步國際控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股持仓"
+      ]
+    },
+    {
+      "code": "01378",
+      "market": "HK",
+      "name": "中国宏桥集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01405",
+      "market": "HK",
+      "name": "达势股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股持仓"
+      ]
+    },
+    {
+      "code": "01448",
+      "market": "HK",
+      "name": "福壽園國際集團有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股持仓"
+      ]
+    },
+    {
+      "code": "01478",
+      "market": "HK",
+      "name": "丘钛科技(集团)有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01513",
+      "market": "HK",
+      "name": "丽珠医药集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股持仓"
+      ]
+    },
+    {
+      "code": "01579",
+      "market": "HK",
+      "name": "颐海国际控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01585",
+      "market": "HK",
+      "name": "雅迪集团控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01610",
+      "market": "HK",
+      "name": "中粮家佳康食品有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01618",
+      "market": "HK",
+      "name": "中国冶金科工股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01686",
+      "market": "HK",
+      "name": "新意网集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01698",
+      "market": "HK",
+      "name": "腾讯音乐娱乐集团",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01766",
+      "market": "HK",
+      "name": "中国中车股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01787",
+      "market": "HK",
+      "name": "山东黄金矿业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "01810",
+      "market": "HK",
+      "name": "小米集團有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01811",
+      "market": "HK",
+      "name": "中国广核新能源控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01818",
+      "market": "HK",
+      "name": "招金矿业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01836",
+      "market": "HK",
+      "name": "九兴控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01858",
+      "market": "HK",
+      "name": "北京市春立正达医疗器械股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01866",
+      "market": "HK",
+      "name": "中国心连心化肥有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01876",
+      "market": "HK",
+      "name": "百威亚太控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01882",
+      "market": "HK",
+      "name": "海天国际控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01888",
+      "market": "HK",
+      "name": "建滔积层板控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01908",
+      "market": "HK",
+      "name": "建发国际投资集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01910",
+      "market": "HK",
+      "name": "新秀丽集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01913",
+      "market": "HK",
+      "name": "PRADA S.p.A.",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01928",
+      "market": "HK",
+      "name": "金沙中国有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01951",
+      "market": "HK",
+      "name": "锦欣生殖医疗集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01952",
+      "market": "HK",
+      "name": "云顶新耀有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01997",
+      "market": "HK",
+      "name": "九龙仓置业地产投资有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "01999",
+      "market": "HK",
+      "name": "敏华控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股持仓"
+      ]
+    },
+    {
+      "code": "02005",
+      "market": "HK",
+      "name": "石四药集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "02015",
+      "market": "HK",
+      "name": "理想汽车",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02016",
+      "market": "HK",
+      "name": "浙商银行股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02020",
+      "market": "HK",
+      "name": "安踏体育用品有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02039",
+      "market": "HK",
+      "name": "中国国际海运集装箱(集团)股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02097",
+      "market": "HK",
+      "name": "蜜雪冰城股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02105",
+      "market": "HK",
+      "name": "来凯医药有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02128",
+      "market": "HK",
+      "name": "中国联塑集团控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02145",
+      "market": "HK",
+      "name": "上海上美化妝品股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股持仓"
+      ]
+    },
+    {
+      "code": "02155",
+      "market": "HK",
+      "name": "森松国际控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02186",
+      "market": "HK",
+      "name": "绿叶制药集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02190",
+      "market": "HK",
+      "name": "归创通桥医疗科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02196",
+      "market": "HK",
+      "name": "上海复星医药（集团）股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02228",
+      "market": "HK",
+      "name": "晶泰控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02232",
+      "market": "HK",
+      "name": "晶苑国际集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02233",
+      "market": "HK",
+      "name": "中国西部水泥有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02269",
+      "market": "HK",
+      "name": "药明生物技术有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02276",
+      "market": "HK",
+      "name": "上海康耐特光学科技集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02282",
+      "market": "HK",
+      "name": "美高梅中国控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02285",
+      "market": "HK",
+      "name": "泉峰控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02313",
+      "market": "HK",
+      "name": "申洲国际集团控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股持仓"
+      ]
+    },
+    {
+      "code": "02314",
+      "market": "HK",
+      "name": "理文造纸有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02319",
+      "market": "HK",
+      "name": "中国蒙牛乳业有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02328",
+      "market": "HK",
+      "name": "中国人民财产保险股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02331",
+      "market": "HK",
+      "name": "李宁有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02333",
+      "market": "HK",
+      "name": "长城汽车股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "02357",
+      "market": "HK",
+      "name": "中国航空科技工业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02367",
+      "market": "HK",
+      "name": "巨子生物控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02380",
+      "market": "HK",
+      "name": "中国电力国际发展有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02382",
+      "market": "HK",
+      "name": "舜宇光学科技(集团)有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02400",
+      "market": "HK",
+      "name": "心动有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02419",
+      "market": "HK",
+      "name": "四川德康农牧食品集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02460",
+      "market": "HK",
+      "name": "华润饮料(控股)有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02473",
+      "market": "HK",
+      "name": "喜相逢集团控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02498",
+      "market": "HK",
+      "name": "速腾聚创科技有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02507",
+      "market": "HK",
+      "name": "西锐飞机有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02510",
+      "market": "HK",
+      "name": "德翔海运有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02513",
+      "market": "HK",
+      "name": "北京智谱华章科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02533",
+      "market": "HK",
+      "name": "黑芝麻智能国际控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02580",
+      "market": "HK",
+      "name": "奥克斯电气有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股持仓"
+      ]
+    },
+    {
+      "code": "02588",
+      "market": "HK",
+      "name": "中银航空租赁有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02602",
+      "market": "HK",
+      "name": "万物云空间科技服务股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02610",
+      "market": "HK",
+      "name": "南山铝业国际控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股持仓"
+      ]
+    },
+    {
+      "code": "02628",
+      "market": "HK",
+      "name": "中国人寿保险股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02631",
+      "market": "HK",
+      "name": "山东天岳先进科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02648",
+      "market": "HK",
+      "name": "安井食品集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02665",
+      "market": "HK",
+      "name": "Seyond Holdings Ltd.",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02666",
+      "market": "HK",
+      "name": "通用环球医疗集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02669",
+      "market": "HK",
+      "name": "中海物业集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股持仓"
+      ]
+    },
+    {
+      "code": "02688",
+      "market": "HK",
+      "name": "新奥能源控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02689",
+      "market": "HK",
+      "name": "玖龙纸业(控股)有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02698",
+      "market": "HK",
+      "name": "乐舒适有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02799",
+      "market": "HK",
+      "name": "中国中信金融资产管理股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02866",
+      "market": "HK",
+      "name": "中远海运发展股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02877",
+      "market": "HK",
+      "name": "中国神威药业集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "02880",
+      "market": "HK",
+      "name": "辽宁港口股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "03288",
+      "market": "HK",
+      "name": "佛山市海天调味食品股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "03306",
+      "market": "HK",
+      "name": "江南布衣有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "03311",
+      "market": "HK",
+      "name": "中国建筑国际集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "03320",
+      "market": "HK",
+      "name": "华润医药集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "03323",
+      "market": "HK",
+      "name": "中国建材股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "03330",
+      "market": "HK",
+      "name": "灵宝黄金集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "03393",
+      "market": "HK",
+      "name": "威胜控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "03690",
+      "market": "HK",
+      "name": "美团",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "03698",
+      "market": "HK",
+      "name": "徽商银行股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "03759",
+      "market": "HK",
+      "name": "康龙化成(北京)新药技术股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "03888",
+      "market": "HK",
+      "name": "金山软件有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "03898",
+      "market": "HK",
+      "name": "株洲中车时代电气股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "03899",
+      "market": "HK",
+      "name": "中集安瑞科控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "03900",
+      "market": "HK",
+      "name": "绿城中国控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "03908",
+      "market": "HK",
+      "name": "中国国际金融股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "03918",
+      "market": "HK",
+      "name": "金界控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "03931",
+      "market": "HK",
+      "name": "中创新航科技集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "03933",
+      "market": "HK",
+      "name": "联邦制药国际控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "03983",
+      "market": "HK",
+      "name": "中海石油化学股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "03998",
+      "market": "HK",
+      "name": "波司登国际控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "06049",
+      "market": "HK",
+      "name": "保利物业服务股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股持仓"
+      ]
+    },
+    {
+      "code": "06055",
+      "market": "HK",
+      "name": "中烟国际(香港)有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "06078",
+      "market": "HK",
+      "name": "海吉亚医疗控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股持仓"
+      ]
+    },
+    {
+      "code": "06098",
+      "market": "HK",
+      "name": "碧桂园服务控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "06110",
+      "market": "HK",
+      "name": "滔搏国际控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "06168",
+      "market": "HK",
+      "name": "周六福珠宝股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "06186",
+      "market": "HK",
+      "name": "中国飞鹤有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "06198",
+      "market": "HK",
+      "name": "青岛港国际股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "06613",
+      "market": "HK",
+      "name": "蓝思科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "06655",
+      "market": "HK",
+      "name": "华新建材集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "06826",
+      "market": "HK",
+      "name": "上海昊海生物科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股持仓"
+      ]
+    },
+    {
+      "code": "06855",
+      "market": "HK",
+      "name": "亚盛医药（杭州）股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "06862",
+      "market": "HK",
+      "name": "海底捞国际控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股持仓",
+        "港股"
+      ]
+    },
+    {
+      "code": "06881",
+      "market": "HK",
+      "name": "中国银河证券股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "06963",
+      "market": "HK",
+      "name": "阳光保险集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "06969",
+      "market": "HK",
+      "name": "思摩尔国际控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "09606",
+      "market": "HK",
+      "name": "映恩生物",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "09618",
+      "market": "HK",
+      "name": "京东集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "09633",
+      "market": "HK",
+      "name": "农夫山泉股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "09658",
+      "market": "HK",
+      "name": "特海国际控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "09660",
+      "market": "HK",
+      "name": "地平线",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "09699",
+      "market": "HK",
+      "name": "杭州顺丰同城实业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "09858",
+      "market": "HK",
+      "name": "中国优然牧业集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "09866",
+      "market": "HK",
+      "name": "蔚来集团",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "09868",
+      "market": "HK",
+      "name": "小鹏集团",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "09880",
+      "market": "HK",
+      "name": "深圳市优必选科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "09896",
+      "market": "HK",
+      "name": "名创优品集团控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "09899",
+      "market": "HK",
+      "name": "网易云音乐股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "09911",
+      "market": "HK",
+      "name": "赤子城科技有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "09926",
+      "market": "HK",
+      "name": "康方生物科技(开曼)有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "09985",
+      "market": "HK",
+      "name": "卫龙美味全球控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股持仓"
+      ]
+    },
+    {
+      "code": "09987",
+      "market": "HK",
+      "name": "百胜中国控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "09988",
+      "market": "HK",
+      "name": "阿里巴巴集團控股有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "09992",
+      "market": "HK",
+      "name": "泡泡玛特国际集团有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "09999",
+      "market": "HK",
+      "name": "网易股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "港股"
+      ]
+    },
+    {
+      "code": "300001",
+      "market": "A",
+      "name": "青岛特锐德电气股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300015",
+      "market": "A",
+      "name": "爱尔眼科",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "300019",
+      "market": "A",
+      "name": "成都硅宝科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300042",
+      "market": "A",
+      "name": "深圳市朗科科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300045",
+      "market": "A",
+      "name": "北京华力创通科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300115",
+      "market": "A",
+      "name": "深圳市长盈精密技术股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300119",
+      "market": "A",
+      "name": "瑞普生物科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "300124",
+      "market": "A",
+      "name": "汇川技术",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "300146",
+      "market": "A",
+      "name": "汤臣倍健股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "300251",
+      "market": "A",
+      "name": "北京光线传媒股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300294",
+      "market": "A",
+      "name": "华润博雅生物制药集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "300316",
+      "market": "A",
+      "name": "浙江晶盛机电股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300355",
+      "market": "A",
+      "name": "蒙草生态环境（集团）股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300400",
+      "market": "A",
+      "name": "深圳市劲拓自动化设备股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究",
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300401",
+      "market": "A",
+      "name": "浙江花园生物医药股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "300413",
+      "market": "A",
+      "name": "芒果超媒",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "300415",
+      "market": "A",
+      "name": "伊之密股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "300428",
+      "market": "A",
+      "name": "立中四通轻合金集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "300433",
+      "market": "A",
+      "name": "蓝思科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300450",
+      "market": "A",
+      "name": "先导智能",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "300454",
+      "market": "A",
+      "name": "深信服",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "300470",
+      "market": "A",
+      "name": "中密控股股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "300498",
+      "market": "A",
+      "name": "温氏股份",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "300568",
+      "market": "A",
+      "name": "深圳市星源材质科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "300595",
+      "market": "A",
+      "name": "欧普康视科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "300622",
+      "market": "A",
+      "name": "博士眼镜连锁股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300676",
+      "market": "A",
+      "name": "深圳华大基因股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300681",
+      "market": "A",
+      "name": "珠海英搏尔电气股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300693",
+      "market": "A",
+      "name": "深圳市盛弘电气股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300741",
+      "market": "A",
+      "name": "华宝科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "300750",
+      "market": "A",
+      "name": "宁德时代",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "300760",
+      "market": "A",
+      "name": "迈瑞医疗",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "300770",
+      "market": "A",
+      "name": "广东南方新媒体股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "300777",
+      "market": "A",
+      "name": "中简科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究",
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300779",
+      "market": "A",
+      "name": "青岛惠城环保科技集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300783",
+      "market": "A",
+      "name": "三只松鼠股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300806",
+      "market": "A",
+      "name": "江苏斯迪克新材料科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300811",
+      "market": "A",
+      "name": "深圳市铂科新材料股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300821",
+      "market": "A",
+      "name": "山东东岳有机硅材料股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300832",
+      "market": "A",
+      "name": "深圳市新产业生物医学工程股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "300866",
+      "market": "A",
+      "name": "安克创新科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "300873",
+      "market": "A",
+      "name": "江苏海晨物流股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "300896",
+      "market": "A",
+      "name": "爱美客技术发展股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300908",
+      "market": "A",
+      "name": "仲景食品股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "300918",
+      "market": "A",
+      "name": "山东南山智尚科技股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "300926",
+      "market": "A",
+      "name": "江苏博俊工业科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300967",
+      "market": "A",
+      "name": "宁夏晓鸣农牧股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300972",
+      "market": "A",
+      "name": "福建万辰食品集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "300979",
+      "market": "A",
+      "name": "中山华利实业集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "301039",
+      "market": "A",
+      "name": "中集车辆(集团)股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "301061",
+      "market": "A",
+      "name": "常州匠心独具智能家居股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "301101",
+      "market": "A",
+      "name": "明月镜片股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "301207",
+      "market": "A",
+      "name": "华兰生物疫苗股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "301238",
+      "market": "A",
+      "name": "江苏瑞泰新能源材料股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "301239",
+      "market": "A",
+      "name": "普瑞眼科医院集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "301251",
+      "market": "A",
+      "name": "江西威尔高电子股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "301296",
+      "market": "A",
+      "name": "山东新巨丰科技包装股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "301301",
+      "market": "A",
+      "name": "伊犁川宁生物技术股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "301327",
+      "market": "A",
+      "name": "深圳市华宝新能源股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "301363",
+      "market": "A",
+      "name": "深圳市美好创亿医疗科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "301373",
+      "market": "A",
+      "name": "广州凌玮科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "301398",
+      "market": "A",
+      "name": "宁波星源卓镁技术股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "301488",
+      "market": "A",
+      "name": "深圳市豪恩汽车电子装备股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "301498",
+      "market": "A",
+      "name": "乖宝宠物食品集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600000",
+      "market": "A",
+      "name": "浦发银行",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600004",
+      "market": "A",
+      "name": "广州白云国际机场股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600007",
+      "market": "A",
+      "name": "中国国际贸易中心股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600008",
+      "market": "A",
+      "name": "北京首创生态环保集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600009",
+      "market": "A",
+      "name": "上海机场",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600010",
+      "market": "A",
+      "name": "内蒙古包钢钢联股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600011",
+      "market": "A",
+      "name": "华能国际电力股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "600017",
+      "market": "A",
+      "name": "日照港股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600018",
+      "market": "A",
+      "name": "上海国际港务（集团）股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "600019",
+      "market": "A",
+      "name": "宝钢股份",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600022",
+      "market": "A",
+      "name": "山东钢铁股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600023",
+      "market": "A",
+      "name": "浙江浙能电力股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "600025",
+      "market": "A",
+      "name": "华能水电",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600026",
+      "market": "A",
+      "name": "中远海运能源运输股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600027",
+      "market": "A",
+      "name": "华电国际电力股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "600028",
+      "market": "A",
+      "name": "中国石化",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600030",
+      "market": "A",
+      "name": "中信证券",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600031",
+      "market": "A",
+      "name": "三一重工",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600036",
+      "market": "A",
+      "name": "招商银行",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600039",
+      "market": "A",
+      "name": "四川路桥建设集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600048",
+      "market": "A",
+      "name": "保利发展",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600050",
+      "market": "A",
+      "name": "中国联通",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600057",
+      "market": "A",
+      "name": "厦门象屿股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600059",
+      "market": "A",
+      "name": "浙江古越龙山绍兴酒股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600063",
+      "market": "A",
+      "name": "安徽皖维高新材料股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600066",
+      "market": "A",
+      "name": "宇通客车股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600073",
+      "market": "A",
+      "name": "上海光明肉业集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600085",
+      "market": "A",
+      "name": "北京同仁堂股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600096",
+      "market": "A",
+      "name": "云南云天化股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600098",
+      "market": "A",
+      "name": "广州发展集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600104",
+      "market": "A",
+      "name": "上汽集团",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600105",
+      "market": "A",
+      "name": "江苏永鼎股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "600108",
+      "market": "A",
+      "name": "甘肃亚盛实业（集团）股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600111",
+      "market": "A",
+      "name": "北方稀土",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600114",
+      "market": "A",
+      "name": "东睦新材料集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "600123",
+      "market": "A",
+      "name": "山西兰花科技创业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600125",
+      "market": "A",
+      "name": "中铁铁龙集装箱物流股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600132",
+      "market": "A",
+      "name": "重庆啤酒股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "600141",
+      "market": "A",
+      "name": "湖北兴发化工集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600150",
+      "market": "A",
+      "name": "中国船舶工业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "600161",
+      "market": "A",
+      "name": "北京天坛生物制品股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600179",
+      "market": "A",
+      "name": "安通控股股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600188",
+      "market": "A",
+      "name": "兖矿能源",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600189",
+      "market": "A",
+      "name": "吉林泉阳泉股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "600196",
+      "market": "A",
+      "name": "复星医药",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600210",
+      "market": "A",
+      "name": "上海紫江企业集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600216",
+      "market": "A",
+      "name": "浙江医药股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "600219",
+      "market": "A",
+      "name": "山东南山铝业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "600236",
+      "market": "A",
+      "name": "广西桂冠电力股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "600256",
+      "market": "A",
+      "name": "广汇能源股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600273",
+      "market": "A",
+      "name": "浙江嘉化能源化工股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600276",
+      "market": "A",
+      "name": "恒瑞医药",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600298",
+      "market": "A",
+      "name": "安琪酵母",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600299",
+      "market": "A",
+      "name": "蓝星安迪苏股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "600300",
+      "market": "A",
+      "name": "维维食品饮料股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600309",
+      "market": "A",
+      "name": "万华化学",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600310",
+      "market": "A",
+      "name": "广西能源股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "600312",
+      "market": "A",
+      "name": "河南平高电气股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "600323",
+      "market": "A",
+      "name": "瀚蓝环境股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600329",
+      "market": "A",
+      "name": "津药达仁堂集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600332",
+      "market": "A",
+      "name": "广州白云山医药集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "600346",
+      "market": "A",
+      "name": "恒力石化股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600348",
+      "market": "A",
+      "name": "山西华阳集团新能股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600368",
+      "market": "A",
+      "name": "广西五洲交通股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600380",
+      "market": "A",
+      "name": "健康元药业集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600388",
+      "market": "A",
+      "name": "福建龙净环保股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600398",
+      "market": "A",
+      "name": "海澜之家",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600406",
+      "market": "A",
+      "name": "国电南瑞科技股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600415",
+      "market": "A",
+      "name": "浙江中国小商品城集团股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600425",
+      "market": "A",
+      "name": "新疆青松建材化工集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600426",
+      "market": "A",
+      "name": "华鲁恒升",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600428",
+      "market": "A",
+      "name": "中远海运特种运输股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600436",
+      "market": "A",
+      "name": "片仔癀",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600438",
+      "market": "A",
+      "name": "通威股份",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600458",
+      "market": "A",
+      "name": "株洲时代新材料科技股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600461",
+      "market": "A",
+      "name": "江西洪城环境股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600483",
+      "market": "A",
+      "name": "福建福能股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600486",
+      "market": "A",
+      "name": "江苏扬农化工股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600489",
+      "market": "A",
+      "name": "中金黄金股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600499",
+      "market": "A",
+      "name": "科达制造股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600502",
+      "market": "A",
+      "name": "安徽建工集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600507",
+      "market": "A",
+      "name": "方大特钢科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600519",
+      "market": "A",
+      "name": "贵州茅台",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600529",
+      "market": "A",
+      "name": "山东省药用玻璃股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600546",
+      "market": "A",
+      "name": "山煤国际能源集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600547",
+      "market": "A",
+      "name": "山东黄金",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600548",
+      "market": "A",
+      "name": "深圳高速公路集团股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600563",
+      "market": "A",
+      "name": "厦门法拉电子股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600570",
+      "market": "A",
+      "name": "恒生电子",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600572",
+      "market": "A",
+      "name": "浙江康恩贝制药股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600575",
+      "market": "A",
+      "name": "淮河能源（集团）股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "600582",
+      "market": "A",
+      "name": "天地科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600583",
+      "market": "A",
+      "name": "海洋石油工程股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "600585",
+      "market": "A",
+      "name": "海螺水泥",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600587",
+      "market": "A",
+      "name": "山东新华医疗器械股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600598",
+      "market": "A",
+      "name": "黑龙江北大荒农业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600600",
+      "market": "A",
+      "name": "青岛啤酒股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "600612",
+      "market": "A",
+      "name": "老凤祥股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600642",
+      "market": "A",
+      "name": "申能股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600655",
+      "market": "A",
+      "name": "豫园股份",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600660",
+      "market": "A",
+      "name": "福耀玻璃工业集团股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600674",
+      "market": "A",
+      "name": "四川川投能源股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600690",
+      "market": "A",
+      "name": "海尔智家",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600694",
+      "market": "A",
+      "name": "大商股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600703",
+      "market": "A",
+      "name": "三安光电股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "600704",
+      "market": "A",
+      "name": "物产中大集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600710",
+      "market": "A",
+      "name": "苏美达股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600717",
+      "market": "A",
+      "name": "天津港股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600727",
+      "market": "A",
+      "name": "山东鲁北化工股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600739",
+      "market": "A",
+      "name": "辽宁成大股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600741",
+      "market": "A",
+      "name": "华域汽车系统股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "600742",
+      "market": "A",
+      "name": "长春富维集团汽车零部件股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "600744",
+      "market": "A",
+      "name": "大唐华银电力股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "600757",
+      "market": "A",
+      "name": "长江出版传媒股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600760",
+      "market": "A",
+      "name": "中航沈飞",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600761",
+      "market": "A",
+      "name": "安徽合力股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600765",
+      "market": "A",
+      "name": "中航重机股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "600782",
+      "market": "A",
+      "name": "新余钢铁股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600795",
+      "market": "A",
+      "name": "国电电力发展股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "600798",
+      "market": "A",
+      "name": "宁波海运股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600801",
+      "market": "A",
+      "name": "华新建材集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600803",
+      "market": "A",
+      "name": "新奥天然气股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "600809",
+      "market": "A",
+      "name": "山西汾酒",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600820",
+      "market": "A",
+      "name": "上海隧道工程股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "600827",
+      "market": "A",
+      "name": "上海百联集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "600845",
+      "market": "A",
+      "name": "宝信软件",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600859",
+      "market": "A",
+      "name": "王府井集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600861",
+      "market": "A",
+      "name": "北京国际人力资本集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600862",
+      "market": "A",
+      "name": "中航航空高科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "600867",
+      "market": "A",
+      "name": "通化东宝药业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600882",
+      "market": "A",
+      "name": "上海妙可蓝多食品科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "600885",
+      "market": "A",
+      "name": "宏发科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600886",
+      "market": "A",
+      "name": "国投电力控股股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600887",
+      "market": "A",
+      "name": "伊利股份",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600893",
+      "market": "A",
+      "name": "航发动力",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600894",
+      "market": "A",
+      "name": "广州广日股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600900",
+      "market": "A",
+      "name": "长江电力",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600901",
+      "market": "A",
+      "name": "江苏金融租赁股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600930",
+      "market": "A",
+      "name": "华电新能源集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600933",
+      "market": "A",
+      "name": "爱柯迪股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600938",
+      "market": "A",
+      "name": "中国海油",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "600941",
+      "market": "A",
+      "name": "中国移动有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600961",
+      "market": "A",
+      "name": "株洲冶炼集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "600968",
+      "market": "A",
+      "name": "中海油能源发展股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600970",
+      "market": "A",
+      "name": "中国中材国际工程股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "600971",
+      "market": "A",
+      "name": "安徽恒源煤电股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600985",
+      "market": "A",
+      "name": "淮北矿业控股股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "600987",
+      "market": "A",
+      "name": "浙江航民股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "600993",
+      "market": "A",
+      "name": "马应龙药业集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601000",
+      "market": "A",
+      "name": "唐山港集团股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601003",
+      "market": "A",
+      "name": "柳州钢铁股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "601006",
+      "market": "A",
+      "name": "大秦铁路",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601012",
+      "market": "A",
+      "name": "隆基绿能",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601016",
+      "market": "A",
+      "name": "中节能风力发电股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601018",
+      "market": "A",
+      "name": "宁波舟山港股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "601019",
+      "market": "A",
+      "name": "山东出版传媒股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601021",
+      "market": "A",
+      "name": "春秋航空股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601022",
+      "market": "A",
+      "name": "宁波远洋运输股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601058",
+      "market": "A",
+      "name": "赛轮集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "601065",
+      "market": "A",
+      "name": "江西省盐业集团股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601083",
+      "market": "A",
+      "name": "上海锦江航运（集团）股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601088",
+      "market": "A",
+      "name": "中国神华",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601098",
+      "market": "A",
+      "name": "中南出版传媒集团股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601100",
+      "market": "A",
+      "name": "江苏恒立液压股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "601107",
+      "market": "A",
+      "name": "四川成渝高速公路集团股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601118",
+      "market": "A",
+      "name": "海南天然橡胶产业集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "601127",
+      "market": "A",
+      "name": "赛力斯集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "601156",
+      "market": "A",
+      "name": "东方航空物流股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601158",
+      "market": "A",
+      "name": "重庆水务集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601163",
+      "market": "A",
+      "name": "三角轮胎股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601166",
+      "market": "A",
+      "name": "兴业银行",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601168",
+      "market": "A",
+      "name": "西部矿业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601186",
+      "market": "A",
+      "name": "中国铁建",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601225",
+      "market": "A",
+      "name": "陕西煤业",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601231",
+      "market": "A",
+      "name": "环旭电子股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "601238",
+      "market": "A",
+      "name": "广汽集团",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601288",
+      "market": "A",
+      "name": "农业银行",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601298",
+      "market": "A",
+      "name": "青岛港国际股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601311",
+      "market": "A",
+      "name": "骆驼集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601318",
+      "market": "A",
+      "name": "中国平安",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601333",
+      "market": "A",
+      "name": "广深铁路股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601336",
+      "market": "A",
+      "name": "新华人寿保险股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601339",
+      "market": "A",
+      "name": "百隆东方股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601369",
+      "market": "A",
+      "name": "西安陕鼓动力股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601390",
+      "market": "A",
+      "name": "中国中铁",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601398",
+      "market": "A",
+      "name": "工商银行",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601518",
+      "market": "A",
+      "name": "吉林高速公路股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601567",
+      "market": "A",
+      "name": "宁波三星医疗电气股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601598",
+      "market": "A",
+      "name": "中国外运股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601600",
+      "market": "A",
+      "name": "中国铝业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "601601",
+      "market": "A",
+      "name": "中国太保",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601607",
+      "market": "A",
+      "name": "上海医药集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601608",
+      "market": "A",
+      "name": "中信重工机械股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601628",
+      "market": "A",
+      "name": "中国人寿",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601633",
+      "market": "A",
+      "name": "长城汽车",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601668",
+      "market": "A",
+      "name": "中国建筑",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601669",
+      "market": "A",
+      "name": "中国电力建设股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "601688",
+      "market": "A",
+      "name": "华泰证券",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601689",
+      "market": "A",
+      "name": "宁波拓普集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "601699",
+      "market": "A",
+      "name": "山西潞安环保能源开发股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601717",
+      "market": "A",
+      "name": "中创智领（郑州）工业技术集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "601728",
+      "market": "A",
+      "name": "中国电信",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601766",
+      "market": "A",
+      "name": "中国中车",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601808",
+      "market": "A",
+      "name": "中海油田服务股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601811",
+      "market": "A",
+      "name": "新华文轩出版传媒股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601816",
+      "market": "A",
+      "name": "京沪高速铁路股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601827",
+      "market": "A",
+      "name": "重庆三峰环境集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601857",
+      "market": "A",
+      "name": "中国石油",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601868",
+      "market": "A",
+      "name": "中国能源建设股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601872",
+      "market": "A",
+      "name": "招商局能源运输股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601880",
+      "market": "A",
+      "name": "辽宁港口股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601881",
+      "market": "A",
+      "name": "中国银河证券股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601882",
+      "market": "A",
+      "name": "宁波海天精工股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "601886",
+      "market": "A",
+      "name": "江河创建集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601888",
+      "market": "A",
+      "name": "中国中免",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601899",
+      "market": "A",
+      "name": "紫金矿业",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601919",
+      "market": "A",
+      "name": "中远海控",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601921",
+      "market": "A",
+      "name": "浙江出版传媒股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601928",
+      "market": "A",
+      "name": "江苏凤凰出版传媒股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601939",
+      "market": "A",
+      "name": "建设银行",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601952",
+      "market": "A",
+      "name": "江苏省农垦农业发展股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601963",
+      "market": "A",
+      "name": "重庆银行股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601966",
+      "market": "A",
+      "name": "山东玲珑轮胎股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "601975",
+      "market": "A",
+      "name": "招商局南京油运股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601985",
+      "market": "A",
+      "name": "中国核电",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601988",
+      "market": "A",
+      "name": "中国银行",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "601991",
+      "market": "A",
+      "name": "大唐国际发电股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "601995",
+      "market": "A",
+      "name": "中国国际金融股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603019",
+      "market": "A",
+      "name": "曙光信息产业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "603027",
+      "market": "A",
+      "name": "千禾味业食品股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603035",
+      "market": "A",
+      "name": "江苏常熟汽饰集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "603049",
+      "market": "A",
+      "name": "中策橡胶集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603055",
+      "market": "A",
+      "name": "浙江台华新材料集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603067",
+      "market": "A",
+      "name": "湖北振华化学股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "603088",
+      "market": "A",
+      "name": "宁波精达成形装备股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "603092",
+      "market": "A",
+      "name": "德力佳传动科技（江苏）股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "603162",
+      "market": "A",
+      "name": "福建海通发展股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603165",
+      "market": "A",
+      "name": "浙江荣晟环保纸业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603167",
+      "market": "A",
+      "name": "渤海轮渡集团股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "603187",
+      "market": "A",
+      "name": "青岛海容商用冷链股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "603195",
+      "market": "A",
+      "name": "公牛集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "603209",
+      "market": "A",
+      "name": "兴通海运股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603259",
+      "market": "A",
+      "name": "药明康德",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "603279",
+      "market": "A",
+      "name": "景津装备股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603283",
+      "market": "A",
+      "name": "苏州赛腾精密电子股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "603288",
+      "market": "A",
+      "name": "海天味业",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "603298",
+      "market": "A",
+      "name": "杭叉集团股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "603303",
+      "market": "A",
+      "name": "横店集团得邦照明股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603305",
+      "market": "A",
+      "name": "旭升集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603317",
+      "market": "A",
+      "name": "四川天味食品集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603318",
+      "market": "A",
+      "name": "水发派思燃气股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "603345",
+      "market": "A",
+      "name": "安井食品集团股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "603365",
+      "market": "A",
+      "name": "上海水星家用纺织品股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603367",
+      "market": "A",
+      "name": "辰欣药业股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "603379",
+      "market": "A",
+      "name": "浙江三美化工股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "603380",
+      "market": "A",
+      "name": "苏州易德龙科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603393",
+      "market": "A",
+      "name": "新疆鑫泰天然气股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603402",
+      "market": "A",
+      "name": "陕西旅游文化产业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "603408",
+      "market": "A",
+      "name": "厦门建霖智慧家居股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "603444",
+      "market": "A",
+      "name": "厦门吉比特网络技术股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603448",
+      "market": "A",
+      "name": "天博智能科技（山东）股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "603501",
+      "market": "A",
+      "name": "韦尔股份",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "603508",
+      "market": "A",
+      "name": "河南思维自动化设备股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603515",
+      "market": "A",
+      "name": "欧普照明股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603519",
+      "market": "A",
+      "name": "江苏立霸实业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603529",
+      "market": "A",
+      "name": "爱玛科技集团股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "603558",
+      "market": "A",
+      "name": "浙江健盛集团股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "603565",
+      "market": "A",
+      "name": "上海中谷物流股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "603596",
+      "market": "A",
+      "name": "芜湖伯特利汽车安全系统股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603599",
+      "market": "A",
+      "name": "安徽广信农化股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "603600",
+      "market": "A",
+      "name": "永艺家具股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603605",
+      "market": "A",
+      "name": "珀莱雅",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "603606",
+      "market": "A",
+      "name": "宁波东方电缆股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "603611",
+      "market": "A",
+      "name": "诺力智能装备股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603626",
+      "market": "A",
+      "name": "昆山科森科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "603658",
+      "market": "A",
+      "name": "郑州安图生物工程股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603680",
+      "market": "A",
+      "name": "今创集团股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "603697",
+      "market": "A",
+      "name": "有友食品股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "603706",
+      "market": "A",
+      "name": "新疆东方环宇燃气股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603737",
+      "market": "A",
+      "name": "三棵树涂料股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603799",
+      "market": "A",
+      "name": "浙江华友钴业股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603816",
+      "market": "A",
+      "name": "顾家家居股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "603868",
+      "market": "A",
+      "name": "上海飞科电器股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603871",
+      "market": "A",
+      "name": "嘉友国际物流股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "603877",
+      "market": "A",
+      "name": "宁波太平鸟时尚服饰股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603889",
+      "market": "A",
+      "name": "浙江新澳纺织股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "603893",
+      "market": "A",
+      "name": "瑞芯微电子股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "603967",
+      "market": "A",
+      "name": "中创物流股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "603979",
+      "market": "A",
+      "name": "金诚信矿业管理股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "603993",
+      "market": "A",
+      "name": "洛阳钼业",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "605138",
+      "market": "A",
+      "name": "盛泰智造集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "605259",
+      "market": "A",
+      "name": "绿田机械股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "605305",
+      "market": "A",
+      "name": "中际联合（北京）科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "605337",
+      "market": "A",
+      "name": "浙江李子园食品股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "605338",
+      "market": "A",
+      "name": "中饮巴比食品股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "605499",
+      "market": "A",
+      "name": "东鹏饮料(集团)股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "605588",
+      "market": "A",
+      "name": "南京冠石科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "688002",
+      "market": "A",
+      "name": "烟台睿创微纳技术股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688036",
+      "market": "A",
+      "name": "深圳传音控股股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "688041",
+      "market": "A",
+      "name": "海光信息技术股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688047",
+      "market": "A",
+      "name": "龙芯中科技术股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688050",
+      "market": "A",
+      "name": "爱博诺德（北京）医疗科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "688052",
+      "market": "A",
+      "name": "苏州纳芯微电子股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688063",
+      "market": "A",
+      "name": "上海派能能源科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688084",
+      "market": "A",
+      "name": "北京晶品特装科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "未分组"
+      ]
+    },
+    {
+      "code": "688110",
+      "market": "A",
+      "name": "东芯半导体股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688111",
+      "market": "A",
+      "name": "金山办公",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "688114",
+      "market": "A",
+      "name": "深圳华大智造科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688127",
+      "market": "A",
+      "name": "浙江蓝特光学股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688143",
+      "market": "A",
+      "name": "武汉长盈通光电技术股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688187",
+      "market": "A",
+      "name": "中车时代电气股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "688190",
+      "market": "A",
+      "name": "青岛云路先进材料技术股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688213",
+      "market": "A",
+      "name": "思特威（上海）电子科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688220",
+      "market": "A",
+      "name": "翱捷科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688226",
+      "market": "A",
+      "name": "威腾电气集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688234",
+      "market": "A",
+      "name": "山东天岳先进科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688273",
+      "market": "A",
+      "name": "南京麦澜德医疗科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688279",
+      "market": "A",
+      "name": "峰岹科技（深圳）股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688314",
+      "market": "A",
+      "name": "西安康拓医疗技术股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "688333",
+      "market": "A",
+      "name": "西安铂力特增材技术股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688334",
+      "market": "A",
+      "name": "西安高压电器研究院股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "688349",
+      "market": "A",
+      "name": "三一重能股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "688368",
+      "market": "A",
+      "name": "上海晶丰明源半导体股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688403",
+      "market": "A",
+      "name": "合肥新汇成微电子股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688425",
+      "market": "A",
+      "name": "中国铁建重工集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "688433",
+      "market": "A",
+      "name": "湖南华曙高科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688439",
+      "market": "A",
+      "name": "贵州振华风光半导体股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "深度整理"
+      ]
+    },
+    {
+      "code": "688456",
+      "market": "A",
+      "name": "有研粉末新材料股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688518",
+      "market": "A",
+      "name": "深圳市联赢激光股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688520",
+      "market": "A",
+      "name": "北京神州细胞生物技术集团股份公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "688536",
+      "market": "A",
+      "name": "思瑞浦微电子科技（苏州）股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688559",
+      "market": "A",
+      "name": "海目星激光科技集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688570",
+      "market": "A",
+      "name": "北京天玛智控科技股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "688582",
+      "market": "A",
+      "name": "安徽芯动联科微系统股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688653",
+      "market": "A",
+      "name": "格兰康希通信科技（上海）股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688676",
+      "market": "A",
+      "name": "海南金盘智能科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688712",
+      "market": "A",
+      "name": "深圳北芯生命科技股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "688721",
+      "market": "A",
+      "name": "深圳市龙图光罩股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688783",
+      "market": "A",
+      "name": "西安奕斯伟材料科技股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "跟踪池"
+      ]
+    },
+    {
+      "code": "688819",
+      "market": "A",
+      "name": "天能电池集团股份有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究"
+      ]
+    },
+    {
+      "code": "688825",
+      "market": "A",
+      "name": "长鑫科技集团股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "688836",
+      "market": "A",
+      "name": "宇树科技股份有限公司",
+      "origins": [
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "688981",
+      "market": "A",
+      "name": "中芯国际",
+      "origins": [
+        "builtin_company_pool",
+        "existing_analysis"
+      ],
+      "groups": []
+    },
+    {
+      "code": "689009",
+      "market": "A",
+      "name": "九号有限公司",
+      "origins": [
+        "watchlist_snapshot",
+        "existing_analysis"
+      ],
+      "groups": [
+        "价值研究",
+        "跟踪池"
+      ]
+    }
+  ]
+}

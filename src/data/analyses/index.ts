@@ -3,6 +3,177 @@
  * 由 MCP（通达信 F10 深度资料 + 券商研报）抓取真实数据后，基于真实数据撰写并落盘为 {code}.json。
  * 覆盖 universe.ts 全部 A 股个股；未覆盖的标的回退到实时 F10 数据展示。
  */
+import { normalizeStockCode } from '../../lib/datasource/codes';
+import coverage00001 from './00001.json';
+import coverage00003 from './00003.json';
+import coverage00005 from './00005.json';
+import coverage00012 from './00012.json';
+import coverage00013 from './00013.json';
+import coverage00016 from './00016.json';
+import coverage00019 from './00019.json';
+import coverage00023 from './00023.json';
+import coverage00027 from './00027.json';
+import coverage00116 from './00116.json';
+import coverage00135 from './00135.json';
+import coverage00142 from './00142.json';
+import coverage00148 from './00148.json';
+import coverage00151 from './00151.json';
+import coverage00175 from './00175.json';
+import coverage00189 from './00189.json';
+import coverage00200 from './00200.json';
+import coverage00220 from './00220.json';
+import coverage00257 from './00257.json';
+import coverage00270 from './00270.json';
+import coverage00288 from './00288.json';
+import coverage00293 from './00293.json';
+import coverage00297 from './00297.json';
+import coverage00303 from './00303.json';
+import coverage00317 from './00317.json';
+import coverage00322 from './00322.json';
+import coverage00338 from './00338.json';
+import coverage00347 from './00347.json';
+import coverage00363 from './00363.json';
+import coverage00384 from './00384.json';
+import coverage00386 from './00386.json';
+import coverage00392 from './00392.json';
+import coverage00525 from './00525.json';
+import coverage00546 from './00546.json';
+import coverage00570 from './00570.json';
+import coverage00576 from './00576.json';
+import coverage00579 from './00579.json';
+import coverage00598 from './00598.json';
+import coverage00631 from './00631.json';
+import coverage00667 from './00667.json';
+import coverage00669 from './00669.json';
+import coverage00697 from './00697.json';
+import coverage00762 from './00762.json';
+import coverage00772 from './00772.json';
+import coverage00836 from './00836.json';
+import coverage00853 from './00853.json';
+import coverage00874 from './00874.json';
+import coverage00880 from './00880.json';
+import coverage00902 from './00902.json';
+import coverage00934 from './00934.json';
+import coverage00956 from './00956.json';
+import coverage00966 from './00966.json';
+import coverage00981 from './00981.json';
+import coverage00991 from './00991.json';
+import coverage00992 from './00992.json';
+import coverage00999 from './00999.json';
+import coverage01030 from './01030.json';
+import coverage01036 from './01036.json';
+import coverage01044 from './01044.json';
+import coverage01052 from './01052.json';
+import coverage01070 from './01070.json';
+import coverage01071 from './01071.json';
+import coverage01083 from './01083.json';
+import coverage01099 from './01099.json';
+import coverage01113 from './01113.json';
+import coverage01114 from './01114.json';
+import coverage01117 from './01117.json';
+import coverage01126 from './01126.json';
+import coverage01179 from './01179.json';
+import coverage01193 from './01193.json';
+import coverage01199 from './01199.json';
+import coverage01209 from './01209.json';
+import coverage01308 from './01308.json';
+import coverage01336 from './01336.json';
+import coverage01359 from './01359.json';
+import coverage01364 from './01364.json';
+import coverage01378 from './01378.json';
+import coverage01478 from './01478.json';
+import coverage01579 from './01579.json';
+import coverage01585 from './01585.json';
+import coverage01610 from './01610.json';
+import coverage01686 from './01686.json';
+import coverage01698 from './01698.json';
+import coverage01766 from './01766.json';
+import coverage01811 from './01811.json';
+import coverage01818 from './01818.json';
+import coverage01836 from './01836.json';
+import coverage01876 from './01876.json';
+import coverage01882 from './01882.json';
+import coverage01888 from './01888.json';
+import coverage01908 from './01908.json';
+import coverage01910 from './01910.json';
+import coverage01913 from './01913.json';
+import coverage01928 from './01928.json';
+import coverage01951 from './01951.json';
+import coverage01952 from './01952.json';
+import coverage01997 from './01997.json';
+import coverage02015 from './02015.json';
+import coverage02039 from './02039.json';
+import coverage02105 from './02105.json';
+import coverage02155 from './02155.json';
+import coverage02190 from './02190.json';
+import coverage02228 from './02228.json';
+import coverage02269 from './02269.json';
+import coverage02276 from './02276.json';
+import coverage02282 from './02282.json';
+import coverage02285 from './02285.json';
+import coverage02314 from './02314.json';
+import coverage02319 from './02319.json';
+import coverage02328 from './02328.json';
+import coverage02357 from './02357.json';
+import coverage02367 from './02367.json';
+import coverage02380 from './02380.json';
+import coverage02382 from './02382.json';
+import coverage02400 from './02400.json';
+import coverage02419 from './02419.json';
+import coverage02460 from './02460.json';
+import coverage02473 from './02473.json';
+import coverage02498 from './02498.json';
+import coverage02507 from './02507.json';
+import coverage02510 from './02510.json';
+import coverage02533 from './02533.json';
+import coverage02588 from './02588.json';
+import coverage02628 from './02628.json';
+import coverage02631 from './02631.json';
+import coverage02665 from './02665.json';
+import coverage02688 from './02688.json';
+import coverage02689 from './02689.json';
+import coverage02698 from './02698.json';
+import coverage02799 from './02799.json';
+import coverage02866 from './02866.json';
+import coverage02877 from './02877.json';
+import coverage03288 from './03288.json';
+import coverage03320 from './03320.json';
+import coverage03330 from './03330.json';
+import coverage03393 from './03393.json';
+import coverage03690 from './03690.json';
+import coverage03698 from './03698.json';
+import coverage03888 from './03888.json';
+import coverage03898 from './03898.json';
+import coverage03899 from './03899.json';
+import coverage03900 from './03900.json';
+import coverage03908 from './03908.json';
+import coverage03918 from './03918.json';
+import coverage03931 from './03931.json';
+import coverage03933 from './03933.json';
+import coverage03983 from './03983.json';
+import coverage03998 from './03998.json';
+import coverage06055 from './06055.json';
+import coverage06110 from './06110.json';
+import coverage06168 from './06168.json';
+import coverage06198 from './06198.json';
+import coverage06881 from './06881.json';
+import coverage06963 from './06963.json';
+import coverage06969 from './06969.json';
+import coverage09606 from './09606.json';
+import coverage09618 from './09618.json';
+import coverage09633 from './09633.json';
+import coverage09658 from './09658.json';
+import coverage09660 from './09660.json';
+import coverage09858 from './09858.json';
+import coverage09866 from './09866.json';
+import coverage09868 from './09868.json';
+import coverage09880 from './09880.json';
+import coverage09899 from './09899.json';
+import coverage09911 from './09911.json';
+import coverage09926 from './09926.json';
+import coverage09987 from './09987.json';
+import coverage09992 from './09992.json';
+import coverage09999 from './09999.json';
 import c601398 from './601398.json';
 import c600415 from './600415.json';
 import c600660 from './600660.json';
@@ -695,6 +866,11 @@ export interface ViewPoint {
 
 export interface PreAnalysis {
   code: string;
+  /** Explicitly separate sourced research drafts from reviewed legacy content. */
+  researchStatus?: 'draft' | 'reviewed';
+  viewBasis?: 'research_hypotheses' | 'institutional_views';
+  sources?: { id: string; label: string; url: string; kind: 'issuer' | 'disclosure' | 'aggregate'; retrievedAt: string }[];
+  verificationTasks?: string[];
   /** 公司全称 */
   fullName?: string;
   /** 所属行业（含层级） */
@@ -1398,8 +1574,179 @@ export const ANALYSES: Record<string, PreAnalysis> = {
   '688676': c688676 as PreAnalysis,
   '688721': c688721 as PreAnalysis,
   '688783': c688783 as PreAnalysis,
+  '00001': coverage00001 as PreAnalysis,
+  '00003': coverage00003 as PreAnalysis,
+  '00005': coverage00005 as PreAnalysis,
+  '00012': coverage00012 as PreAnalysis,
+  '00013': coverage00013 as PreAnalysis,
+  '00016': coverage00016 as PreAnalysis,
+  '00019': coverage00019 as PreAnalysis,
+  '00023': coverage00023 as PreAnalysis,
+  '00027': coverage00027 as PreAnalysis,
+  '00116': coverage00116 as PreAnalysis,
+  '00135': coverage00135 as PreAnalysis,
+  '00142': coverage00142 as PreAnalysis,
+  '00148': coverage00148 as PreAnalysis,
+  '00151': coverage00151 as PreAnalysis,
+  '00175': coverage00175 as PreAnalysis,
+  '00189': coverage00189 as PreAnalysis,
+  '00200': coverage00200 as PreAnalysis,
+  '00220': coverage00220 as PreAnalysis,
+  '00257': coverage00257 as PreAnalysis,
+  '00270': coverage00270 as PreAnalysis,
+  '00288': coverage00288 as PreAnalysis,
+  '00293': coverage00293 as PreAnalysis,
+  '00297': coverage00297 as PreAnalysis,
+  '00303': coverage00303 as PreAnalysis,
+  '00317': coverage00317 as PreAnalysis,
+  '00322': coverage00322 as PreAnalysis,
+  '00338': coverage00338 as PreAnalysis,
+  '00347': coverage00347 as PreAnalysis,
+  '00363': coverage00363 as PreAnalysis,
+  '00384': coverage00384 as PreAnalysis,
+  '00386': coverage00386 as PreAnalysis,
+  '00392': coverage00392 as PreAnalysis,
+  '00525': coverage00525 as PreAnalysis,
+  '00546': coverage00546 as PreAnalysis,
+  '00570': coverage00570 as PreAnalysis,
+  '00576': coverage00576 as PreAnalysis,
+  '00579': coverage00579 as PreAnalysis,
+  '00598': coverage00598 as PreAnalysis,
+  '00631': coverage00631 as PreAnalysis,
+  '00667': coverage00667 as PreAnalysis,
+  '00669': coverage00669 as PreAnalysis,
+  '00697': coverage00697 as PreAnalysis,
+  '00762': coverage00762 as PreAnalysis,
+  '00772': coverage00772 as PreAnalysis,
+  '00836': coverage00836 as PreAnalysis,
+  '00853': coverage00853 as PreAnalysis,
+  '00874': coverage00874 as PreAnalysis,
+  '00880': coverage00880 as PreAnalysis,
+  '00902': coverage00902 as PreAnalysis,
+  '00934': coverage00934 as PreAnalysis,
+  '00956': coverage00956 as PreAnalysis,
+  '00966': coverage00966 as PreAnalysis,
+  '00981': coverage00981 as PreAnalysis,
+  '00991': coverage00991 as PreAnalysis,
+  '00992': coverage00992 as PreAnalysis,
+  '00999': coverage00999 as PreAnalysis,
+  '01030': coverage01030 as PreAnalysis,
+  '01036': coverage01036 as PreAnalysis,
+  '01044': coverage01044 as PreAnalysis,
+  '01052': coverage01052 as PreAnalysis,
+  '01070': coverage01070 as PreAnalysis,
+  '01071': coverage01071 as PreAnalysis,
+  '01083': coverage01083 as PreAnalysis,
+  '01099': coverage01099 as PreAnalysis,
+  '01113': coverage01113 as PreAnalysis,
+  '01114': coverage01114 as PreAnalysis,
+  '01117': coverage01117 as PreAnalysis,
+  '01126': coverage01126 as PreAnalysis,
+  '01179': coverage01179 as PreAnalysis,
+  '01193': coverage01193 as PreAnalysis,
+  '01199': coverage01199 as PreAnalysis,
+  '01209': coverage01209 as PreAnalysis,
+  '01308': coverage01308 as PreAnalysis,
+  '01336': coverage01336 as PreAnalysis,
+  '01359': coverage01359 as PreAnalysis,
+  '01364': coverage01364 as PreAnalysis,
+  '01378': coverage01378 as PreAnalysis,
+  '01478': coverage01478 as PreAnalysis,
+  '01579': coverage01579 as PreAnalysis,
+  '01585': coverage01585 as PreAnalysis,
+  '01610': coverage01610 as PreAnalysis,
+  '01686': coverage01686 as PreAnalysis,
+  '01698': coverage01698 as PreAnalysis,
+  '01766': coverage01766 as PreAnalysis,
+  '01811': coverage01811 as PreAnalysis,
+  '01818': coverage01818 as PreAnalysis,
+  '01836': coverage01836 as PreAnalysis,
+  '01876': coverage01876 as PreAnalysis,
+  '01882': coverage01882 as PreAnalysis,
+  '01888': coverage01888 as PreAnalysis,
+  '01908': coverage01908 as PreAnalysis,
+  '01910': coverage01910 as PreAnalysis,
+  '01913': coverage01913 as PreAnalysis,
+  '01928': coverage01928 as PreAnalysis,
+  '01951': coverage01951 as PreAnalysis,
+  '01952': coverage01952 as PreAnalysis,
+  '01997': coverage01997 as PreAnalysis,
+  '02015': coverage02015 as PreAnalysis,
+  '02039': coverage02039 as PreAnalysis,
+  '02105': coverage02105 as PreAnalysis,
+  '02155': coverage02155 as PreAnalysis,
+  '02190': coverage02190 as PreAnalysis,
+  '02228': coverage02228 as PreAnalysis,
+  '02269': coverage02269 as PreAnalysis,
+  '02276': coverage02276 as PreAnalysis,
+  '02282': coverage02282 as PreAnalysis,
+  '02285': coverage02285 as PreAnalysis,
+  '02314': coverage02314 as PreAnalysis,
+  '02319': coverage02319 as PreAnalysis,
+  '02328': coverage02328 as PreAnalysis,
+  '02357': coverage02357 as PreAnalysis,
+  '02367': coverage02367 as PreAnalysis,
+  '02380': coverage02380 as PreAnalysis,
+  '02382': coverage02382 as PreAnalysis,
+  '02400': coverage02400 as PreAnalysis,
+  '02419': coverage02419 as PreAnalysis,
+  '02460': coverage02460 as PreAnalysis,
+  '02473': coverage02473 as PreAnalysis,
+  '02498': coverage02498 as PreAnalysis,
+  '02507': coverage02507 as PreAnalysis,
+  '02510': coverage02510 as PreAnalysis,
+  '02533': coverage02533 as PreAnalysis,
+  '02588': coverage02588 as PreAnalysis,
+  '02628': coverage02628 as PreAnalysis,
+  '02631': coverage02631 as PreAnalysis,
+  '02665': coverage02665 as PreAnalysis,
+  '02688': coverage02688 as PreAnalysis,
+  '02689': coverage02689 as PreAnalysis,
+  '02698': coverage02698 as PreAnalysis,
+  '02799': coverage02799 as PreAnalysis,
+  '02866': coverage02866 as PreAnalysis,
+  '02877': coverage02877 as PreAnalysis,
+  '03288': coverage03288 as PreAnalysis,
+  '03320': coverage03320 as PreAnalysis,
+  '03330': coverage03330 as PreAnalysis,
+  '03393': coverage03393 as PreAnalysis,
+  '03690': coverage03690 as PreAnalysis,
+  '03698': coverage03698 as PreAnalysis,
+  '03888': coverage03888 as PreAnalysis,
+  '03898': coverage03898 as PreAnalysis,
+  '03899': coverage03899 as PreAnalysis,
+  '03900': coverage03900 as PreAnalysis,
+  '03908': coverage03908 as PreAnalysis,
+  '03918': coverage03918 as PreAnalysis,
+  '03931': coverage03931 as PreAnalysis,
+  '03933': coverage03933 as PreAnalysis,
+  '03983': coverage03983 as PreAnalysis,
+  '03998': coverage03998 as PreAnalysis,
+  '06055': coverage06055 as PreAnalysis,
+  '06110': coverage06110 as PreAnalysis,
+  '06168': coverage06168 as PreAnalysis,
+  '06198': coverage06198 as PreAnalysis,
+  '06881': coverage06881 as PreAnalysis,
+  '06963': coverage06963 as PreAnalysis,
+  '06969': coverage06969 as PreAnalysis,
+  '09606': coverage09606 as PreAnalysis,
+  '09618': coverage09618 as PreAnalysis,
+  '09633': coverage09633 as PreAnalysis,
+  '09658': coverage09658 as PreAnalysis,
+  '09660': coverage09660 as PreAnalysis,
+  '09858': coverage09858 as PreAnalysis,
+  '09866': coverage09866 as PreAnalysis,
+  '09868': coverage09868 as PreAnalysis,
+  '09880': coverage09880 as PreAnalysis,
+  '09899': coverage09899 as PreAnalysis,
+  '09911': coverage09911 as PreAnalysis,
+  '09926': coverage09926 as PreAnalysis,
+  '09987': coverage09987 as PreAnalysis,
+  '09992': coverage09992 as PreAnalysis,
+  '09999': coverage09999 as PreAnalysis,
 };
 
 export function getPreAnalysis(code: string): PreAnalysis | undefined {
-  return ANALYSES[code];
+  const normalized = normalizeStockCode(code);
+  return normalized ? ANALYSES[normalized.code] : undefined;
 }

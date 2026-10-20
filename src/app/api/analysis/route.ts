@@ -3,15 +3,17 @@ import { fetchCompanyProfile } from '@/lib/datasource/profile';
 import { fetchBusiness } from '@/lib/datasource/business';
 import { fetchReports } from '@/lib/datasource/research';
 import { getPreAnalysis } from '@/data/analyses';
+import { normalizeStockCode } from '@/lib/datasource/codes';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
-  const code = (sp.get('code') ?? '').trim();
+  const stock = normalizeStockCode((sp.get('code') ?? '').trim());
+  const code = stock?.code ?? '';
   const name = (sp.get('name') ?? '').trim();
-  const market = (sp.get('market') ?? 'A') === 'HK' ? 'HK' : 'A';
+  const market = stock?.market === 'HK' ? 'HK' : 'A';
 
   if (!code) {
     return NextResponse.json({ error: 'code required' }, { status: 400 });
@@ -28,10 +30,11 @@ export async function GET(req: NextRequest) {
     ]);
 
     return NextResponse.json({
-      name,
+      name: name && !/^(?:(?:sh|sz|bj|hk))?\d{1,6}(?:\.(?:sh|sz|bj|hk))?$/i.test(name) ? name : pre?.fullName || name || code,
       code,
       market,
       pre,
+      analysisStatus: pre ? pre.researchStatus || 'legacy' : 'missing',
       profile: profile
         ? {
             holder: profile.holder,

@@ -25,8 +25,8 @@ export default function CompanyLearningReport({ company, onReady }: {
     onReady({
       name: report.name || name,
       industry: report.pre?.industry || report.profile?.industry || company.industry,
-      questions: report.pre?.bearCase?.map(item => item.point) || [],
-      sources: [
+      questions: [...(report.pre?.bearCase?.map(item => item.point) || []), ...(report.pre?.verificationTasks?.slice(0,2) || [])],
+      sources: report.pre?.sources?.map(item => ({label:item.label,url:item.url})) || [
         { label: 'AI 分析' + (report.pre?.generatedAt ? ' · ' + report.pre.generatedAt : ''), url: '/stock/' + company.symbol },
         { label: '公司披露资料', url: hk ? 'https://www1.hkexnews.hk/search/titlesearch.xhtml?lang=zh' : 'https://emweb.securities.eastmoney.com/PC_HSF10/CompanySurvey/Index?type=web&code=' + company.symbol.toUpperCase() },
       ],

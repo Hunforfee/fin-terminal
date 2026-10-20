@@ -1,15 +1,17 @@
 # 个股 AI 分析撰写规范（福耀玻璃范式）
 
+> 2026-10-20 接续约定：先阅读 `docs/analysis-handoff.md` 与覆盖队列。以下长文结构是参考，不以字数和条数代替证据质量。研究稿须标 `researchStatus: "draft"`、`viewBasis: "research_hypotheses"`，给出来源及待核验项；未完成原文核对不得升格为已复核。资料不足时不补造数字、客户、排名或同行。
+
 ## 输入数据
 
 对每只股票 code，读取两个文件：
 
-1. `/workspace/fin-terminal/src/data/analyses/_raw/{code}.json` —— 东财 F10
+1. `src/data/analyses/_raw/{code}.json` —— 东财 F10
    - `profile` 公司简介、`scope` 经营范围、`review` 最新经营评述（含大量财务与业务数据）
    - `groups` 三维主营构成（分行业/分产品/分地区，含收入、占比、毛利率）
    - `finance` 财务摘要（可能为 null）
    - `industry` 行业分类
-2. `/workspace/fin-terminal/src/data/analyses/_raw/{code}.mcp.json` —— 通达信 MCP
+2. `src/data/analyses/_raw/{code}.mcp.json` —— 通达信 MCP
    - `overview`：`d['overview']['response']['transformed']['tables']`，数组，每项 `{name, rows}`，
      name ∈ metadata / basic_overview / business_overview / related_themes / financial_highlights /
      valuation_metrics / pledge_overview / tags / extra_info。**财务亮点与估值指标主要看这里**
@@ -22,12 +24,11 @@
 - 行业周报、晨会纪要、策略汇总、早知道、其他公司报告一律不计。
 - 评级映射：买入 / 跑赢行业 / 强推 / 优于大市 / 推荐 / 强烈推荐 → **buy**；
   增持 / 谨慎增持 → **hold**；卖出 / 减持 → **sell**。
-- 若确实无直接覆盖的券商研报：`ratingSummary` 全填 0（`{buy:0,hold:0,sell:0}`），
-  **省略 `targetPriceRange` 字段**，`source` 里注明「无直接券商研报覆盖，评级统计如实记零」。
+- 本轮未取得直接覆盖研报时，省略 `ratingSummary` 与 `targetPriceRange`，注明尚未核验；没有取得不等于不存在。只有核验过的直接覆盖样本才能统计机构评级。
 
 ## 输出
 
-写到 `/workspace/fin-terminal/src/data/analyses/{code}.json`，严格 schema：
+写到 `src/data/analyses/{code}.json`，严格 schema：
 
 ```jsonc
 {
@@ -56,17 +57,20 @@
 5. **产能/资本开支/现金流/分红**：在建与投产项目、资本开支计划、经营现金流、分红比例。
 
 写作要求：
-- **必须用具体数字说话**（亿元、%、pct、市占率、产能单位），禁止空泛形容词堆砌。
+- **优先使用已核验的具体数据**，但不得为凑数字补造金额、份额或产能。缺失时写出需要补查的证据。港元交易不等于港元记账，币种和单位须核对原报表。
 - 数据来自 F10 经营评述、主营构成、通达信财务亮点；注明报告期（如 2026H1 / 2025 年报）。
 - 语言为中文，专业、克制、不吹票，风险与亮点都要写。
 
 ## 参考样例
 
-完整范式见 `/workspace/fin-terminal/src/data/analyses/600660.json`（福耀玻璃）与
-`/workspace/fin-terminal/src/data/analyses/000425.json`（徐工机械）。
+完整范式见 `src/data/analyses/600660.json`（福耀玻璃）与
+`src/data/analyses/000425.json`（徐工机械）。
 
 ## 完成标准
 
-写完后运行 `cd /workspace/fin-terminal && node scripts/validate-analyses.mjs` 确认无 ERROR，
+写完后运行 `node scripts/validate-analyses.mjs` 确认无 ERROR，
 并自检每份文件：summary 段落数=5、字数 1300~2200、moat/competitors/bullCase/bearCase 各 ≥3 条、
 competitors 尽量带股票代码、ratingSummary 与研报条数逻辑自洽。
+
+
+研究稿不得将正向情景称为市场共识；同行对照尚未核实直接竞争关系时需说明差异，允许少于三家。完成正文登记后运行 `npm run analyses:coverage` 和 `npm run analyses:check`，更新工作队列。状态区分以接续说明为准。

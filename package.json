@@ -9,7 +9,10 @@
     "start": "next start -H 0.0.0.0",
     "typecheck": "tsc --noEmit",
     "seed": "node scripts/fetch-snapshots.mjs",
-    "test": "node --test scripts/tests/*.test.mjs"
+    "test": "node --test scripts/tests/*.test.mjs",
+    "analyses:coverage": "node scripts/analysis-coverage.mjs",
+    "analyses:check": "node scripts/analysis-coverage.mjs --check",
+    "analyses:index": "node scripts/sync-analysis-index.mjs"
   },
   "dependencies": {
     "@types/nodemailer": "^8.0.2",

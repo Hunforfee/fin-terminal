@@ -4,6 +4,8 @@ import type { LearningAnnual } from './companyLearning';
 import { isResearchDate } from './researchNotes';
 
 export interface LearningResearch {
+  researchStatus?: 'draft' | 'reviewed';
+  viewBasis?: 'research_hypotheses' | 'institutional_views';
   paragraphs: string[];
   introduction: string;
   source: string;
@@ -22,13 +24,16 @@ const points = (items: ViewPoint[] | undefined) => (items || []).filter(p =>
 
 /** Prepared research stays on the server. Dates belong to the research, not the request time. */
 export function makeLearningResearch(pre: PreAnalysis | undefined, today: string, _business: BusinessInfo | null, _latest?: LearningAnnual | null): LearningResearch | null {
-  if (!pre || !isResearchDate(pre.generatedAt) || pre.generatedAt > today || typeof pre.summary !== 'string' || !pre.summary.trim()) return null;
+  const date = typeof pre?.generatedAt === 'string' ? pre.generatedAt.slice(0,10) : '';
+  if (!pre || !isResearchDate(date) || date > today || typeof pre.summary !== 'string' || !pre.summary.trim()) return null;
   const paragraphs = pre.summary.split(/\n\s*\n/).map(text).filter(Boolean);
   const result: LearningResearch = {
+    researchStatus: pre.researchStatus,
+    viewBasis: pre.viewBasis,
     paragraphs,
     introduction: pre.position ? text(pre.position) : paragraphs[0]?.split('。')[0] || '',
     source: text(pre.source),
-    date: pre.generatedAt,
+    date,
     advantages: points(pre.moat),
     competitors: (pre.competitors || []).filter(c => typeof c.name === 'string' && typeof c.note === 'string').slice(0, 4).map(c => ({ name: text(c.name), code: /^\d{6}$/.test(c.code || '') ? c.code : undefined, note: text(c.note) })),
     bull: points(pre.bullCase),

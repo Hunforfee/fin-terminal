@@ -42,7 +42,7 @@ for (const code of files) {
   } else where.push('summary 非字符串');
   for (const [k, min] of Object.entries(LIST_MIN)) {
     if (!Array.isArray(d[k])) { where.push(`${k} 非数组`); continue; }
-    if (d[k].length < min) where.push(`${k} 仅 ${d[k].length} 条(应≥${min})`);
+    if (d[k].length < min && !(k === 'competitors' && d.researchStatus === 'draft')) where.push(`${k} 仅 ${d[k].length} 条(应≥${min})`);
     d[k].forEach((it, i) => {
       if (!it || typeof it !== 'object') where.push(`${k}[${i}] 非对象`);
       else for (const f of ['point', 'detail', 'name', 'note']) {
@@ -57,7 +57,8 @@ for (const code of files) {
     if (rs && rs.buy === 0 && rs.hold === 0 && rs.sell === 0 && !/无直接|无券商|无研报|无覆盖|未覆盖|如实记零/.test(d.source || '')) {
       warned.push(`${code}: 评级全零但 source 未注明无覆盖`);
     }
-  } else where.push('缺 ratingSummary');
+  } else if (d.researchStatus !== 'draft') where.push('缺 ratingSummary');
+  if (d.researchStatus === 'draft' && (d.ratingSummary || d.targetPriceRange || d.viewBasis !== 'research_hypotheses' || !d.verificationTasks?.length || !d.sources?.length)) where.push('研究稿状态、来源或未核验观点标记无效');
   const tp = d.targetPriceRange;
   if (tp) {
     if (typeof tp.min !== 'number' || typeof tp.max !== 'number') where.push('targetPriceRange 非数字');

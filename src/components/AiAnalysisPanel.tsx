@@ -16,6 +16,10 @@ interface Competitor {
 }
 interface PreAnalysis {
   code: string;
+  researchStatus?: 'draft' | 'reviewed';
+  viewBasis?: 'research_hypotheses' | 'institutional_views';
+  sources?: { id: string; label: string; url: string; kind: 'issuer' | 'disclosure' | 'aggregate'; retrievedAt: string }[];
+  verificationTasks?: string[];
   fullName?: string;
   industry: string;
   position?: string;
@@ -259,9 +263,10 @@ export default function AiAnalysisPanel({
   }, [report, onReady]);
 
   const askYuanbao = async () => {
-    const text = `【${name}（${code}）】\n\n${DEFAULT_PROMPT.replaceAll(
+    const analysisName = report?.name || name;
+    const text = `【${analysisName}（${code}）】\n\n${DEFAULT_PROMPT.replaceAll(
       '{name}',
-      name,
+      analysisName,
     ).replaceAll('{code}', code)}`;
     await copyText(text);
     window.open(YUANBAO_URL, '_blank', 'noopener,noreferrer');
@@ -333,7 +338,7 @@ export default function AiAnalysisPanel({
     if (s.id === 'sec-revenue')
       return !!(biz?.groups && biz.groups.length > 0);
     return !!report?.profile;
-  });
+  }).map(s => pre?.viewBasis === 'research_hypotheses' && s.id === 'sec-views' ? { ...s, label: '研究假设' } : pre?.researchStatus === 'draft' && s.id === 'sec-moat' ? { ...s, label: '优势线索' } : pre?.researchStatus === 'draft' && s.id === 'sec-competitors' ? { ...s, label: '同行对照' } : s);
 
   const navigation = (
     navItems.length > 1 ? (
@@ -383,6 +388,7 @@ export default function AiAnalysisPanel({
                     <h3 className="text-sm font-semibold text-slate-900">
                       业务与模式
                     </h3>
+                    {pre?.researchStatus === 'draft' && <span className="text-[11px] font-medium text-amber-700">研究稿 · 待复核</span>}
                     {(pre?.industry || biz?.industry) && (
                       <span className="rounded bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700">
                         {pre?.industry || biz?.industry}
@@ -478,7 +484,7 @@ export default function AiAnalysisPanel({
               {pre?.moat && pre.moat.length > 0 && (
                 <section id="sec-moat" className="scroll-mt-2">
                   <h3 className="mb-2 text-sm font-semibold text-slate-900">
-                    护城河
+                    {pre?.researchStatus === 'draft' ? '优势线索与验证' : '护城河'}
                   </h3>
                   <PointList items={pre.moat} tone="brand" />
                 </section>
@@ -487,7 +493,7 @@ export default function AiAnalysisPanel({
               {pre?.competitors && pre.competitors.length > 0 && (
                 <section id="sec-competitors" className="scroll-mt-2">
                   <h3 className="mb-2 text-sm font-semibold text-slate-900">
-                    竞争对手对比
+                    {pre?.researchStatus === 'draft' ? '同行对照' : '竞争对手对比'}
                   </h3>
                   <ul className="divide-y divide-slate-100">
                     {pre.competitors.map((c, i) => (
@@ -513,7 +519,7 @@ export default function AiAnalysisPanel({
                   <section id="sec-views" className="scroll-mt-2">
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <h3 className="text-sm font-semibold text-slate-900">
-                        市场观点
+                        {pre.viewBasis === 'research_hypotheses' ? '研究假设' : '市场观点'}
                       </h3>
                       <div className="flex items-center gap-2 text-[11px]">
                         {pre.ratingSummary && (
@@ -538,7 +544,7 @@ export default function AiAnalysisPanel({
                     {pre.bullCase && pre.bullCase.length > 0 && (
                       <div className="mb-2.5 rounded-lg border border-emerald-100 bg-emerald-50/50 p-2.5">
                         <div className="mb-1.5 text-[12px] font-semibold text-emerald-700">
-                          主流看好
+                          {pre.viewBasis === 'research_hypotheses' ? '正向情景 · 待验证' : '主流看好'}
                         </div>
                         <PointList items={pre.bullCase} tone="bull" />
                       </div>
@@ -587,10 +593,13 @@ export default function AiAnalysisPanel({
                 </section>
               )}
 
+              {pre?.sources?.length ? <section aria-label="解析来源与复核" className="border-t border-slate-100 pt-3 text-xs">
+                <div className="flex flex-wrap gap-x-4 gap-y-2">{pre.sources.map(item => <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer" className="text-brand-700 hover:underline">{item.label}</a>)}</div>
+                {pre.verificationTasks?.length ? <details className="mt-3 text-slate-500"><summary className="cursor-pointer">待核对 {pre.verificationTasks.length} 项</summary><ul className="mt-2 list-disc space-y-1 pl-4">{pre.verificationTasks.map(task => <li key={task} className="leading-5">{task}</li>)}</ul></details> : null}
+              </section> : null}
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
                 <p className="text-[11px] leading-4 text-slate-400">
-                  数据来源：通达信 F10 深度资料 + 券商研报（评级/目标价/风险提示）+
-                  东方财富 F10 主营构成。内容为基于公开资料的研究整理，不构成投资建议。
+                  {pre?.researchStatus === 'draft' ? '公司资料与指标线索已整理；原始财报、币种及研究假设仍待复核，未统计机构评级或目标价。' : '数据来源：通达信 F10 深度资料、券商研报及东方财富 F10。内容为基于公开资料的研究整理。'}
                 </p>
                 <button
                   type="button"

@@ -101,13 +101,14 @@ function IndustryContent({ market }: { market: 'A' | 'HK' }) {
   const [treeRefresh, setTreeRefresh] = useState(0);
   const [view, setView] = useState<'members' | 'comparison'>('members');
   const [navOpen, setNavOpen] = useState(false), [navHidden, setNavHidden] = useState(false);
-  const [query, setQuery] = useState(''), [profitability, setProfitability] = useState<IndustryProfitability>('all'), [onlyWatched, setOnlyWatched] = useState(false);
+  const [query, setQuery] = useState(''), [profitability, setProfitability] = useState<IndustryProfitability>('all'), [onlyWatched, setOnlyWatched] = useState(false), [excludeST, setExcludeST] = useState(false), [excludeLoss, setExcludeLoss] = useState(false), [screenOpen, setScreenOpen] = useState(false);
   const [sort, setSort] = useState<{ key: IndustrySortKey; direction: 'asc' | 'desc' }>({ key: 'totalMarketCap', direction: 'desc' });
   const [comparisonSort, setComparisonSort] = useState<{ key: ComparisonKey; direction: 'asc' | 'desc' }>({ key: 'totalMarketCap', direction: 'desc' });
   const [columns, setColumns] = useState<ColumnId[]>(DEFAULT_COLUMNS), [columnsOpen, setColumnsOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>([]), [groupId, setGroupId] = useState(UNGROUPED), [actionStatus, setActionStatus] = useState('');
   const [panelHeight, setPanelHeight] = useState<number | undefined>();
   const panelRef = useRef<HTMLDivElement>(null), tableRef = useRef<HTMLDivElement>(null), allRef = useRef<HTMLInputElement>(null);
+  const screenMenuRef = useRef<HTMLDetailsElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -121,6 +122,17 @@ function IndustryContent({ market }: { market: 'A' | 'HK' }) {
     return () => window.removeEventListener(AUTH_CHANGE, load);
   }, []);
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+  // 筛选下拉：点击外部或 Esc 关闭。
+  useEffect(() => {
+    if (!screenOpen) return;
+    const close = (event: MouseEvent) => {
+      if (!screenMenuRef.current?.contains(event.target as Node)) screenMenuRef.current?.removeAttribute('open');
+    };
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') screenMenuRef.current?.removeAttribute('open'); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', onKey); };
+  }, [screenOpen]);
   useEffect(() => {
     const restoreIndustry = () => { setView('members'); setNavOpen(false); };
     window.addEventListener('popstate', restoreIndustry);
@@ -128,8 +140,7 @@ function IndustryContent({ market }: { market: 'A' | 'HK' }) {
   }, []);
   useEffect(() => {
     const element = panelRef.current;
-    if (!element) return;
-    const measure = () => setPanelHeight(Math.max(320, window.innerHeight - element.getBoundingClientRect().top - 12));
+    if (!element) return;    const measure = () => setPanelHeight(Math.max(320, window.innerHeight - element.getBoundingClientRect().top - 12));
     measure(); const observer = new ResizeObserver(measure); observer.observe(document.querySelector('header') ?? document.body);
     window.addEventListener('resize', measure); window.visualViewport?.addEventListener('resize', measure);
     return () => { observer.disconnect(); window.removeEventListener('resize', measure); window.visualViewport?.removeEventListener('resize', measure); };
@@ -168,7 +179,7 @@ function IndustryContent({ market }: { market: 'A' | 'HK' }) {
   const children = selection?.l2 ? second?.children ?? [] : first?.children ?? [];
   const childLevel: 2 | 3 = selection?.l2 ? 3 : 2;
   const selectIndustry = useCallback((next: IndustrySelection) => {
-    setSelection(next); setQuery(''); setProfitability('all'); setOnlyWatched(false); setNavOpen(false);
+    setSelection(next); setQuery(''); setProfitability('all'); setOnlyWatched(false); setExcludeST(false); setExcludeLoss(false); setNavOpen(false);
     const search = new URLSearchParams({ node: nameOf(next), level: String(levelOf(next)), l1: next.l1 });
     if (next.l2) search.set('l2', next.l2);
     if (isHk) search.set('market', 'HK');
@@ -180,12 +191,19 @@ function IndustryContent({ market }: { market: 'A' | 'HK' }) {
     setView('comparison');
   };
   const summary = useMemo(() => summarizeIndustry(data?.rows ?? [], data?.count), [data]);
-  const rows = useMemo(() => sortIndustryRows(filterIndustryRows(data?.rows ?? [], { query, profitability }).filter(r => !onlyWatched || watchlist.has(r.symbol ?? r.code)), sort.key, sort.direction), [data, query, profitability, onlyWatched, watchlist, sort]);
+  // 「ST」按名称前缀识别，覆盖 ST / *ST / SST 等交易所风险警示写法。
+  const isSTRow = (name: string) => /(^|\*)S?ST/i.test(name.trim());
+  // 「亏损」以负 PE 为唯一可判定口径：PE 缺失或为 0 都不算亏损，保持在结果内。
+  const isLossRow = (row: IndustryResearchRow) => typeof row.pe === 'number' && Number.isFinite(row.pe) && row.pe < 0;
+  const rows = useMemo(() => sortIndustryRows(filterIndustryRows(data?.rows ?? [], { query, profitability })
+    .filter(r => !onlyWatched || watchlist.has(r.symbol ?? r.code))
+    .filter(r => !excludeST || !isSTRow(r.name))
+    .filter(r => !excludeLoss || !isLossRow(r)), sort.key, sort.direction), [data, query, profitability, onlyWatched, excludeST, excludeLoss, watchlist, sort]);
   const comparisons = useMemo(() => compareIndustryChildren(data?.rows ?? [], childLevel, children).sort((a, b) => compareResearchValues(comparisonSort.key === 'name' ? a.name : a.summary[comparisonSort.key], comparisonSort.key === 'name' ? b.name : b.summary[comparisonSort.key], comparisonSort.direction)), [data, childLevel, children, comparisonSort]);
   const activeColumns = columns.map(id => columnCatalog.find(c => c.id === id)!).filter(Boolean);
   const selectedRows = rows.filter(r => selected.includes(r.code)), selectionCount = selectedRows.length;
   const targetGroupId = watchlist.groups.some(group => group.id === groupId) ? groupId : UNGROUPED;
-  useEffect(() => { setSelected([]); setActionStatus(''); }, [query, profitability, onlyWatched]);
+  useEffect(() => { setSelected([]); setActionStatus(''); }, [query, profitability, onlyWatched, excludeST, excludeLoss]);
   useEffect(() => { if (allRef.current) allRef.current.indeterminate = selectionCount > 0 && selectionCount < rows.length; }, [selectionCount, rows.length]);
   const clickSort = (key: IndustrySortKey) => setSort(p => ({ key, direction: p.key === key ? p.direction === 'asc' ? 'desc' : 'asc' : ['pe', 'pb', 'name'].includes(key) ? 'asc' : 'desc' }));
   const clickComparisonSort = (key: ComparisonKey) => setComparisonSort(p => ({ key, direction: p.key === key ? p.direction === 'asc' ? 'desc' : 'asc' : ['positivePeMedian', 'positivePbMedian', 'name'].includes(key) ? 'asc' : 'desc' }));
@@ -213,8 +231,12 @@ function IndustryContent({ market }: { market: 'A' | 'HK' }) {
   };
   const drillInto = (name: string) => { if (selection) { selectIndustry(childLevel === 2 ? { l1: selection.l1, l2: name, l3: null } : { ...selection, l3: name }); setView('members'); } };
   const sortButton = (label: string, active: boolean, direction: 'asc' | 'desc', onClick: () => void) => <button type="button" onClick={onClick} className={`inline-flex min-h-7 items-center gap-1 whitespace-nowrap font-medium ${active ? 'text-brand-700' : 'hover:text-slate-900'}`} aria-label={`按${label}排序`}>{label}<span className={active ? 'text-brand-600' : 'text-slate-300'} aria-hidden="true">{active ? direction === 'asc' ? '↑' : '↓' : '↕'}</span></button>;
-  const isFiltered = !!query || profitability !== 'all' || onlyWatched;
-  const clearFilters = () => { setQuery(''); setProfitability('all'); setOnlyWatched(false); };
+  const screenCount = (onlyWatched ? 1 : 0) + (excludeST ? 1 : 0) + (excludeLoss ? 1 : 0);
+  const screenLabel = screenCount === 0 ? '范围筛选' : screenCount === 1
+    ? [onlyWatched && '仅自选', excludeST && '排除ST', excludeLoss && '排除亏损'].filter(Boolean)[0]
+    : `已选 ${screenCount} 项`;
+  const isFiltered = !!query || profitability !== 'all' || screenCount > 0;
+  const clearFilters = () => { setQuery(''); setProfitability('all'); setOnlyWatched(false); setExcludeST(false); setExcludeLoss(false); };
 
   return <div className="w-full">
     <h1 className="sr-only">行业研究</h1>
@@ -240,7 +262,24 @@ function IndustryContent({ market }: { market: 'A' | 'HK' }) {
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2">
-          {view === 'members' ? <div className="flex min-w-0 flex-wrap items-center gap-2"><input aria-label="筛选行业成分公司" placeholder="公司 / 代码 / 细分行业" value={query} onChange={e => setQuery(e.target.value)} className="input !min-h-7 !w-44 !py-1 !text-xs sm:!w-48" /><select aria-label="盈利状态" value={profitability} onChange={e => setProfitability(e.target.value as IndustryProfitability)} className="input !min-h-7 !w-auto !py-1 !text-xs"><option value="all">全部公司</option><option value="profitable">盈利公司</option><option value="loss-making">亏损公司</option><option value="missing-pe">PE缺失</option></select><label className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-xs text-slate-600"><input type="checkbox" checked={onlyWatched} onChange={e => setOnlyWatched(e.target.checked)} className="h-3.5 w-3.5 accent-blue-600" />仅自选</label>{isFiltered && <button type="button" onClick={clearFilters} className="text-xs text-slate-400 hover:text-brand-700">重置</button>}</div> : <span className="text-xs text-slate-500">{childLevel === 2 ? '二级行业' : '三级行业'} · {comparisons.length} 个细分 · 点击名称查看公司</span>}
+          {view === 'members' ? <div className="flex min-w-0 flex-wrap items-center gap-2"><input aria-label="筛选行业成分公司" placeholder="公司 / 代码 / 细分行业" value={query} onChange={e => setQuery(e.target.value)} className="input !min-h-7 !w-44 !py-1 !text-xs sm:!w-48" /><select aria-label="盈利状态" value={profitability} onChange={e => setProfitability(e.target.value as IndustryProfitability)} className="input !min-h-7 !w-auto !py-1 !text-xs"><option value="all">全部公司</option><option value="profitable">盈利公司</option><option value="loss-making">亏损公司</option><option value="missing-pe">PE缺失</option></select><details ref={screenMenuRef} className="relative shrink-0" onToggle={e => setScreenOpen((e.currentTarget as HTMLDetailsElement).open)}>
+            <summary aria-label="股票范围筛选" title="仅自选 / 排除ST / 排除亏损" className={`input flex !min-h-7 !w-auto cursor-pointer list-none items-center gap-1 !py-1 !text-xs [&::-webkit-details-marker]:hidden ${screenCount > 0 ? 'border-brand-300 bg-brand-50/60 font-medium text-brand-800' : ''}`}>
+              <svg aria-hidden="true" viewBox="0 0 12 12" className="h-3 w-3 flex-none fill-none stroke-current stroke-[1.4]"><path d="M1.5 2h9l-3.4 4v3.2l-2.2 1V6L1.5 2Z" /></svg>
+              <span>{screenLabel}</span>
+              <span aria-hidden="true" className={`text-[9px] text-slate-400 transition-transform ${screenOpen ? 'rotate-180' : ''}`}>▼</span>
+            </summary>
+            <div className="absolute left-0 top-full z-40 mt-1 w-44 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+              {([
+                { key: 'watched' as const, label: '仅自选', hint: '只看自选分组内的公司', checked: onlyWatched, toggle: setOnlyWatched },
+                { key: 'st' as const, label: '排除 ST', hint: '剔除名称带 ST 风险警示的公司', checked: excludeST, toggle: setExcludeST },
+                { key: 'loss' as const, label: '排除亏损', hint: '剔除 PE 为负的公司', checked: excludeLoss, toggle: setExcludeLoss },
+              ]).map(item => <label key={item.key} className="flex cursor-pointer items-start gap-2 rounded px-2 py-1.5 text-xs text-slate-600 hover:bg-slate-50">
+                <input type="checkbox" checked={item.checked} onChange={e => item.toggle(e.target.checked)} className="mt-0.5 h-3.5 w-3.5 flex-none accent-blue-600" />
+                <span className="min-w-0"><span className="block font-medium text-slate-700">{item.label}</span><span className="block text-[10px] leading-4 text-slate-400">{item.hint}</span></span>
+              </label>)}
+              {screenCount > 0 && <button type="button" onClick={() => { setOnlyWatched(false); setExcludeST(false); setExcludeLoss(false); }} className="mt-1 block w-full rounded border-t border-slate-100 px-2 pt-1.5 text-left text-[11px] text-slate-400 hover:text-brand-700">清空这三项</button>}
+            </div>
+          </details>{isFiltered && <button type="button" onClick={clearFilters} className="text-xs text-slate-400 hover:text-brand-700">重置</button>}</div> : <span className="text-xs text-slate-500">{childLevel === 2 ? '二级行业' : '三级行业'} · {comparisons.length} 个细分 · 点击名称查看公司</span>}
           <div className="ml-auto flex items-center gap-1.5">{view === 'members' && <button type="button" onClick={() => setColumnsOpen(true)} className="btn !min-h-7 !px-2 !py-1 !text-xs">列设置</button>}<button type="button" onClick={exportCsv} disabled={loading || !data || (view === 'members' ? !rows.length : !comparisons.length)} className="btn !min-h-7 !px-2 !py-1 !text-xs">导出 CSV</button></div>
         </div>
         {(selectionCount > 0 || actionStatus) && view === 'members' && <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-brand-100 bg-brand-50/60 px-3 py-1.5 text-xs text-brand-800">{selectionCount > 0 && <><span>已选 {selectionCount} 家</span><button type="button" onClick={() => setSelected([])} className="text-slate-500 hover:text-slate-900">清空</button><select aria-label="批量加入分组" value={targetGroupId} onChange={e => setGroupId(e.target.value)} className="input ml-auto !min-h-7 !w-auto !py-1 !text-xs">{watchlist.groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select><button type="button" onClick={importSelected} disabled={!watchlist.ready} className="btn-primary !min-h-7 !py-1 !text-xs">加入自选</button></>}<span role="status">{actionStatus}</span></div>}

@@ -48,6 +48,8 @@ export default function IndustryNavigator({
   className = '',
 }: Props) {
   const [query, setQuery] = useState('');
+  // 展开状态可独立于选中项：用户手动收起的分支记在 collapsed 里，选中项变化不会强行展开。
+  const [collapsed, setCollapsed] = useState<string[]>([]);
   const headingId = useId();
   const rowsRef = useRef<HTMLDivElement>(null);
   const keyword = query.trim().toLocaleLowerCase('zh-CN');
@@ -82,14 +84,23 @@ export default function IndustryNavigator({
     }
     return rows;
   }, [industries]);
+  // 一级分支展开中：等于当前选中的一级，且未被手动收起。
+  const openFirst = (l1: string) => selection?.l1 === l1 && !collapsed.includes(l1);
+  // 二级分支展开中：等于当前选中的二级，且未被手动收起。
+  const openSecond = (key: string) => {
+    const [l1, l2] = key.split('/');
+    return selection?.l1 === l1 && (selection?.l2 ?? null) === l2 && !collapsed.includes(key);
+  };
   const visibleRows = useMemo(
     () => allRows.filter((row) => keyword
       ? row.name.toLocaleLowerCase('zh-CN').includes(keyword)
       : row.level === 1 || (
-        row.selection.l1 === selection?.l1 &&
-        (row.level === 2 || row.selection.l2 === selection.l2)
+        row.level === 2
+          ? openFirst(row.selection.l1)
+          : openFirst(row.selection.l1) && openSecond(`${row.selection.l1}/${row.selection.l2}`)
       )),
-    [allRows, keyword, selection],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allRows, keyword, selection, collapsed],
   );
   const counts = useMemo(() => ({
     second: industries.reduce((sum, first) => sum + first.children.length, 0),
@@ -167,14 +178,25 @@ export default function IndustryNavigator({
           <ul>
             {visibleRows.map((row) => {
               const sameFirst = row.selection.l1 === selection?.l1;
-              const sameSecond = sameFirst && row.selection.l2 === (selection?.l2 ?? null);
-              const current = sameSecond && row.selection.l3 === (selection?.l3 ?? null);
+              const sameSecond = sameFirst && (row.selection.l2 ?? null) === (selection?.l2 ?? null);
+              const current = sameSecond && (row.selection.l3 ?? null) === (selection?.l3 ?? null);
               const ancestor = sameFirst && (
-                row.level === 1 || (row.level === 2 && row.selection.l2 === selection?.l2)
+                row.level === 1 || (row.level === 2 && (row.selection.l2 ?? null) === (selection?.l2 ?? null))
               );
-              const expanded = row.level === 1 ? sameFirst : sameSecond;
+              const expanded = row.level === 1
+                ? openFirst(row.selection.l1)
+                : row.level === 2 && openSecond(`${row.selection.l1}/${row.selection.l2}`);
+              // 子分类左侧的父级引导竖线：二级挂在一级下，三级挂在所属二级下。
+              const guideLeft = row.level === 2 ? 13 : row.level === 3 ? 23 : null;
               return (
-                <li key={JSON.stringify(row.selection)}>
+                <li key={JSON.stringify(row.selection)} className="relative">
+                  {guideLeft !== null && (
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute bottom-0 top-0 border-l border-slate-300"
+                      style={{ left: guideLeft }}
+                    />
+                  )}
                   <button
                     type="button"
                     data-industry-row
@@ -184,6 +206,15 @@ export default function IndustryNavigator({
                     title={`${[row.parentPath, row.name].filter(Boolean).join(' / ')} · ${row.count}只`}
                     onClick={() => {
                       setQuery('');
+                      // 有下级的行：再次点击同一个父分类即收起它的子分类。
+                      if (!keyword && row.hasChildren && expanded) {
+                        setCollapsed(prev => [...new Set([...prev, row.level === 1 ? row.selection.l1 : `${row.selection.l1}/${row.selection.l2}`])]);
+                        return;
+                      }
+                      if (!keyword && row.hasChildren) {
+                        const key = row.level === 1 ? row.selection.l1 : `${row.selection.l1}/${row.selection.l2}`;
+                        setCollapsed(prev => prev.filter(item => item !== key));
+                      }
                       onSelect(row.selection);
                     }}
                     style={!keyword ? { paddingLeft: 8 + (row.level - 1) * 10 } : undefined}

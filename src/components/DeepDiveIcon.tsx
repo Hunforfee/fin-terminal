@@ -27,6 +27,7 @@ export default function DeepDiveIcon({
         market={market}
         variant="none"
         autoOpen
+        onClosed={() => setActive(false)}
       />
     );
   }

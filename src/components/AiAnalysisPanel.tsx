@@ -195,6 +195,7 @@ export default function AiAnalysisPanel({
   embedded = false,
   variant = 'button',
   autoOpen = false,
+  onClosed,
   onReady,
 }: {
   name: string;
@@ -207,6 +208,8 @@ export default function AiAnalysisPanel({
   /** 列表按需挂载用：挂载即展开弹窗 */
   autoOpen?: boolean;
   onReady?: (report: CompanyAnalysisReport | null) => void;
+  /** 弹窗关闭后的回调（供 variant='none' 的外层把挂载点切回图标） */
+  onClosed?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   /** 列表场景按需挂载：挂载即打开 */
@@ -629,6 +632,7 @@ export default function AiAnalysisPanel({
           setOpen(false);
           setReport(null);
           setActive(SECTIONS[0].id);
+          onClosed?.();
         }}
         size="lg"
         maximizable

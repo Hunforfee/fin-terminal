@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Modal from '@/components/Modal';
 import WatchlistButton from '@/components/WatchlistButton';
+import IndustryMultiSelect from '@/components/IndustryMultiSelect';
 import { useWatchlist } from '@/components/WatchlistProvider';
 import { normalizeStockCode } from '@/lib/datasource/codes';
 import { industryStockSymbol } from '@/lib/industryResearch';
@@ -13,12 +14,12 @@ import { personalStorage, AUTH_CHANGE } from '@/lib/personalStorage';
 import { compareResearchValues } from '@/lib/researchColumns';
 import {
   SCREEN_PREFERENCES_KEY, SCREEN_SCHEMES_KEY, SCREEN_COLUMNS, DEFAULT_SCREEN_COLUMNS,
-  emptyScreenerDraft, readScreenerPreferences, readScreenerSchemes,
+  SCREEN_AUTO_PERIOD, emptyScreenerDraft, readScreenerPreferences, readScreenerSchemes,
   type ScreenerDraft, type ScreenerPreferences, type ScreenerScheme, type ScreenColumnId, type ScreenerSort,
 } from '@/lib/screenerPreferences';
 import type { ValueScreenCriteria, ValueScreenMeta, ValueScreenResult, ValueScreenRow } from '@/lib/valueScreen';
 
-type NumericField = Exclude<keyof ScreenerDraft, 'scope' | 'industry' | 'period' | 'cashflowPositive' | 'deductedProfitPositive'>;
+type NumericField = Exclude<keyof ScreenerDraft, 'scope' | 'industries' | 'excludedIndustries' | 'period' | 'cashflowPositive' | 'deductedProfitPositive'>;
 const NUMERIC_FIELDS: NumericField[] = ['peMin', 'peMax', 'pbMin', 'pbMax', 'roeMin', 'netMarginMin', 'revenueGrowthMin', 'profitGrowthMin', 'deductedGrowthMin', 'debtRatioMax', 'marketCapMin', 'marketCapMax', 'ocfMin', 'ocfToProfitMin'];
 const PRESETS: { name: string; title: string; values: Partial<ScreenerDraft> }[] = [
   { name: '低估值', title: '0 < PE ≤ 20，0 < PB ≤ 2', values: { peMin: '0', peMax: '20', pbMin: '0', pbMax: '2' } },
@@ -27,7 +28,7 @@ const PRESETS: { name: string; title: string; values: Partial<ScreenerDraft> }[]
   { name: '现金流', title: '经营现金流为正，且不低于同期净利润', values: { cashflowPositive: true, ocfToProfitMin: '100' } },
 ];
 const number = (value: unknown, digits = 2) => typeof value !== 'number' || !Number.isFinite(value) ? '—' : value.toLocaleString('zh-CN', { minimumFractionDigits: digits, maximumFractionDigits: digits });
-const periodLabel = (period: string) => `${period.slice(0, 4)}年报`;
+const periodLabel = (period: string) => period === SCREEN_AUTO_PERIOD ? '自动（最新年报）' : `${period.slice(0, 4)}年报`;
 const toneClass = { valuation: 'text-blue-700', quality: 'text-teal-800', growth: 'text-teal-700', cash: 'text-cyan-800', risk: 'text-amber-800', neutral: 'text-slate-500' };
 function draftError(draft: ScreenerDraft): string | null {
   for (const key of NUMERIC_FIELDS) if (draft[key].trim() && !Number.isFinite(Number(draft[key]))) return '条件需填写有效数字';
@@ -38,7 +39,15 @@ function draftError(draft: ScreenerDraft): string | null {
 function activeConditions(draft: ScreenerDraft): string[] {
   const labels: Record<NumericField, string> = { peMin: 'PE ≥', peMax: 'PE ≤', pbMin: 'PB ≥', pbMax: 'PB ≤', roeMin: 'ROE ≥', netMarginMin: '净利率 ≥', revenueGrowthMin: '营收同比 ≥', profitGrowthMin: '净利同比 ≥', deductedGrowthMin: '扣非同比 ≥', debtRatioMax: '负债率 ≤', marketCapMin: '市值 ≥', marketCapMax: '市值 ≤', ocfMin: '经营现金流 ≥', ocfToProfitMin: '现金净利比 ≥' };
   const units: Partial<Record<NumericField, string>> = { peMin: '', peMax: '', pbMin: '', pbMax: '', marketCapMin: '亿', marketCapMax: '亿', ocfMin: '亿' };
-  return [...NUMERIC_FIELDS.filter(key => draft[key].trim()).map(key => `${labels[key]} ${draft[key]}${units[key] ?? '%'}`), ...(draft.cashflowPositive ? ['经营现金流为正'] : []), ...(draft.deductedProfitPositive ? ['扣非利润为正'] : [])];
+  const industryTags = (list: string[], label: string) => list.length ? [`${label} ${list.slice(0, 2).join('、')}${list.length > 2 ? ` 等${list.length}个` : ''}`] : [];
+  return [
+    ...NUMERIC_FIELDS.filter(key => draft[key].trim()).map(key => `${labels[key]} ${draft[key]}${units[key] ?? '%'}`),
+    ...(draft.cashflowPositive ? ['经营现金流为正'] : []),
+    ...(draft.deductedProfitPositive ? ['扣非利润为正'] : []),
+    ...industryTags(draft.industries, '行业'),
+    ...industryTags(draft.excludedIndustries, '排除'),
+    ...(draft.period === SCREEN_AUTO_PERIOD ? ['财报自动取最新'] : []),
+  ];
 }
 function NumericInput({ label, value, onChange, suffix = '%', operator = '≥', title }: { label: string; value: string; onChange: (value: string) => void; suffix?: string; operator?: string; title?: string }) {
   return <label className="block min-w-0 text-[11px] text-slate-500" title={title}><span className="mb-1 block truncate">{label}</span><span className="flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 focus-within:border-brand-300 focus-within:ring-2 focus-within:ring-brand-100"><span className="text-xs text-slate-400" aria-hidden="true">{operator}</span><input type="number" step="any" aria-label={label} value={value} onChange={event => onChange(event.target.value)} placeholder="不限" className="min-w-0 flex-1 bg-transparent text-xs tabular-nums text-slate-800 outline-none placeholder:text-slate-300" /><span className="text-[11px] text-slate-400">{suffix}</span></span></label>;
@@ -46,19 +55,19 @@ function NumericInput({ label, value, onChange, suffix = '%', operator = '≥', 
 function RangeInput({ label, min, max, onMin, onMax, suffix = '' }: { label: string; min: string; max: string; onMin: (value: string) => void; onMax: (value: string) => void; suffix?: string }) {
   return <div className="min-w-0 text-[11px] text-slate-500"><span className="mb-1 block">{label}{suffix && `（${suffix}）`}</span><div className="flex h-8 min-w-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 focus-within:border-brand-300 focus-within:ring-2 focus-within:ring-brand-100"><input type="number" step="any" aria-label={`${label}下限`} value={min} onChange={event => onMin(event.target.value)} placeholder="最低" className="w-0 min-w-0 flex-1 bg-transparent text-xs tabular-nums text-slate-800 outline-none placeholder:text-slate-300" /><span aria-hidden="true" className="text-slate-300">至</span><input type="number" step="any" aria-label={`${label}上限`} value={max} onChange={event => onMax(event.target.value)} placeholder="最高" className="w-0 min-w-0 flex-1 bg-transparent text-right text-xs tabular-nums text-slate-800 outline-none placeholder:text-slate-300" /></div></div>;
 }
-function downloadCsv(rows: ValueScreenRow[], columns: ScreenColumnId[], period: string) {
+const downloadCsv = (rows: ValueScreenRow[], columns: ScreenColumnId[], period: string) => {
   const catalog = columns.map(id => SCREEN_COLUMNS.find(column => column.id === id)!);
   const escape = (value: unknown) => { let text = value == null ? '' : String(value); if (typeof value === 'string' && /^[=+@-]/.test(text)) text = `'${text}`; return `"${text.replaceAll('"', '""')}"`; };
   const data = [['公司', '代码', '行业', ...catalog.map(column => `${column.label}${column.kind === 'percent' ? '（%）' : ''}`), '公告日', '行情时间'], ...rows.map(row => [row.name, `\t${row.code}`, row.industry, ...catalog.map(column => row[column.id]), row.noticeDate, row.quoteTime])];
   const url = URL.createObjectURL(new Blob(['\uFEFF' + data.map(row => row.map(escape).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
-  const link = document.createElement('a'); link.href = url; link.download = `基本面选股-${period}.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
+  const link = document.createElement('a'); link.href = url; link.download = `基本面选股-${period === SCREEN_AUTO_PERIOD ? '最新年报' : period}.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
 export default function ScreenerPage() {
   return <Suspense fallback={<p className="text-xs text-slate-500">加载选股条件…</p>}><ScreenerContent /></Suspense>;
 }
 function ScreenerContent() {
   const params = useSearchParams(), watchlist = useWatchlist();
-  const [meta, setMeta] = useState<ValueScreenMeta | null>(null), [draft, setDraft] = useState(() => emptyScreenerDraft(''));
+  const [meta, setMeta] = useState<ValueScreenMeta | null>(null), [draft, setDraft] = useState(() => emptyScreenerDraft(SCREEN_AUTO_PERIOD));
   const [applied, setApplied] = useState<ScreenerDraft | null>(null), [result, setResult] = useState<ValueScreenResult | null>(null);
   const [appliedScopeKey, setAppliedScopeKey] = useState('');
   const [preferences, setPreferences] = useState<ScreenerPreferences>(() => readScreenerPreferences(null));
@@ -80,7 +89,9 @@ function ScreenerContent() {
   const setValue = <K extends keyof ScreenerDraft>(key: K, value: ScreenerDraft[K]) => setDraft(previous => ({ ...previous, [key]: value }));
   const performScreen = async (next: ScreenerDraft) => {
     const invalid = draftError(next); if (invalid) { setError(invalid); return; }
-    const payload: ValueScreenCriteria = { period: next.period, industry: next.industry || undefined, scope: next.scope === 'all' ? 'all' : 'watchlist', cashflowPositive: next.cashflowPositive, deductedProfitPositive: next.deductedProfitPositive };
+    const payload: ValueScreenCriteria = { period: next.period, scope: next.scope === 'all' ? 'all' : 'watchlist', cashflowPositive: next.cashflowPositive, deductedProfitPositive: next.deductedProfitPositive };
+    if (next.industries.length) payload.industries = next.industries;
+    if (next.excludedIndustries.length) payload.excludedIndustries = next.excludedIndustries;
     for (const key of NUMERIC_FIELDS) if (next[key].trim()) payload[key] = Number(next[key]);
     if (next.scope !== 'all') payload.codes = scopeCodes(next.scope);
     const scopeKey = next.scope === 'all' ? 'all' : payload.codes!.join(',');
@@ -97,9 +108,9 @@ function ScreenerContent() {
   useEffect(() => {
     const loadPersonal = (reset = false) => {
       try { setPreferences(readScreenerPreferences(JSON.parse(personalStorage.getItem(SCREEN_PREFERENCES_KEY) ?? 'null'))); } catch { setPreferences(readScreenerPreferences(null)); }
-      try { setSchemes(readScreenerSchemes(JSON.parse(personalStorage.getItem(SCREEN_SCHEMES_KEY) ?? 'null'), metaRef.current?.defaultPeriod ?? '')); } catch { setSchemes([]); }
+      try { setSchemes(readScreenerSchemes(JSON.parse(personalStorage.getItem(SCREEN_SCHEMES_KEY) ?? 'null'), SCREEN_AUTO_PERIOD)); } catch { setSchemes([]); }
       setPreferencesReady(true); setSchemeId('');
-      if (reset) { requestRef.current?.abort(); setResult(null); setApplied(null); setSelected([]); setStatus(''); setError(''); const period = metaRef.current?.defaultPeriod; if (period) { const next = emptyScreenerDraft(period); setDraft(next); void performRef.current(next); } }
+      if (reset) { requestRef.current?.abort(); setResult(null); setApplied(null); setSelected([]); setStatus(''); setError(''); if (metaRef.current) { const next = emptyScreenerDraft(SCREEN_AUTO_PERIOD); setDraft(next); void performRef.current(next); } }
     };
     loadPersonal(); const onAccount = () => loadPersonal(true); window.addEventListener(AUTH_CHANGE, onAccount);
     return () => { window.removeEventListener(AUTH_CHANGE, onAccount); requestRef.current?.abort(); if (statusTimer.current) clearTimeout(statusTimer.current); };
@@ -110,7 +121,8 @@ function ScreenerContent() {
     fetch('/api/screen?meta=1', { signal: controller.signal }).then(response => response.json()).then(json => {
       if (!json.ok) throw Error(json.error ?? '选股目录加载失败'); if (controller.signal.aborted) return;
       const nextMeta = json.data as ValueScreenMeta; setMeta(nextMeta); metaRef.current = nextMeta;
-      const next = { ...emptyScreenerDraft(nextMeta.defaultPeriod), industry: nextMeta.industries.some(industry => industry.name === initialIndustry.current) ? initialIndustry.current : '' };
+      const requested = initialIndustry.current;
+      const next = { ...emptyScreenerDraft(SCREEN_AUTO_PERIOD), industries: requested && nextMeta.industries.some(industry => industry.name === requested) ? [requested] : [] };
       setDraft(next); void performRef.current(next);
     }).catch(issue => { if (!controller.signal.aborted) { setError(issue.message ?? '选股目录加载失败'); setLoading(false); } });
     return () => controller.abort();
@@ -134,7 +146,7 @@ function ScreenerContent() {
   useEffect(() => { if (checkboxRef.current) checkboxRef.current.indeterminate = pageSelected > 0 && pageSelected < visibleRows.length; }, [pageSelected, visibleRows.length]);
   const updateSort = (key: ScreenerSort['key']) => { setPreferences(previous => ({ ...previous, sort: { key, direction: previous.sort.key === key ? previous.sort.direction === 'asc' ? 'desc' : 'asc' : key === 'name' || key === 'industry' || key === 'pe' || key === 'pb' ? 'asc' : 'desc' } })); setPage(1); };
   const updateColumns = (columns: ScreenColumnId[]) => setPreferences(previous => readScreenerPreferences({ ...previous, columns }));
-  const applyPreset = (values: Partial<ScreenerDraft>) => { setDraft(previous => ({ ...emptyScreenerDraft(previous.period), scope: previous.scope, industry: previous.industry, ...values })); setSchemeId(''); };
+  const applyPreset = (values: Partial<ScreenerDraft>) => { setDraft(previous => ({ ...emptyScreenerDraft(previous.period), scope: previous.scope, industries: previous.industries, excludedIndustries: previous.excludedIndustries, ...values })); setSchemeId(''); };
   const applyScheme = (id: string) => { setSchemeId(id); const scheme = schemes.find(item => item.id === id); if (!scheme) return; setDraft({ ...scheme.criteria }); setPreferences(previous => readScreenerPreferences({ ...previous, columns: scheme.columns, sort: scheme.sort })); void performRef.current(scheme.criteria); };
   const saveSchemes = (next: ScreenerScheme[]): boolean => {
     try { personalStorage.setItem(SCREEN_SCHEMES_KEY, JSON.stringify(next)); setSchemes(next); return true; }
@@ -147,7 +159,7 @@ function ScreenerContent() {
     if (current && sameName && current.id !== sameName.id) { setSchemeError('已有同名方案'); return; }
     const existing = current ?? sameName; if (!existing && schemes.length >= 12) { setSchemeError('最多保存12个方案'); return; }
     const next: ScreenerScheme = { id: existing?.id ?? crypto.randomUUID(), name, criteria: { ...draft }, columns: preferences.columns, sort: preferences.sort };
-    const updated = readScreenerSchemes([...schemes.filter(item => item.id !== next.id), next], draft.period);
+    const updated = readScreenerSchemes([...schemes.filter(item => item.id !== next.id), next], SCREEN_AUTO_PERIOD);
     if (!updated.some(item => item.id === next.id)) { setSchemeError('方案中的条件无效'); return; }
     if (saveSchemes(updated)) { setSchemeId(next.id); setSchemeOpen(false); }
   };
@@ -159,7 +171,7 @@ function ScreenerContent() {
   const head = (key: ScreenerSort['key'], label: string, tone = 'text-slate-500') => <button type="button" onClick={() => updateSort(key)} aria-label={`按${label}排序`} className={`inline-flex min-h-7 items-center gap-1 whitespace-nowrap font-medium ${preferences.sort.key === key ? 'text-brand-700' : tone}`}>{label}<span aria-hidden="true" className={preferences.sort.key === key ? 'text-brand-600' : 'text-slate-300'}>{preferences.sort.key === key ? preferences.sort.direction === 'asc' ? '↑' : '↓' : '↕'}</span></button>;
   const sortAria = (key: ScreenerSort['key']) => preferences.sort.key === key ? preferences.sort.direction === 'asc' ? 'ascending' as const : 'descending' as const : 'none' as const;
   const columns = preferences.columns.map(id => SCREEN_COLUMNS.find(column => column.id === id)!);
-  const periods = [...new Set([...(meta?.periods ?? []), ...(draft.period ? [draft.period] : [])])].sort().reverse();
+  const periods = [...new Set([...(meta?.periods ?? []), ...(draft.period && draft.period !== SCREEN_AUTO_PERIOD ? [draft.period] : [])])].sort().reverse();
   const selectedScopeMissing = draft.scope.startsWith('group:') && !watchlist.groups.some(group => `group:${group.id}` === draft.scope);
   return <div ref={rootRef} style={{ height: height ?? 'calc(100dvh - 68px)' }} className="flex min-h-[420px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2">
@@ -170,8 +182,8 @@ function ScreenerContent() {
           {watchlist.groups.map(group => <option key={group.id} value={`group:${group.id}`}>{group.name} · A股</option>)}
           {selectedScopeMissing && <option value={draft.scope}>原分组已删除</option>}
         </select>
-        <select aria-label="所属行业" value={draft.industry} onChange={event => setValue('industry', event.target.value)} className="input !min-h-8 !w-auto !max-w-32 !py-1 !text-xs"><option value="">全部行业</option>{meta?.industries.map(industry => <option key={industry.name} value={industry.name}>{industry.name}</option>)}</select>
-        <select aria-label="财报期间" value={draft.period} onChange={event => setValue('period', event.target.value)} className="input !min-h-8 !w-auto !py-1 !text-xs">{!periods.length && <option value="">加载年报期…</option>}{periods.map(period => <option key={period} value={period}>{periodLabel(period)}</option>)}</select>
+        <IndustryMultiSelect options={meta?.industries ?? []} included={draft.industries} excluded={draft.excludedIndustries} onIncludedChange={value => setValue('industries', value)} onExcludedChange={value => setValue('excludedIndustries', value)} />
+        <select aria-label="财报期间" value={draft.period} onChange={event => setValue('period', event.target.value)} className="input !min-h-8 !w-auto !py-1 !text-xs"><option value={SCREEN_AUTO_PERIOD}>自动 · 最新年报</option>{!periods.length && <option value="">加载年报期…</option>}{periods.filter(period => period !== SCREEN_AUTO_PERIOD).map(period => <option key={period} value={period}>{periodLabel(period)}</option>)}</select>
       </div>
       <div className="ml-auto flex items-center gap-2">
         <select aria-label="我的选股方案" value={schemeId} onChange={event => applyScheme(event.target.value)} className="input !min-h-8 !w-auto !max-w-36 !py-1 !text-xs"><option value="">我的方案</option>{schemes.map(scheme => <option key={scheme.id} value={scheme.id}>{scheme.name}</option>)}</select>
@@ -206,7 +218,7 @@ function ScreenerContent() {
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">{preferences.filtersCollapsed ? conditions.map(condition => <button key={condition} type="button" onClick={() => setPreferences(previous => ({ ...previous, filtersCollapsed: false }))} className="rounded border border-brand-100 bg-brand-50/60 px-2 py-1 text-[11px] text-brand-800">{condition}</button>) : PRESETS.map(preset => <button key={preset.name} type="button" title={preset.title} onClick={() => applyPreset(preset.values)} className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600 hover:border-brand-200 hover:text-brand-700">{preset.name}</button>)}</div>
         <div className="ml-auto flex items-center gap-3">
           {dirty && result && <span className="text-[11px] text-amber-700">条件未应用</span>}
-          <button type="button" onClick={() => { setDraft(previous => ({ ...emptyScreenerDraft(previous.period), scope: previous.scope, industry: previous.industry })); setSchemeId(''); setError(''); }} className="text-xs text-slate-500 hover:text-slate-900">清空条件</button>
+          <button type="button" onClick={() => { setDraft(previous => ({ ...emptyScreenerDraft(previous.period), scope: previous.scope, industries: previous.industries, excludedIndustries: previous.excludedIndustries })); setSchemeId(''); setError(''); }} className="text-xs text-slate-500 hover:text-slate-900">清空条件</button>
           <button type="submit" disabled={loading || !meta} className="btn-primary !min-h-8 !px-4 !py-1 !text-xs">{loading ? '筛选中…' : '筛选'}</button>
         </div>
       </div>
@@ -239,18 +251,18 @@ function ScreenerContent() {
           })}
           <td className="whitespace-nowrap px-3 py-1"><div className="flex items-center justify-end gap-3 text-xs"><Link href={`/stock/${row.symbol}`} prefetch={false} className="text-brand-700 hover:underline">估值</Link><Link href={`/stock/${row.symbol}/finance`} prefetch={false} className="text-brand-700 hover:underline">财报</Link><WatchlistButton compact code={row.symbol} name={row.name} /></div></td>
         </tr>)}
-        {!visibleRows.length && <tr><td colSpan={columns.length + 4} className="px-3 py-16 text-center text-xs text-slate-500">{loading ? '读取所选年报与行情…' : result?.universeCount === 0 ? '当前范围没有 A 股公司' : error ? '数据暂未取得' : '没有符合条件的公司'}{!loading && !error && <button type="button" onClick={() => { const next = emptyScreenerDraft(draft.period); setDraft(next); void performScreen(next); }} className="ml-2 text-brand-700">查看全部A股</button>}</td></tr>}
+        {!visibleRows.length && <tr><td colSpan={columns.length + 4} className="px-3 py-16 text-center text-xs text-slate-500">{loading ? '读取所选年报与行情…' : result?.universeCount === 0 ? '当前范围没有 A 股公司' : error ? '数据暂未取得' : '没有符合条件的公司'}{!loading && !error && <button type="button" onClick={() => { const next = { ...emptyScreenerDraft(SCREEN_AUTO_PERIOD), scope: draft.scope }; setDraft(next); void performScreen(next); }} className="ml-2 text-brand-700">查看全部A股</button>}</td></tr>}
         </tbody>
       </table>
     </div>
     <div className="flex min-h-8 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-slate-200 bg-slate-50/50 px-3 py-1 text-[11px] text-slate-500">
-      <span>{result ? `${periodLabel(result.period)} · 财报 ${result.financialCount}/${result.universeCount} 家 · 行情 ${result.quoteCount}/${result.scannedCount} 家` : '—'}{!!result?.unknownConditionCount && <span className="ml-2 text-amber-700">条件缺值 {result.unknownConditionCount} 家</span>}<button type="button" onClick={() => setColumnsOpen(true)} className="ml-3 text-slate-400 hover:text-brand-700">数据口径</button></span>
+      <span>{result ? <>{periodLabel(result.period)} · 财报 {result.financialCount}/{result.universeCount} 家 · 行情 {result.quoteCount}/{result.scannedCount} 家{result.requestedPeriod === SCREEN_AUTO_PERIOD && !!result.fallbackCount && <span className="ml-2 text-amber-700">{result.fallbackCount} 家用更早年报</span>}</> : '—'}{!!result?.unknownConditionCount && <span className="ml-2 text-amber-700">条件缺值 {result.unknownConditionCount} 家</span>}<button type="button" onClick={() => setColumnsOpen(true)} className="ml-3 text-slate-400 hover:text-brand-700">数据口径</button></span>
       <div className="ml-auto flex items-center gap-2"><span>{page}/{pageCount} 页 · 每页 {pageSize} 家</span><button type="button" disabled={page <= 1} onClick={() => movePage(page - 1)} className="btn !min-h-6 !px-2 !py-0 !text-[11px]">上一页</button><button type="button" disabled={page >= pageCount} onClick={() => movePage(page + 1)} className="btn !min-h-6 !px-2 !py-0 !text-[11px]">下一页</button><input type="number" min={1} max={pageCount} aria-label="跳转页码" value={jump} onChange={event => setJump(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && jump && Number.isInteger(Number(jump))) movePage(Number(jump)); }} placeholder="页码" className="h-6 w-12 rounded border border-slate-200 bg-white px-1 text-center text-[11px] tabular-nums outline-none focus:border-brand-300" /></div>
     </div>
     <Modal open={columnsOpen} title="显示列" onClose={() => setColumnsOpen(false)}>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{SCREEN_COLUMNS.map(column => <label key={column.id} className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-xs ${preferences.columns.includes(column.id) ? 'border-brand-200 bg-brand-50/40' : 'border-slate-200'} ${toneClass[column.tone]}`}><input type="checkbox" checked={preferences.columns.includes(column.id)} onChange={event => updateColumns(event.target.checked ? SCREEN_COLUMNS.filter(item => item.id === column.id || preferences.columns.includes(item.id)).map(item => item.id) : preferences.columns.filter(id => id !== column.id))} className="h-3.5 w-3.5 accent-blue-600" />{column.label}</label>)}</div>
       <div className="mt-4 flex items-center justify-between"><button type="button" onClick={() => updateColumns([...DEFAULT_SCREEN_COLUMNS])} className="text-xs text-slate-500">恢复默认列</button><button type="button" onClick={() => setColumnsOpen(false)} className="btn-primary">完成</button></div>
-      <details className="mt-4 border-t border-slate-100 pt-3 text-xs leading-6 text-slate-500"><summary>指标与数据口径</summary><p className="mt-2">股票范围为本地申万分类中的A股。财务条件使用同一年度、已经披露的年报：ROE为披露的加权ROE，增长率为年度同比；经营现金流和市值以亿元计。现金净利比为经营现金流除以同期全体净利润，净利润非正时不计算。PE-TTM、PB和市值来自当前行情，不使用PB÷PE推算财报ROE。未取得的数据留空，已启用条件的缺失值不会通过筛选。表尾分别列出财报与行情覆盖数量。</p></details>
+      <details className="mt-4 border-t border-slate-100 pt-3 text-xs leading-6 text-slate-500"><summary>指标与数据口径</summary><p className="mt-2">股票范围为本地申万分类中的A股。行业可多选「只看这些行业」，也可多选「排除这些行业」；同一行业同时出现在两组时，勾选其中一组会自动取消另一组，避免条件互相抵消。</p><p className="mt-2">财务条件使用已经披露的年报：ROE为披露的加权ROE，增长率为年度同比；经营现金流和市值以亿元计。现金净利比为经营现金流除以同期全体净利润，净利润非正时不计算。财报期选「自动」时，每家公司各自取其最新的已披露年报，未披露最新年报的公司自动回退到上一期，因此「报告期」列会出现不同年份；底栏会统计用了更早年报的家数。</p><p className="mt-2">PE-TTM、PB和市值来自当前行情，不使用PB÷PE推算财报ROE。未取得的数据留空，已启用条件的缺失值不会通过筛选。表尾分别列出财报与行情覆盖数量。</p></details>
     </Modal>
     <Modal open={schemeOpen} title="保存选股方案" onClose={() => setSchemeOpen(false)}>
       <form onSubmit={event => { event.preventDefault(); saveScheme(); }}>

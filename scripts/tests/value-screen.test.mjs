@@ -11,6 +11,7 @@ const { clearCache } = await load('datasource/cache');
 const {
   valueScreenToday, valueScreenPeriods, valueScreenUniverse, selectValueScreenUniverse,
   readValueScreenCriteria, emptyValueScreenRow, matchesValueScreenFinancial, matchesValueScreenQuote,
+  valueScreenRequestedPeriods,
 } = shared;
 const { getValueScreenMeta, parseValueScreenFinancials, fetchValueScreenReportPages, fetchValueScreenReports, runValueScreen } = service;
 const today = '2026-10-19', period = '2025-12-31';
@@ -53,7 +54,7 @@ test('annual defaults use Shanghai dates and wait until after the April 30 discl
 test('criteria reject invalid or silently ignored filters and add no implicit thresholds', () => {
   assert.deepEqual(readValueScreenCriteria(criteria({}), ['银行'], now), criteria({}));
   assert.deepEqual(readValueScreenCriteria(criteria({ peMin: 0, cashflowPositive: false }), ['银行'], now), criteria({ peMin: 0, cashflowPositive: false }));
-  for (const raw of [null, [], criteria({ scope: 'HK' }), criteria({ industry: '不存在' }), criteria({ roeMin: '15' }),
+  for (const raw of [null, [], criteria({ scope: 'HK' }), criteria({ industries: ['不存在'] }), criteria({ roeMin: '15' }),
     criteria({ roeMin: null }), criteria({ roeMin: NaN }), criteria({ cashflowPositive: 'true' }),
     criteria({ peMin: 20, peMax: 10 }), criteria({ codes: [123] }), criteria({ limit: 300 }),
     criteria({ period: '2026-12-31' }), criteria({ period: '2025-06-30' })])
@@ -66,8 +67,64 @@ test('watchlist scope never falls back to all shares and preserves stock/index c
   assert.deepEqual(selectValueScreenUniverse(universe, criteria({ scope: 'watchlist', codes: ['000001', 'SZ000001', '600519.SH'] })).map(row => row.symbol), ['sz000001', 'sh600519']);
 });
 
+test('industry selection includes many, excludes many, and exclusion always wins', () => {
+  assert.equal(selectValueScreenUniverse(universe, criteria({ industries: ['食品饮料', '银行'] })).length, 3);
+  assert.deepEqual(selectValueScreenUniverse(universe, criteria({ industries: ['食品饮料'] })).map(row => row.code), ['600415', '600519']);
+  assert.deepEqual(selectValueScreenUniverse(universe, criteria({ excludedIndustries: ['食品饮料'] })).map(row => row.code), ['000001']);
+  assert.deepEqual(selectValueScreenUniverse(universe, criteria({ industries: ['食品饮料', '银行'], excludedIndustries: ['银行'] })).map(row => row.code), ['600415', '600519']);
+  assert.equal(selectValueScreenUniverse(universe, criteria({ industries: [], excludedIndustries: [] })).length, 3);
+});
+
+test('industry lists validate against the classification and reject self-contradiction', () => {
+  const names = ['银行', '食品饮料'];
+  assert.deepEqual(readValueScreenCriteria(criteria({ industries: ['银行', ' 银行 ', '食品饮料'] }), names, now), criteria({ industries: ['银行', '食品饮料'] }));
+  // Legacy single-value payloads still work.
+  assert.deepEqual(readValueScreenCriteria(criteria({ industry: '银行' }), names, now), criteria({ industries: ['银行'] }));
+  assert.deepEqual(readValueScreenCriteria(criteria({ industry: '' }), names, now), criteria({}));
+  for (const raw of [criteria({ industries: '银行' }), criteria({ industries: ['不存在'] }),
+    criteria({ excludedIndustries: [123] }), criteria({ excludedIndustries: ['不存在'] }),
+    criteria({ industries: Array.from({ length: 51 }, () => '银行') }),
+    criteria({ industries: ['银行'], excludedIndustries: ['银行'] })])
+    assert.throws(() => readValueScreenCriteria(raw, names, now));
+  assert.throws(() => readValueScreenCriteria(criteria({ industries: ['银行'], excludedIndustries: ['银行'] }), names, now), /同时被包含和排除/);
+});
+
+test('auto period requests several report dates and each row keeps the date actually matched', async () => {
+  const meta = getValueScreenMeta(now);
+  assert.equal(meta.defaultPeriod, period);
+  assert.deepEqual(meta.fallbackPeriods, [period, '2024-12-31', '2023-12-31']);
+  assert.deepEqual(valueScreenRequestedPeriods(criteria({ period: 'auto' }), meta.periods), meta.fallbackPeriods);
+  assert.deepEqual(valueScreenRequestedPeriods(criteria({}), meta.periods), [period]);
+
+  const older = (code, extra = {}) => financial(code, { REPORT_DATE: '2024-12-31 00:00:00', NOTICE_DATE: '2025-04-20 00:00:00', UPDATE_DATE: '2025-04-20 00:00:00', ...extra });
+  let requested;
+  const result = await runValueScreen(criteria({ period: 'auto' }), async symbols => symbols.map(symbol => quote(symbol)), {
+    universe, now,
+    reports: async periods => { requested = periods; return { main: [financial('600519'), older('600415'), older('000001', { ROEJQ: 5 })], income: [] }; },
+  });
+  assert.deepEqual(requested, meta.fallbackPeriods);
+  assert.equal(result.requestedPeriod, 'auto');
+  assert.equal(result.period, period, 'the headline period stays the newest requested date');
+  assert.equal(result.financialCount, 3);
+  assert.equal(result.fallbackCount, 2);
+  assert.equal(result.rows.find(row => row.code === '600519').period, period);
+  assert.equal(result.rows.find(row => row.code === '600415').period, '2024-12-31');
+});
+
+test('newer report dates beat older ones regardless of row order and notice dates', () => {
+  const rows = [
+    financial('600519', { REPORT_DATE: '2024-12-31 00:00:00', NOTICE_DATE: '2025-04-20 00:00:00', UPDATE_DATE: '2025-04-20 00:00:00', ROEJQ: 1 }),
+    financial('600519', { REPORT_DATE: '2025-12-31 00:00:00', NOTICE_DATE: '2026-04-17 00:00:00', UPDATE_DATE: '2026-04-17 00:00:00', ROEJQ: 2 }),
+    // Same date, newer disclosure version wins.
+    financial('600519', { REPORT_DATE: '2025-12-31 00:00:00', NOTICE_DATE: '2026-04-17 00:00:00', UPDATE_DATE: '2026-06-01 00:00:00', ROEJQ: 3 }),
+  ];
+  const parsed = parseValueScreenFinancials({ main: rows, income: [] }, [period, '2024-12-31'], today).get('600519');
+  assert.equal(parsed.roe, 3);
+  assert.equal(parsed.period, period);
+});
+
 test('real annual fields keep disclosed weighted ROE and CNY units, using total consolidated net profit', () => {
-  const row = parseValueScreenFinancials(reports, period, today).get('600519');
+  const row = parseValueScreenFinancials(reports, [period], today).get('600519');
   assert.equal(row.roe, 32.53);
   assert.equal(row.netMargin, 50.52);
   assert.equal(row.revenueGrowth, -1.2);
@@ -84,12 +141,12 @@ test('real annual fields keep disclosed weighted ROE and CNY units, using total 
 test('future disclosure, wrong reporting periods/currency, and future revisions cannot enter financial rows', () => {
   for (const extra of [{ NOTICE_DATE: '2026-10-20' }, { NOTICE_DATE: null }, { NOTICE_DATE: 'bad' },
     { REPORT_DATE: '2024-12-31' }, { CURRENCY: 'HKD' }, { UPDATE_DATE: '2026-10-20' }])
-    assert.equal(parseValueScreenFinancials({ main: [financial('600519', extra)], income: [] }, period, today).size, 0);
+    assert.equal(parseValueScreenFinancials({ main: [financial('600519', extra)], income: [] }, [period], today).size, 0);
   for (const extra of [{ NOTICE_DATE: '2026-10-20' }, { REPORT_DATE: '2024-12-31' }, { CURRENCY: 'USD' }, { NETPROFIT: 0 }, { NETPROFIT: -100 }]) {
-    const row = parseValueScreenFinancials({ main: reports.main, income: [income('600519', extra)] }, period, today).get('600519');
+    const row = parseValueScreenFinancials({ main: reports.main, income: [income('600519', extra)] }, [period], today).get('600519');
     assert.equal(row.ocfToProfit, null);
   }
-  const zero = parseValueScreenFinancials({ main: [financial('600519', { NETCASH_OPERATE_PK: 0, ROEJQ: null })], income: reports.income }, period, today).get('600519');
+  const zero = parseValueScreenFinancials({ main: [financial('600519', { NETCASH_OPERATE_PK: 0, ROEJQ: null })], income: reports.income }, [period], today).get('600519');
   assert.equal(zero.operatingCashFlow, 0);
   assert.equal(zero.ocfToProfit, 0);
   assert.equal(zero.roe, null);
@@ -224,7 +281,7 @@ test('a failed quote batch keeps other results and explicitly reports partial co
 test('report queries fetch every stable page, with exact annual/disclosure filters and explicit columns', async () => {
   const all = Array.from({ length: 501 }, (_, index) => financial(String(600000 + index)));
   const calls = [];
-  const rows = await fetchValueScreenReportPages('RPT_F10_FINANCE_MAINFINADATA', 'SECURITY_CODE,ROEJQ', period, today, async url => {
+  const rows = await fetchValueScreenReportPages('RPT_F10_FINANCE_MAINFINADATA', 'SECURITY_CODE,ROEJQ', [period], today, async url => {
     const p = new URL(url).searchParams;
     calls.push(p);
     const page = Number(p.get('pageNumber'));
@@ -232,15 +289,24 @@ test('report queries fetch every stable page, with exact annual/disclosure filte
   });
   assert.equal(rows.length, 501);
   assert.equal(calls.length, 2);
-  assert.equal(calls[0].get('filter'), "(REPORT_DATE='2025-12-31')(NOTICE_DATE<='2026-10-19 23:59:59')");
+  assert.equal(calls[0].get('filter'), "(REPORT_DATE in ('2025-12-31'))(NOTICE_DATE<='2026-10-19 23:59:59')");
   assert.equal(calls[0].get('sortColumns'), 'SECURITY_CODE,UPDATE_DATE');
   assert.equal(calls[0].get('columns'), 'SECURITY_CODE,ROEJQ');
+});
+
+test('multi-period requests filter every requested date at once and accept no dates silently', async () => {
+  const calls = [];
+  const fetcher = async url => { calls.push(new URL(url).searchParams); return { success: true, result: { pages: 1, count: 1, data: [financial('600519')] } }; };
+  await fetchValueScreenReportPages('TEST', 'ALL', [period, '2024-12-31', '2023-12-31'], today, fetcher);
+  assert.equal(calls[0].get('filter'), "(REPORT_DATE in ('2025-12-31','2024-12-31','2023-12-31'))(NOTICE_DATE<='2026-10-19 23:59:59')");
+  assert.deepEqual(await fetchValueScreenReportPages('TEST', 'ALL', [], today, fetcher), []);
+  assert.equal(calls.length, 1, 'an empty date list must not reach the network');
 });
 
 test('incomplete, repeated or changing report pages fail instead of silently returning a truncated screen', async () => {
   for (const kind of ['missing', 'repeated', 'changed']) {
     const page = financial('600519');
-    await assert.rejects(fetchValueScreenReportPages('TEST', 'ALL', period, today, async url => {
+    await assert.rejects(fetchValueScreenReportPages('TEST', 'ALL', [period], today, async url => {
       const first = new URL(url).searchParams.get('pageNumber') === '1';
       return { success: true, result: { pages: 2, count: kind === 'changed' && !first ? 3 : 2,
         data: first || kind === 'repeated' ? [page] : [] } };
@@ -268,8 +334,15 @@ test('only raw reports cache; scans use new quotes and final PE values each time
     assert.equal(first.rows[0].pe, 10);
     assert.equal(second.rows[0].pe, 20);
     assert.equal(calls, 2, 'MAIN and GINCOME load once each, without caching the final screen');
-    assert.equal((await fetchValueScreenReports(period, today)).main.length, 1);
+    assert.equal((await fetchValueScreenReports([period], today)).main.length, 1);
     assert.equal(calls, 2);
+    // A different date set is a different cache entry, never a hit on the single-date one.
+    await fetchValueScreenReports([period, '2024-12-31'], today);
+    assert.equal(calls, 4);
+    await fetchValueScreenReports(['2024-12-31', period], today);
+    assert.equal(calls, 4, 'date order must not split the cache entry');
+    await fetchValueScreenReports([period], today);
+    assert.equal(calls, 4);
   } finally { globalThis.fetch = nativeFetch; clearCache(); }
 });
 

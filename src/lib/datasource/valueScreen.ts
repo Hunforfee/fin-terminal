@@ -1,7 +1,8 @@
 import { SW2021 } from '../sw2021';
 import {
   emptyValueScreenRow, valueScreenFinancialStatus, valueScreenQuoteStatus,
-  selectValueScreenUniverse, valueScreenPeriods, valueScreenToday, valueScreenUniverse,
+  selectValueScreenUniverse, valueScreenFallbackPeriods, valueScreenPeriods,
+  valueScreenRequestedPeriods, valueScreenToday, valueScreenUniverse,
   type ValueScreenCandidate, type ValueScreenCriteria, type ValueScreenFinancial,
   type ValueScreenMeta, type ValueScreenResult, type ValueScreenRow,
 } from '../valueScreen';
@@ -21,6 +22,10 @@ type QuoteFetcher = (symbols: string[]) => Promise<Quote[]>;
 
 const DC_URL = 'https://datacenter-web.eastmoney.com/api/data/v1/get';
 const PAGE_SIZE = 500;
+/** Observed full-market pages per annual report date; ceiling keeps truncation detectable. */
+const PAGE_CEILING_PER_PERIOD = 120;
+/** Multi-period requests get more parallelism because each run fetches ~3x the pages. */
+const PAGE_CONCURRENCY = 8;
 const MAIN_COLUMNS = [
   'SECURITY_CODE', 'SECURITY_NAME_ABBR', 'REPORT_DATE', 'NOTICE_DATE', 'UPDATE_DATE',
   'CURRENCY', 'ROEJQ', 'XSJLL', 'TOTALOPERATEREVETZ', 'PARENTNETPROFITTZ',
@@ -64,6 +69,7 @@ export function getValueScreenMeta(now = new Date()): ValueScreenMeta {
   const periods = valueScreenPeriods(now);
   return {
     periods,
+    fallbackPeriods: valueScreenFallbackPeriods(periods),
     industries: SW2021.industries.map(industry => ({
       name: industry.name,
       count: universe.filter(candidate => candidate.industry === industry.name).length,
@@ -77,16 +83,21 @@ export function getValueScreenMeta(now = new Date()): ValueScreenMeta {
 export async function fetchValueScreenReportPages(
   reportName: string,
   columns: string,
-  period: string,
+  periods: string[],
   today: string,
   fetcher: JsonFetcher = url => fetchJson<DataPage>(url, {
     timeoutMs: 15000, headers: { Referer: 'https://data.eastmoney.com/' },
   }),
 ): Promise<RawRow[]> {
+  if (periods.length === 0) return [];
+  const inList = periods.map(period => `'${period}'`).join(',');
+  // Each report date adds roughly 30 pages of full-market rows, so the sanity
+  // ceiling has to scale with the requested dates instead of a fixed 100.
+  const pageCeiling = periods.length * PAGE_CEILING_PER_PERIOD;
   const read = async (page: number) => {
     const params = new URLSearchParams({
       reportName, columns,
-      filter: `(REPORT_DATE='${period}')(NOTICE_DATE<='${today} 23:59:59')`,
+      filter: `(REPORT_DATE in (${inList}))(NOTICE_DATE<='${today} 23:59:59')`,
       sortColumns: 'SECURITY_CODE,UPDATE_DATE', sortTypes: '1,-1',
       pageNumber: String(page), pageSize: String(PAGE_SIZE),
     });
@@ -95,14 +106,14 @@ export async function fetchValueScreenReportPages(
     if (!response.success || !result || !Array.isArray(result.data))
       throw Error('年报数据暂不可用，请稍后重试');
     const pages = Number(result.pages), count = Number(result.count);
-    if (!Number.isInteger(pages) || pages < 0 || pages > 100 ||
+    if (!Number.isInteger(pages) || pages < 0 || pages > pageCeiling ||
       !Number.isInteger(count) || count < 0 ||
       (count > 0 && pages < 1) || (count === 0 && result.data.length > 0))
       throw Error('年报分页信息不完整，请稍后重试');
     return { rows: result.data, pages, count };
   };
   const first = await read(1);
-  const remaining = await mapLimit(Array.from({ length: Math.max(0, first.pages - 1) }, (_, index) => index + 2), 4, read);
+  const remaining = await mapLimit(Array.from({ length: Math.max(0, first.pages - 1) }, (_, index) => index + 2), PAGE_CONCURRENCY, read);
   if (remaining.some(page => page.pages !== first.pages || page.count !== first.count))
     throw Error('年报分页数据发生变化，请重新筛选');
   const rows = [first, ...remaining].flatMap(page => page.rows);
@@ -113,50 +124,62 @@ export async function fetchValueScreenReportPages(
 }
 
 /** Cache only raw reports. Prices and final valuation/filter results never use this TTL. */
-export async function fetchValueScreenReports(period: string, today: string): Promise<ValueScreenReports> {
-  return cached(`value-screen-reports-v1:${period}:${today}`, 3600e3, async () => {
+export async function fetchValueScreenReports(periods: string[], today: string): Promise<ValueScreenReports> {
+  const key = [...new Set(periods)].sort().join('~');
+  return cached(`value-screen-reports-v1:${key}:${today}`, 3600e3, async () => {
     const [main, income] = await Promise.all([
-      fetchValueScreenReportPages('RPT_F10_FINANCE_MAINFINADATA', MAIN_COLUMNS, period, today),
-      fetchValueScreenReportPages('RPT_F10_FINANCE_GINCOME', INCOME_COLUMNS, period, today),
+      fetchValueScreenReportPages('RPT_F10_FINANCE_MAINFINADATA', MAIN_COLUMNS, periods, today),
+      fetchValueScreenReportPages('RPT_F10_FINANCE_GINCOME', INCOME_COLUMNS, periods, today),
     ]);
     return { main, income };
   });
 }
 
-function validReport(row: RawRow, period: string, today: string): boolean {
+function validReport(row: RawRow, allowedPeriods: Set<string>, today: string): boolean {
   const notice = dateOnly(row.NOTICE_DATE);
   const update = dateOnly(row.UPDATE_DATE);
+  const report = dateOnly(row.REPORT_DATE);
   return /^\d{6}$/.test(String(row.SECURITY_CODE ?? '')) &&
-    dateOnly(row.REPORT_DATE) === period && notice !== null && notice <= today &&
+    report !== null && allowedPeriods.has(report) && notice !== null && notice <= today &&
     (!update || update <= today) && row.CURRENCY === 'CNY';
 }
 
-function latestReports(rows: RawRow[], period: string, today: string): Map<string, RawRow> {
-  const result = new Map<string, RawRow>();
+/**
+ * Two-level winner per code: the newest report date first, then the newest
+ * disclosure version inside that date. `allowedPeriods` only bounds which dates
+ * may compete; ordering comes from the date string, not list position.
+ */
+function latestReports(rows: RawRow[], allowedPeriods: Set<string>, today: string): Map<string, { row: RawRow; period: string }> {
+  const result = new Map<string, { row: RawRow; period: string }>();
+  const version = (row: RawRow) => `${row.UPDATE_DATE ?? ''}|${row.NOTICE_DATE ?? ''}`;
   for (const row of rows) {
-    if (!validReport(row, period, today)) continue;
-    const code = String(row.SECURITY_CODE), current = result.get(code);
-    const version = `${row.UPDATE_DATE ?? ''}|${row.NOTICE_DATE ?? ''}`;
-    const previous = current ? `${current.UPDATE_DATE ?? ''}|${current.NOTICE_DATE ?? ''}` : '';
-    if (!current || version > previous) result.set(code, row);
+    if (!validReport(row, allowedPeriods, today)) continue;
+    const code = String(row.SECURITY_CODE), period = dateOnly(row.REPORT_DATE)!;
+    const current = result.get(code);
+    if (!current || period > current.period ||
+      (period === current.period && version(row) > version(current.row)))
+      result.set(code, { row, period });
   }
   return result;
 }
 
 /** ROEJQ is disclosed weighted ROE; no PB/PE substitute is used anywhere here. */
-export function parseValueScreenFinancials(reports: ValueScreenReports, period: string, today: string): Map<string, ValueScreenFinancial> {
-  const main = latestReports(reports.main, period, today);
-  const income = latestReports(reports.income, period, today);
-  return new Map([...main].map(([code, row]) => {
+export function parseValueScreenFinancials(reports: ValueScreenReports, periods: string[], today: string): Map<string, ValueScreenFinancial> {
+  const allowedPeriods = new Set(periods);
+  const main = latestReports(reports.main, allowedPeriods, today);
+  const income = latestReports(reports.income, allowedPeriods, today);
+  return new Map([...main].map(([code, entry]) => {
+    const row = entry.row;
     const cashFlow = finite(row.NETCASH_OPERATE_PK);
     // MAINFINADATA contains attributable profit only. GINCOME.NETPROFIT is total
-    // consolidated after-tax profit, unlike PARENT_NETPROFIT or pretax TOTAL_PROFIT.
-    const totalNetProfit = finite(income.get(code)?.NETPROFIT);
+    // consolidated after-tax profit, unlike PARENTNETPROFIT or pretax TOTAL_PROFIT.
+    // The income row may sit in an earlier period than main, so look it up by code.
+    const totalNetProfit = finite(income.get(code)?.row.NETPROFIT);
     const cashToProfit = cashFlow !== null && totalNetProfit !== null && totalNetProfit > 0
       ? cashFlow / totalNetProfit * 100 : null;
     return [code, {
       code, name: typeof row.SECURITY_NAME_ABBR === 'string' ? row.SECURITY_NAME_ABBR : code,
-      period, noticeDate: dateOnly(row.NOTICE_DATE),
+      period: entry.period, noticeDate: dateOnly(row.NOTICE_DATE),
       roe: finite(row.ROEJQ), netMargin: finite(row.XSJLL),
       revenueGrowth: finite(row.TOTALOPERATEREVETZ), profitGrowth: finite(row.PARENTNETPROFITTZ),
       deductedGrowth: finite(row.KCFJCXSYJLRTZ), debtRatio: finite(row.ZCFZL),
@@ -170,7 +193,8 @@ export function parseValueScreenFinancials(reports: ValueScreenReports, period: 
 export interface ValueScreenOptions {
   now?: Date;
   universe?: ValueScreenCandidate[];
-  reports?: (period: string, today: string) => Promise<ValueScreenReports>;
+  periods?: string[];
+  reports?: (periods: string[], today: string) => Promise<ValueScreenReports>;
 }
 
 /** Financial conditions run first; at most four 50-symbol quote batches run together. */
@@ -181,19 +205,24 @@ export async function runValueScreen(
 ): Promise<ValueScreenResult> {
   const now = options.now ?? new Date();
   const candidates = selectValueScreenUniverse(options.universe ?? universe, criteria);
+  const periods = valueScreenRequestedPeriods(criteria, options.periods ?? valueScreenPeriods(now));
+  const newestPeriod = periods[0] ?? criteria.period;
   const empty: ValueScreenResult = {
     rows: [], total: 0, universeCount: candidates.length, financialCount: 0,
-    quoteCount: 0, scannedCount: 0, unknownConditionCount: 0, period: criteria.period,
+    quoteCount: 0, scannedCount: 0, unknownConditionCount: 0, period: newestPeriod,
+    requestedPeriod: criteria.period, fallbackCount: 0,
     updatedAt: now.toISOString(), partial: false,
   };
   if (candidates.length === 0) return empty;
-  const reports = await (options.reports ?? fetchValueScreenReports)(criteria.period, valueScreenToday(now));
-  const financials = parseValueScreenFinancials(reports, criteria.period, valueScreenToday(now));
+  const reports = await (options.reports ?? fetchValueScreenReports)(periods, valueScreenToday(now));
+  const financials = parseValueScreenFinancials(reports, periods, valueScreenToday(now));
   const all = candidates.map(candidate => {
     const financial = financials.get(candidate.code);
-    return { ...emptyValueScreenRow(candidate, criteria.period), ...financial, financialAvailable: !!financial };
+    // `...financial` wins so a row carries the report date actually matched.
+    return { ...emptyValueScreenRow(candidate, newestPeriod), ...financial, financialAvailable: !!financial };
   });
   const financialCount = all.filter(row => row.financialAvailable).length;
+  const fallbackCount = all.filter(row => row.financialAvailable && row.period !== newestPeriod).length;
   let unknownConditionCount = 0;
   const scanned = all.filter(row => {
     const status = valueScreenFinancialStatus(row, criteria);
@@ -235,7 +264,7 @@ export async function runValueScreen(
   });
   return {
     ...empty, rows, total: rows.length, financialCount, quoteCount, scannedCount: scanned.length,
-    unknownConditionCount,
+    unknownConditionCount, fallbackCount,
     partial: unknownConditionCount > 0 || financialCount < candidates.length || quoteCount < scanned.length || failedQuoteBatch || stale,
   };
 }

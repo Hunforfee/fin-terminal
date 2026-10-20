@@ -37,19 +37,24 @@ test('empty draft, typed column catalog and default preferences have stable inde
   assert.equal(first.period, period);
   assert.equal(first.cashflowPositive, false);
   assert.equal(first.deductedProfitPositive, false);
+  assert.deepEqual(first.industries, []);
+  assert.deepEqual(first.excludedIndustries, []);
   assert.ok(
     Object.entries(first)
       .filter(
-        ([key]) =>
+        ([key, value]) =>
           ![
             'scope',
             'period',
             'cashflowPositive',
             'deductedProfitPositive',
-          ].includes(key),
+          ].includes(key) &&
+          typeof value === 'string',
       )
       .every(([, value]) => value === ''),
   );
+  first.industries.push('银行');
+  assert.deepEqual(second.industries, []);
   first.peMin = '15';
   assert.equal(second.peMin, '');
   assert.equal(SCREEN_COLUMNS.length, 13);
@@ -119,7 +124,8 @@ test('schemes preserve finite numeric drafts including negative/zero/empty and r
     criteria: {
       ...emptyScreenerDraft(period),
       scope: 'group:任意 id/中文:?=1',
-      industry: '  食品饮料  ',
+      industries: ['  食品饮料  ', '银行', '食品饮料'],
+      excludedIndustries: ['  银行  '],
       peMin: ' -5 ',
       peMax: '0',
       pbMin: '-0',
@@ -134,7 +140,8 @@ test('schemes preserve finite numeric drafts including negative/zero/empty and r
   });
   const [read] = readScreenerSchemes([incoming], period);
   assert.equal(read.criteria.scope, incoming.criteria.scope);
-  assert.equal(read.criteria.industry, '食品饮料');
+  assert.deepEqual(read.criteria.industries, ['食品饮料', '银行']);
+  assert.deepEqual(read.criteria.excludedIndustries, ['银行']);
   assert.equal(read.criteria.peMin, '-5');
   assert.equal(read.criteria.peMax, '0');
   assert.equal(read.criteria.pbMin, '-0');
@@ -149,6 +156,65 @@ test('schemes preserve finite numeric drafts including negative/zero/empty and r
     readScreenerSchemes(JSON.parse(JSON.stringify([read])), period),
     [read],
   );
+});
+
+test('legacy single-industry schemes upgrade to arrays instead of being silently dropped', () => {
+  const legacy = scheme({
+    criteria: { ...emptyScreenerDraft(period), industry: '  食品饮料  ' },
+  });
+  const [upgraded] = readScreenerSchemes([legacy], period);
+  assert.deepEqual(upgraded.criteria.industries, ['食品饮料']);
+  assert.deepEqual(upgraded.criteria.excludedIndustries, []);
+  assert.ok(!('industry' in upgraded.criteria), 'the legacy key never persists forward');
+  // An empty legacy value meant "all industries".
+  assert.deepEqual(
+    readScreenerSchemes(
+      [scheme({ criteria: { ...emptyScreenerDraft(period), industry: '' } })],
+      period,
+    )[0].criteria.industries,
+    [],
+  );
+  // Both keys present during an in-flight upgrade merge without duplicates.
+  assert.deepEqual(
+    readScreenerSchemes(
+      [
+        scheme({
+          criteria: {
+            ...emptyScreenerDraft(period),
+            industry: '银行',
+            industries: ['银行', '食品饮料'],
+          },
+        }),
+      ],
+      period,
+    )[0].criteria.industries,
+    ['银行', '食品饮料'],
+  );
+  // 'auto' is a valid persisted period; a bare string is the legacy shape and
+  // still upgrades, but malformed array contents drop the scheme entirely.
+  assert.equal(
+    readScreenerSchemes(
+      [scheme({ criteria: { ...emptyScreenerDraft('auto') } })],
+      period,
+    ).length,
+    1,
+  );
+  assert.deepEqual(
+    readScreenerSchemes(
+      [scheme({ criteria: { ...emptyScreenerDraft(period), industries: '银行' } })],
+      period,
+    )[0].criteria.industries,
+    ['银行'],
+  );
+  for (const bad of [[123], ['银行', ''], Array.from({ length: 51 }, () => '银行')])
+    assert.deepEqual(
+      readScreenerSchemes(
+        [scheme({ criteria: { ...emptyScreenerDraft(period), industries: bad } })],
+        period,
+      ),
+      [],
+      JSON.stringify(bad),
+    );
 });
 
 test('malformed, incomplete and nonfinite schemes are rejected without corrupting valid neighbors', () => {

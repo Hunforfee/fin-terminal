@@ -1,9 +1,15 @@
 export const SCREEN_PREFERENCES_KEY = 'fin.screener.preferences.v1';
 export const SCREEN_SCHEMES_KEY = 'fin.screener.schemes.v1';
+/** Period sentinel: use each company's newest disclosed annual report. */
+export const SCREEN_AUTO_PERIOD = 'auto';
 
 export interface ScreenerDraft {
   scope: string;
-  industry: string;
+  /** Included industries; empty means all. */
+  industries: string[];
+  /** Excluded industries; exclusion always wins over inclusion. */
+  excludedIndustries: string[];
+  /** 'auto' means newest available annual report, falling back per company. */
   period: string;
   peMin: string;
   peMax: string;
@@ -26,7 +32,8 @@ export interface ScreenerDraft {
 export function emptyScreenerDraft(period: string): ScreenerDraft {
   return {
     scope: 'all',
-    industry: '',
+    industries: [],
+    excludedIndustries: [],
     period,
     peMin: '',
     peMax: '',
@@ -183,6 +190,28 @@ const numberString = (value: unknown): string | null => {
   return Number.isFinite(Number(trimmed)) ? trimmed : null;
 };
 
+/**
+ * Accepts legacy single string, current array, or missing, and returns a
+ * deduplicated list. Legacy schemes stored `industry`; both keys are merged so
+ * an in-flight upgrade never drops a saved selection.
+ */
+function normalizeIndustries(...values: unknown[]): string[] | null {
+  const result: string[] = [];
+  for (const value of values) {
+    if (value === undefined || value === null) continue;
+    // Legacy shape: a single industry name, empty meaning "all".
+    const items = typeof value === 'string' ? (value.trim() ? [value] : []) : value;
+    if (!Array.isArray(items) || items.length > 50) return null;
+    for (const item of items) {
+      if (typeof item !== 'string') return null;
+      const name = item.trim();
+      if (!name || name.length > 100 || !noControls(name)) return null;
+      if (!result.includes(name)) result.push(name);
+    }
+  }
+  return result;
+}
+
 function readCriteria(
   raw: unknown,
   defaultPeriod: string,
@@ -198,22 +227,20 @@ function readCriteria(
     )
   )
     return null;
-  if (
-    typeof raw.industry !== 'string' ||
-    raw.industry.length > 100 ||
-    !noControls(raw.industry)
-  )
-    return null;
+  const industries = normalizeIndustries(raw.industries, raw.industry);
+  const excludedIndustries = normalizeIndustries(raw.excludedIndustries);
+  if (!industries || !excludedIndustries) return null;
   const period = raw.period === undefined ? defaultPeriod : raw.period;
   if (
-    !validDate(period) ||
+    (period !== SCREEN_AUTO_PERIOD && !validDate(period)) ||
     typeof raw.cashflowPositive !== 'boolean' ||
     typeof raw.deductedProfitPositive !== 'boolean'
   )
     return null;
   const criteria = emptyScreenerDraft(period);
   criteria.scope = raw.scope;
-  criteria.industry = raw.industry.trim();
+  criteria.industries = industries;
+  criteria.excludedIndustries = excludedIndustries;
   criteria.cashflowPositive = raw.cashflowPositive;
   criteria.deductedProfitPositive = raw.deductedProfitPositive;
   for (const key of NUMBER_FIELDS) {

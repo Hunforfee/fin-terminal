@@ -1,5 +1,6 @@
 import { industryStockSymbol } from './industryResearch';
 import { normalizeStockCode } from './datasource/codes';
+import { SCREEN_AUTO_PERIOD as VALUE_SCREEN_AUTO_PERIOD } from './screenerPreferences';
 
 export const VALUE_SCREEN_NUMBER_KEYS = [
   'peMin', 'peMax', 'pbMin', 'pbMax', 'roeMin', 'netMarginMin',
@@ -11,8 +12,12 @@ export const VALUE_SCREEN_BOOLEAN_KEYS = ['cashflowPositive', 'deductedProfitPos
 
 /** Percentages use percentage points (100 = 100%); monetary filters use CNY yi. */
 export interface ValueScreenCriteria extends Partial<Record<ValueScreenNumberKey, number>> {
+  /** SCREEN_AUTO_PERIOD, or a YYYY-12-31 annual report date. */
   period: string;
-  industry?: string;
+  /** Included industries; empty/undefined means all. */
+  industries?: string[];
+  /** Excluded industries; exclusion always wins over inclusion. */
+  excludedIndustries?: string[];
   scope: 'all' | 'watchlist';
   codes?: string[];
   cashflowPositive?: boolean;
@@ -59,13 +64,20 @@ export interface ValueScreenResult {
   scannedCount: number;
   /** Companies with an active condition that cannot be evaluated, unless another active condition already rejects them. */
   unknownConditionCount?: number;
+  /** Newest requested annual report; 'auto' when each company picks its own newest. */
   period: string;
+  /** What the caller asked for, preserved for display. */
+  requestedPeriod: string;
+  /** Companies whose financials come from an earlier report than the newest requested one. */
+  fallbackCount: number;
   updatedAt: string;
   partial: boolean;
 }
 
 export interface ValueScreenMeta {
   periods: string[];
+  /** Newest-first report dates used when period is 'auto'. */
+  fallbackPeriods: string[];
   industries: { name: string; count: number }[];
   universeCount: number;
   defaultPeriod: string;
@@ -96,6 +108,19 @@ export function valueScreenPeriods(now = new Date()): string[] {
   return Array.from({ length: 5 }, (_, index) => `${newest - index}-12-31`);
 }
 
+/** How many report dates 'auto' scans; later dates cover the vast majority of companies. */
+export const VALUE_SCREEN_FALLBACK_DEPTH = 3;
+/** Newest-first dates actually requested when period is 'auto'. */
+export function valueScreenFallbackPeriods(periods: string[]): string[] {
+  return periods.slice(0, VALUE_SCREEN_FALLBACK_DEPTH);
+}
+
+/** Report dates a screen run must fetch: one explicit date, or the auto fallback set. */
+export function valueScreenRequestedPeriods(criteria: ValueScreenCriteria, periods: string[]): string[] {
+  if (criteria.period === VALUE_SCREEN_AUTO_PERIOD) return valueScreenFallbackPeriods(periods);
+  return [criteria.period];
+}
+
 /** Use the same A-share rules as industry research, retaining stock/index disambiguation. */
 export function valueScreenUniverse(industries: { name: string; stocks: string[] }[]): ValueScreenCandidate[] {
   const rows = new Map<string, ValueScreenCandidate>();
@@ -113,27 +138,53 @@ export function selectValueScreenUniverse(universe: ValueScreenCandidate[], crit
     const stock = normalizeStockCode(input);
     return stock && industryStockSymbol(stock.code) === stock.symbol ? [stock.symbol] : [];
   }));
-  return universe.filter(row => (!criteria.industry || row.industry === criteria.industry) &&
+  const included = criteria.industries?.length ? new Set(criteria.industries) : null;
+  const excluded = new Set(criteria.excludedIndustries ?? []);
+  return universe.filter(row =>
+    (!included || included.has(row.industry)) &&
+    !excluded.has(row.industry) &&
     (criteria.scope !== 'watchlist' || selected.has(row.symbol)));
+}
+
+/** Trimmed, deduplicated industry names; every entry must exist in the classification. */
+function readIndustries(value: unknown, industries: string[], label: string): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length > 50 || value.some(item => typeof item !== 'string'))
+    throw Error(`${label}必须为字符串数组`);
+  const result: string[] = [];
+  for (const item of value as string[]) {
+    const name = item.trim();
+    if (!name || name.length > 100) throw Error(`${label}名称无效`);
+    if (!industries.includes(name)) throw Error('请选择有效的申万一级行业');
+    if (!result.includes(name)) result.push(name);
+  }
+  return result;
 }
 
 export function readValueScreenCriteria(raw: unknown, industries: string[], now = new Date()): ValueScreenCriteria {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw Error('筛选条件必须为 JSON 对象');
   const input = raw as Record<string, unknown>;
-  const allowed = new Set<string>(['period', 'industry', 'scope', 'codes', ...VALUE_SCREEN_NUMBER_KEYS, ...VALUE_SCREEN_BOOLEAN_KEYS]);
+  const allowed = new Set<string>(['period', 'industries', 'excludedIndustries', 'industry', 'scope', 'codes', ...VALUE_SCREEN_NUMBER_KEYS, ...VALUE_SCREEN_BOOLEAN_KEYS]);
   if (Object.keys(input).some(key => !allowed.has(key))) throw Error('包含不支持的筛选条件');
   const period = input.period;
-  if (typeof period !== 'string' || !/^\d{4}-12-31$/.test(period) ||
-    Number(period.slice(0, 4)) < 1998 || period >= valueScreenToday(now))
+  if (typeof period !== 'string' || (period !== VALUE_SCREEN_AUTO_PERIOD &&
+    (!/^\d{4}-12-31$/.test(period) ||
+      Number(period.slice(0, 4)) < 1998 || period >= valueScreenToday(now))))
     throw Error('请选择已结束年度的年报日期，如 2025-12-31');
   const scope = input.scope ?? 'all';
   if (scope !== 'all' && scope !== 'watchlist') throw Error('股票范围仅支持全部 A 股或自选 A 股');
   const result: ValueScreenCriteria = { period, scope };
-  if (input.industry !== undefined) {
-    if (typeof input.industry !== 'string') throw Error('行业名称无效');
-    const name = input.industry.trim();
-    if (name && !industries.includes(name)) throw Error('请选择有效的申万一级行业');
-    if (name) result.industry = name;
+  // `industry` is the legacy single-value shape; older clients still send it.
+  const legacy = input.industry === undefined ? undefined
+    : typeof input.industry === 'string' ? (input.industry.trim() ? [input.industry] : [])
+    : input.industry;
+  const included = readIndustries(input.industries ?? legacy, industries, '行业');
+  const excluded = readIndustries(input.excludedIndustries, industries, '排除行业');
+  if (included?.length) result.industries = included;
+  if (excluded?.length) {
+    const overlap = included?.filter(name => excluded.includes(name));
+    if (overlap?.length) throw Error(`行业「${overlap[0]}」同时被包含和排除，请只保留一项`);
+    result.excludedIndustries = excluded;
   }
   if (input.codes !== undefined) {
     if (!Array.isArray(input.codes) || input.codes.length > 10000 || input.codes.some(code => typeof code !== 'string'))

@@ -10,7 +10,7 @@ import IndustryMultiSelect from '@/components/IndustryMultiSelect';
 import { useWatchlist } from '@/components/WatchlistProvider';
 import { normalizeStockCode } from '@/lib/datasource/codes';
 import { industryStockSymbol } from '@/lib/industryResearch';
-import { UNGROUPED } from '@/lib/watchlist';
+import ScreenerGroupImport from '@/components/ScreenerGroupImport';
 import { personalStorage, AUTH_CHANGE } from '@/lib/personalStorage';
 import { compareResearchValues } from '@/lib/researchColumns';
 import {
@@ -76,13 +76,12 @@ function ScreenerContent() {
   const [schemeOpen, setSchemeOpen] = useState(false), [schemeName, setSchemeName] = useState(''), [schemeError, setSchemeError] = useState('');
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [loading, setLoading] = useState(false), [error, setError] = useState(''), [status, setStatus] = useState('');
-  const [selected, setSelected] = useState<string[]>([]), [targetGroup, setTargetGroup] = useState(UNGROUPED);
+  const [selected, setSelected] = useState<string[]>([]), [groupImportOpen, setGroupImportOpen] = useState(false);
   const [page, setPage] = useState(1), [pageSize, setPageSize] = useState(20), [jump, setJump] = useState(''), [height, setHeight] = useState<number | undefined>();
   const rootRef = useRef<HTMLDivElement>(null), tableRef = useRef<HTMLDivElement>(null), checkboxRef = useRef<HTMLInputElement>(null);
   const requestRef = useRef<AbortController | null>(null), statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const metaRef = useRef(meta); metaRef.current = meta;
   const initialIndustry = useRef(params.get('industry') ?? '');
-  const groupId = watchlist.groups.some(group => group.id === targetGroup) ? targetGroup : UNGROUPED;
   const scopeCodes = (scope: string) => {
     const codes = scope.startsWith('group:') ? watchlist.codesIn(scope.slice(6)) : watchlist.codes;
     return [...new Set(codes.flatMap(code => { const stock = normalizeStockCode(code); return stock && industryStockSymbol(stock.code) === stock.symbol ? [stock.symbol] : []; }))].sort();
@@ -96,7 +95,7 @@ function ScreenerContent() {
     if (next.scope !== 'all') payload.codes = scopeCodes(next.scope);
     const scopeKey = next.scope === 'all' ? 'all' : payload.codes!.join(',');
     requestRef.current?.abort(); const controller = new AbortController(); requestRef.current = controller;
-    setLoading(true); setError(''); setStatus('');
+    setLoading(true); setGroupImportOpen(false); setError(''); setStatus('');
     try {
       const response = await fetch('/api/screen', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: controller.signal }); const json = await response.json();
       if (!json.ok) throw Error(json.error ?? '筛选失败'); if (controller.signal.aborted) return;
@@ -109,7 +108,7 @@ function ScreenerContent() {
       try { setPreferences({ ...readScreenerPreferences(JSON.parse(personalStorage.getItem(SCREEN_PREFERENCES_KEY) ?? 'null')), filtersCollapsed: false }); } catch { setPreferences(readScreenerPreferences(null)); }
       try { setSchemes(readScreenerSchemes(JSON.parse(personalStorage.getItem(SCREEN_SCHEMES_KEY) ?? 'null'), SCREEN_AUTO_PERIOD)); } catch { setSchemes([]); }
       setPreferencesReady(true); setSchemeId('');
-      if (reset) { requestRef.current?.abort(); setResult(null); setApplied(null); setSelected([]); setStatus(''); setError(''); if (metaRef.current) { setDraft({ ...emptyScreenerDraft(SCREEN_AUTO_PERIOD), industries: metaRef.current.industries.map(item => item.name) }); setLoading(false); } }
+      if (reset) { requestRef.current?.abort(); setResult(null); setApplied(null); setGroupImportOpen(false); setSelected([]); setStatus(''); setError(''); if (metaRef.current) { setDraft({ ...emptyScreenerDraft(SCREEN_AUTO_PERIOD), industries: metaRef.current.industries.map(item => item.name) }); setLoading(false); } }
     };
     loadPersonal(); const onAccount = () => loadPersonal(true); window.addEventListener(AUTH_CHANGE, onAccount);
     return () => { window.removeEventListener(AUTH_CHANGE, onAccount); requestRef.current?.abort(); if (statusTimer.current) clearTimeout(statusTimer.current); };
@@ -162,9 +161,9 @@ function ScreenerContent() {
     if (!updated.some(item => item.id === next.id)) { setSchemeError('方案中的条件无效'); return; }
     if (saveSchemes(updated)) { setSchemeId(next.id); setSchemeOpen(false); }
   };
-  const addSelected = () => {
-    const added = watchlist.importMany(selected, groupId); setStatus(added ? `已加入 ${added.added} 家${added.skipped ? `，组内已有 ${added.skipped} 家` : ''}` : '分组已变化，请重新选择'); if (added) setSelected([]);
-    if (statusTimer.current) clearTimeout(statusTimer.current); statusTimer.current = setTimeout(() => setStatus(''), 4000);
+  const onGroupImported = (message: string) => {
+    setStatus(message); setSelected([]); setGroupImportOpen(false);
+    if (statusTimer.current) clearTimeout(statusTimer.current); statusTimer.current = setTimeout(() => setStatus(''), 6000);
   };
   const movePage = (next: number) => { setPage(Math.max(1, Math.min(pageCount, next))); if (tableRef.current) tableRef.current.scrollTop = 0; };
   const head = (key: ScreenerSort['key'], label: string, tone = 'text-slate-500') => <button type="button" onClick={() => updateSort(key)} aria-label={`按${label}排序`} className={`inline-flex min-h-7 items-center gap-1 whitespace-nowrap font-medium ${preferences.sort.key === key ? 'text-brand-700' : tone}`}>{label}<span aria-hidden="true" className={preferences.sort.key === key ? 'text-brand-600' : 'text-slate-300'}>{preferences.sort.key === key ? preferences.sort.direction === 'asc' ? '↑' : '↓' : '↕'}</span></button>;
@@ -219,7 +218,8 @@ function ScreenerContent() {
     <div className="flex min-h-10 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-slate-100 px-3 py-1.5 text-xs">
       <div className="flex flex-wrap items-center gap-2 text-slate-500">
         <strong className="font-semibold text-slate-800">{result ? `匹配 ${result.total.toLocaleString()} 家` : loading ? '读取财报与行情…' : '尚未筛选'}</strong>
-        {selected.length > 0 && <><span className="text-brand-700">已选 {selected.length} 家</span><button type="button" onClick={() => setSelected([])}>清空</button><button type="button" onClick={() => setSelected(sorted.map(row => row.symbol))} className="text-brand-700">全选结果</button><select aria-label="批量加入分组" value={groupId} onChange={event => setTargetGroup(event.target.value)} className="input !min-h-7 !w-auto !max-w-32 !py-0.5 !text-xs">{watchlist.groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select><button type="button" onClick={addSelected} disabled={!watchlist.ready} className="btn-primary !min-h-7 !px-2 !py-0.5 !text-xs">加入自选</button></>}
+        {selected.length > 0 && <><span className="text-brand-700">已选 {selected.length} 家</span><button type="button" onClick={() => setSelected([])}>清空</button><button type="button" onClick={() => setSelected(sorted.map(row => row.symbol))} className="text-brand-700">全选结果</button></>}
+        <button type="button" onClick={() => setGroupImportOpen(true)} disabled={!watchlist.ready || !sorted.length || loading} className="btn-primary !min-h-7 !px-2 !py-0.5 !text-xs">一键添加到分组</button>
         <span role="status" className="text-teal-700">{status}</span>
       </div>
       <div className="ml-auto flex items-center gap-1.5"><button type="button" onClick={() => setColumnsOpen(true)} className="btn !min-h-7 !px-2 !py-0.5 !text-xs">列设置</button><button type="button" disabled={!sorted.length || loading} onClick={() => downloadCsv(sorted, preferences.columns, result!.period)} className="btn !min-h-7 !px-2 !py-0.5 !text-xs">导出 CSV</button></div>
@@ -251,6 +251,7 @@ function ScreenerContent() {
       <span>{result ? <>{periodLabel(result.period)} · 财报 {result.financialCount}/{result.universeCount} 家 · 行情 {result.quoteCount}/{result.scannedCount} 家{result.requestedPeriod === SCREEN_AUTO_PERIOD && !!result.fallbackCount && <span className="ml-2 text-amber-700">{result.fallbackCount} 家使用较早报告期</span>}</> : '—'}{!!result?.unknownConditionCount && <span className="ml-2 text-amber-700">条件缺值 {result.unknownConditionCount} 家</span>}<button type="button" onClick={() => setColumnsOpen(true)} className="ml-3 text-slate-400 hover:text-brand-700">数据口径</button></span>
       <div className="ml-auto flex items-center gap-2"><span>{page}/{pageCount} 页 · 每页 {pageSize} 家</span><button type="button" disabled={page <= 1} onClick={() => movePage(page - 1)} className="btn !min-h-6 !px-2 !py-0 !text-[11px]">上一页</button><button type="button" disabled={page >= pageCount} onClick={() => movePage(page + 1)} className="btn !min-h-6 !px-2 !py-0 !text-[11px]">下一页</button><input type="number" min={1} max={pageCount} aria-label="跳转页码" value={jump} onChange={event => setJump(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && jump && Number.isInteger(Number(jump))) movePage(Number(jump)); }} placeholder="页码" className="h-6 w-12 rounded border border-slate-200 bg-white px-1 text-center text-[11px] tabular-nums outline-none focus:border-brand-300" /></div>
     </div>
+    {groupImportOpen && <ScreenerGroupImport symbols={sorted.map(row => row.symbol)} selected={selected} onClose={() => setGroupImportOpen(false)} onImported={onGroupImported} />}
     <Modal open={columnsOpen} title="显示列" onClose={() => setColumnsOpen(false)}>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{SCREEN_COLUMNS.map(column => <label key={column.id} className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-xs ${preferences.columns.includes(column.id) ? 'border-brand-200 bg-brand-50/40' : 'border-slate-200'} ${toneClass[column.tone]}`}><input type="checkbox" checked={preferences.columns.includes(column.id)} onChange={event => updateColumns(event.target.checked ? SCREEN_COLUMNS.filter(item => item.id === column.id || preferences.columns.includes(item.id)).map(item => item.id) : preferences.columns.filter(id => id !== column.id))} className="h-3.5 w-3.5 accent-blue-600" />{column.label}</label>)}</div>
       <div className="mt-4 flex items-center justify-between"><button type="button" onClick={() => updateColumns([...DEFAULT_SCREEN_COLUMNS])} className="text-xs text-slate-500">恢复默认列</button><button type="button" onClick={() => setColumnsOpen(false)} className="btn-primary">完成</button></div>

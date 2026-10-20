@@ -63,7 +63,7 @@ export default function KLineChart({ candles, title, height = 420, showVolume = 
 
     if (showVolume) {
       series.push({
-        name: '成交量',
+        name: '成交量（百股）',
         type: 'bar',
         xAxisIndex: 1,
         yAxisIndex: 1,

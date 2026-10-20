@@ -63,6 +63,8 @@ export interface Quote {
   amplitude: number | null;
   /** 市盈率 TTM */
   pe: number | null;
+  /** Original quote-provider PE, retained when HK financial-basis PE is applied. */
+  marketPe?: number | null;
   /** 市盈率（动态） */
   peForward: number | null;
   /** 市盈率（静态） */
@@ -233,6 +235,8 @@ export interface ValuationPoint {
 
 /** 财务摘要 */
 export interface FinancialSummary {
+  /** Amount unit when supplied by the provider; not inferred from trading currency. */
+  currency?: string;
   code: string;
   /** 报告期，如 2025-12-31 */
   periods: string[];

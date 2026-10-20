@@ -225,11 +225,12 @@ export async function getIndustryQuotes(inputs: string[]): Promise<Quote[]> {
   const financialMap = new Map(financials);
   const allQuotes = new Map(aQuotes.map((quote) => [quote.symbol, quote]));
   for (const quote of hkQuotes.flat()) {
+    const valuation = computeHkValuation(financialMap.get(quote.symbol) ?? null, null, quote.stale ? null : quote.price);
     allQuotes.set(quote.symbol, {
       ...quote,
-      pb: computeHkValuation(
-        financialMap.get(quote.symbol) ?? null, null, quote.price,
-      ).pb,
+      marketPe: quote.marketPe === undefined ? quote.pe : quote.marketPe,
+      pe: valuation.pe,
+      pb: valuation.pb,
     });
   }
   return normalized.flatMap((n) => {
@@ -287,12 +288,12 @@ async function withHkValuation(quotes: Quote[]): Promise<Quote[]> {
   if (hk.length === 0) return quotes;
   const map = new Map<string, HkValuation>();
   await mapLimit(hk, 4, async (q) => {
-    const v = await getHkCurrentValuation(q.symbol, q.price);
+    const v = await getHkCurrentValuation(q.symbol, q.stale ? null : q.price);
     map.set(q.symbol, v);
   });
   return quotes.map((q) => {
     const v = map.get(q.symbol);
-    return v ? { ...q, pb: v.pb, dividendYield: v.dividendYield,
+    return v ? { ...q, marketPe: q.marketPe === undefined ? q.pe : q.marketPe, pe: v.pe, pb: v.pb, dividendYield: v.dividendYield,
       dividendYieldMethod: 'hk-static', dividendFiscalYear: v.fiscalYear,
       dividendPerShare: { ordinary: v.ordinaryDps, special: v.specialDps, total: v.ttmDps } } : q;
   });
@@ -343,12 +344,13 @@ export async function getKLine(
     }
     try {
       if (adjust !== 'none') throw new Error('新浪仅提供不复权价格');
-      return await sina.fetchKLine(n.symbol, period, count);
+      const series = await sina.fetchKLine(n.symbol, period, count);
+      return { ...series, candles: series.candles.filter(c => !startDate || c.date >= startDate).slice(-count) };
     } catch {
       /* 落到下一级 */
     }
     const snap = await snapshot.snapshotKLine(n.symbol, period);
-    if (snap && snap.adjust === adjust) return snap;
+    if (snap && snap.adjust === adjust) return { ...snap, candles: snap.candles.filter(c => !startDate || c.date >= startDate).slice(-count) };
     throw new Error(`无法获取 ${n.symbol} 的 ${period} 线数据（${adjust}）`);
   });
 }
@@ -384,7 +386,7 @@ export async function getValuation(input: string, years = 10, method: ValuationM
         () => hkFinance.fetchHkIndicatorPoints(`${n.code}.HK`, span + 3)),
     ]);
     if (!q) throw new Error('行情获取失败');
-    const current = await getHkCurrentValuation(n.symbol, q.price);
+    const current = await getHkCurrentValuation(n.symbol, q.stale ? null : q.price);
     const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
     const result = hkFinance.summarizeHkSnapshot(points, n.code, q, date, span, current);
     return { ...result, stale: q.stale };
@@ -454,6 +456,7 @@ export async function getValuation(input: string, years = 10, method: ValuationM
         expectedPerShare: main.dividendYield === null ? null : main.dividendYield * (last.rawClose ?? last.close) / 100,
         staticPerShare: main.staticDividendYield === null ? null : main.staticDividendYield * (last.rawClose ?? last.close) / 100 },
       netProfit: lastFin?.npTTM ?? null,
+      netAssets: lastFin?.bps != null && lastFin.shares != null ? lastFin.bps * lastFin.shares : null,
       marketComparison: { pe: q.pe, pb: q.pb, ts: q.ts },
       fin: { report: lastFin?.report ?? null, npTTM: lastFin?.npTTM ?? null,
         shares: lastFin?.shares ?? null, bps: lastFin?.bps ?? null, points: points.length,

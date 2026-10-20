@@ -41,6 +41,7 @@ export const PROVIDER_NAME = 'tencent';
  */
 export function parseQuoteLine(symbol: string, body: string): Quote | null {
   const f = body.split('~');
+  if (f[2] && f[2] !== symbol.slice(2)) return null;
   // 港股（v_hk00700=...）字段布局不同，走专用解析
   if (symbol.startsWith('hk')) return parseHkQuoteLine(symbol, body);
   if (f.length < 50) return null;
@@ -141,7 +142,7 @@ function parseHkQuoteLine(symbol: string, body: string): Quote | null {
     low: numOrNull(f[34]),
     change: numOrNull(f[31]),
     changePct: numOrNull(f[32]),
-    volume: volShare === null ? null : Math.round(volShare / 100),
+    volume: volShare === null ? null : volShare / 100,
     amount: numOrNull(f[37]),
     turnoverRate: null,
     volumeRatio: null,
@@ -172,8 +173,9 @@ export async function fetchQuotes(symbols: string[]): Promise<Quote[]> {
   const re = /v_([a-z]{2}\d{4,6})="([^"]*)"/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
+    if (!symbols.includes(m[1])) continue;
     const q = parseQuoteLine(m[1], m[2]);
-    if (q && Number.isFinite(q.price)) out.push(q);
+    if (q && q.price !== null && Number.isFinite(q.price) && q.price > 0) out.push(q);
   }
   if (out.length === 0) throw new Error('tencent quote parse yielded nothing');
   return out;
@@ -253,10 +255,8 @@ export async function fetchKLine(
   if (!node) throw new Error(`tencent kline: no data node for ${symbol}`);
 
   const key = adjust === 'qfq' ? `qfq${p}` : adjust === 'hfq' ? `hfq${p}` : p;
-  // 港股 K 线上游不提供复权序列（实测只返回 day），此时兜底用不复权数据；
-  // A 股必须严格按复权 key 取数，禁止静默降级（见 valuation.test.mjs 契约）
-  let raw = (adjust === 'none' ? node[p] : node[key]) as unknown[] | undefined;
-  if ((!raw || raw.length === 0) && symbol.startsWith('hk')) raw = node[p] as unknown[] | undefined;
+  // No market may label unadjusted prices as an adjusted series.
+  const raw = (adjust === 'none' ? node[p] : node[key]) as unknown[] | undefined;
   if (!raw || raw.length === 0) throw new Error(`tencent kline: empty series (${key})`);
 
   // 腾讯行序： [date, open, close, high, low, volume]
@@ -272,7 +272,7 @@ export async function fetchKLine(
       close,
       high: Number.isFinite(high) ? Math.max(high, open, close) : Math.max(open, close),
       low: Number.isFinite(low) ? Math.min(low, open, close) : Math.min(open, close),
-      volume: Number(a[5]) || 0,
+      volume: (Number(a[5]) || 0) / (symbol.startsWith('hk') ? 100 : 1),
     };
   });
 
@@ -301,7 +301,7 @@ export async function fetchMinute(symbol: string): Promise<MinutePoint[]> {
     return {
       time: `${time.slice(0, 2)}:${time.slice(2)}`,
       price: Number(price),
-      volume: isHk ? Math.round(v / 100) : v,
+      volume: isHk ? v / 100 : v,
       amount: Number(amt),
     };
   });

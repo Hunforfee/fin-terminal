@@ -202,7 +202,7 @@ test('baskets use at most 30 codes per request and two concurrent report batches
   );
 });
 
-test('industry uses shared HKD PB at current price, retains raw PE and requests no dividends', async () => {
+test('industry uses shared PE/PB at current price, retains raw PE separately and requests no dividends', async () => {
   const originalNow = Date.now;
   let clock = Date.now(),
     price = 50.15,
@@ -243,9 +243,10 @@ test('industry uses shared HKD PB at current price, retains raw PE and requests 
         assert.equal(first[0].pb, 1.471);
         assert.equal(
           first[0].pe,
-          -12.7,
-          'negative native PE remains available for loss counts',
+          12.715,
+          'PE shares the same financial basis as the detail page',
         );
+        assert.equal(first[0].marketPe, -12.7);
         assert.equal(first[0].dividendYield, null);
         assert.equal(financialCalls, 1);
         assert.equal(dividendCalls, 0);

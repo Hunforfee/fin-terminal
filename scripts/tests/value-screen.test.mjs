@@ -335,14 +335,14 @@ test('only raw reports cache; scans use new quotes and final PE values each time
     assert.equal(first.rows[0].pe, 10);
     assert.equal(second.rows[0].pe, 20);
     assert.equal(calls, 2, 'MAIN and GINCOME load once each, without caching the final screen');
-    assert.equal((await fetchValueScreenReports([period], today)).main.length, 1);
+    assert.equal((await fetchValueScreenReports([period], today, ['600519'])).main.length, 1);
     assert.equal(calls, 2);
     // A different date set is a different cache entry, never a hit on the single-date one.
-    await fetchValueScreenReports([period, '2024-12-31'], today);
+    await fetchValueScreenReports([period, '2024-12-31'], today, ['600519']);
     assert.equal(calls, 4);
-    await fetchValueScreenReports(['2024-12-31', period], today);
+    await fetchValueScreenReports(['2024-12-31', period], today, ['600519']);
     assert.equal(calls, 4, 'date order must not split the cache entry');
-    await fetchValueScreenReports([period], today);
+    await fetchValueScreenReports([period], today, ['600519']);
     assert.equal(calls, 4);
   } finally { globalThis.fetch = nativeFetch; clearCache(); }
 });
@@ -373,4 +373,116 @@ test('scope excludes ST and loss independently and cash ratio never mixes period
  assert.equal(matchesValueScreenQuote({ ...row, name: '正常公司', pe: 8 }, criteria({ excludeST: true, excludeLoss: true })), true);
  const parsed = parseValueScreenFinancials({ main: [financial('600519')], income: [income('600519', { REPORT_DATE: '2024-12-31' })] }, [period, '2024-12-31'], today);
  assert.equal(parsed.get('600519').ocfToProfit, null);
+});
+
+test('report loading receives the intersection of industry and watchlist before financial filtering', async () => {
+  let requested;
+  const result = await runValueScreen(criteria({
+    period: 'auto', scope: 'watchlist', codes: ['600519', '000001'], industries: ['银行'],
+  }), async symbols => symbols.map(symbol => quote(symbol)), {
+    universe, now,
+    reports: async (periods, date, codes) => {
+      requested = { periods, date, codes };
+      return { main: [financial('000001')], income: [income('000001')] };
+    },
+  });
+  assert.deepEqual(requested.codes, ['000001']);
+  assert.equal(requested.date, today);
+  assert.ok(requested.periods.includes(period), 'older reports still participate in fallback');
+  assert.deepEqual(result.rows.map(row => row.code), ['000001']);
+  assert.equal(result.rows[0].period, period);
+  assert.equal(result.fallbackCount, 1);
+});
+
+test('scoped report pagination keeps the code restriction on every page and rejects ignored scopes', async () => {
+  const calls = [];
+  const codes = ['000001', '600519'];
+  const rows = await fetchValueScreenReportPages('TEST', 'ALL', [period], today, async url => {
+    const params = new URL(url).searchParams;
+    calls.push(params.get('filter'));
+    const code = codes[Number(params.get('pageNumber')) - 1];
+    return { success: true, result: { pages: 2, count: 2, data: [financial(code)] } };
+  }, codes);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(calls, Array(2).fill(`(SECURITY_CODE in ("000001","600519"))(REPORT_DATE in ('${period}'))(NOTICE_DATE<='${today} 23:59:59')`));
+  await assert.rejects(fetchValueScreenReportPages('TEST', 'ALL', [period], today, async () => ({
+    success: true, result: { pages: 1, count: 1, data: [financial('600519')] },
+  }), ['000001']), /范围之外/);
+  const unreachable = async () => { throw Error('must not call network'); };
+  assert.deepEqual(await fetchValueScreenReportPages('TEST', 'ALL', [period], today, unreachable, []), []);
+  await assert.rejects(fetchValueScreenReportPages('TEST', 'ALL', [period], today, unreachable, ['000001")']), /范围无效/);
+});
+
+test('scoped report caches stay isolated and normalize code order while quotes remain fresh', async () => {
+  clearCache();
+  const nativeFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async url => {
+    const params = new URL(url).searchParams;
+    const codeList = /SECURITY_CODE in \(([^)]+)\)/.exec(params.get('filter'))?.[1];
+    assert.ok(codeList, 'a narrow scan must never issue an all-market request');
+    const codes = [...codeList.matchAll(/"(\d{6})"/g)].map(match => match[1]);
+    requests.push(codes);
+    const rows = codes.map(code => params.get('reportName').includes('MAINFINADATA') ? financial(code) : income(code));
+    return new Response(JSON.stringify({ success: true, result: { pages: 1, count: rows.length, data: rows } }));
+  };
+  try {
+    const quotes = async symbols => symbols.map(symbol => quote(symbol));
+    const bank = await runValueScreen(criteria({ industries: ['银行'] }), quotes, { universe, now });
+    assert.deepEqual(bank.rows.map(row => row.code), ['000001']);
+    assert.equal(requests.length, 2);
+    const food = await runValueScreen(criteria({ industries: ['食品饮料'] }), quotes, { universe, now });
+    assert.deepEqual(food.rows.map(row => row.code), ['600415', '600519']);
+    assert.equal(requests.length, 4, 'another industry must get its own reports');
+    await fetchValueScreenReports([period], today, ['600519', '600415', '600519']);
+    assert.equal(requests.length, 4, 'reordering or repeating codes must reuse the same cache');
+    await fetchValueScreenReports([period], today, []);
+    assert.equal(requests.length, 4, 'an empty scope must not fall back to all shares');
+  } finally { globalThis.fetch = nativeFetch; clearCache(); }
+});
+
+test('large code scopes use bounded batches without dropping companies or mixing cached scopes', async () => {
+  clearCache();
+  const nativeFetch = globalThis.fetch;
+  const codes = Array.from({ length: 401 }, (_, i) => String(600000 + i));
+  let active = 0, maxActive = 0;
+  const requests = [];
+  globalThis.fetch = async url => {
+    const params = new URL(url).searchParams;
+    const filter = params.get('filter');
+    const scope = [.../SECURITY_CODE in \(([^)]+)\)/.exec(filter)[1].matchAll(/"(\d{6})"/g)].map(match => match[1]);
+    assert.ok(scope.length <= 200);
+    assert.ok(filter.includes(`'${period}'`) && filter.includes("'2024-12-31'"));
+    requests.push(scope);
+    maxActive = Math.max(maxActive, ++active);
+    await new Promise(resolve => setTimeout(resolve, 2));
+    active--;
+    const rows = scope.map(code => params.get('reportName').includes('MAINFINADATA') ? financial(code) : income(code));
+    return new Response(JSON.stringify({ success: true, result: { pages: 1, count: rows.length, data: rows } }));
+  };
+  try {
+    const result = await fetchValueScreenReports([period, '2024-12-31'], today, codes);
+    assert.deepEqual(result.main.map(row => row.SECURITY_CODE), codes);
+    assert.deepEqual(result.income.map(row => row.SECURITY_CODE), codes);
+    assert.equal(requests.length, 6, 'three code batches, each fetching two report types');
+    assert.ok(maxActive <= 4, 'no more than two batches load their first MAIN/INCOME pages concurrently');
+    await fetchValueScreenReports(['2024-12-31', period], today, [...codes].reverse());
+    assert.equal(requests.length, 6);
+  } finally { globalThis.fetch = nativeFetch; clearCache(); }
+});
+
+test('an unrestricted directory scan retains the bulk loader instead of issuing per-code batches', async () => {
+  let requestedCodes = 'not called';
+  const result = await runValueScreen(criteria({ roeMin: 20 }), async () => {
+    throw Error('missing financials must not request quotes');
+  }, {
+    now,
+    reports: async (_periods, _today, codes) => {
+      requestedCodes = codes;
+      return { main: [], income: [] };
+    },
+  });
+  assert.equal(requestedCodes, undefined);
+  assert.equal(result.universeCount, getValueScreenMeta(now).universeCount);
+  assert.equal(result.total, 0);
 });

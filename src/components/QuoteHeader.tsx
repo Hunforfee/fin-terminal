@@ -138,6 +138,7 @@ export default function QuoteHeader({ quote }: { quote: Quote }) {
             >
               {price(quote.price)}
             </span>
+            <span className="text-xs text-slate-500">{quote.kind === 'index' ? '点' : quote.market === 'HK' ? '港元' : '元'}</span>
             <span className={`text-sm tabular ${toneClass(quote.change)}`}>
               {signed(quote.change)}　{signedPct(quote.changePct)}
             </span>
@@ -151,7 +152,7 @@ export default function QuoteHeader({ quote }: { quote: Quote }) {
 
         {isStock && (
           <div className="flex min-w-0 flex-1 flex-wrap justify-start gap-x-6 gap-y-3">
-            <ProfileItem label="总市值" value={capText} />
+            <ProfileItem label={quote.market === 'HK' ? '总市值（港元）' : '总市值（人民币）'} value={capText} />
             <ProfileItem
               label="控股股东"
               value={profile?.holder ?? '--'}

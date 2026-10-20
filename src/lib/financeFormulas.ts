@@ -36,7 +36,6 @@ export const PRESET_FORMULAS: Formula[] = [
     expr: 'bs_负债合计 / bs_资产总计 * 100',
     unit: 'pct',
     preset: true,
-    nullAsZero: true,
   },
   {
     id: 'p-interest-debt-ratio',
@@ -45,7 +44,6 @@ export const PRESET_FORMULAS: Formula[] = [
       '(bs_短期借款 + bs_一年内到期的非流动负债 + bs_长期借款 + bs_应付债券 + bs_租赁负债) / bs_资产总计 * 100',
     unit: 'pct',
     preset: true,
-    nullAsZero: true,
   },
   {
     id: 'p-cash-to-debt',
@@ -54,7 +52,6 @@ export const PRESET_FORMULAS: Formula[] = [
       '(bs_货币资金 + bs_交易性金融资产) / (bs_短期借款 + bs_一年内到期的非流动负债 + bs_长期借款 + bs_应付债券 + bs_租赁负债)',
     unit: '',
     preset: true,
-    nullAsZero: true,
   },
   {
     id: 'p-interest-coverage',
@@ -75,17 +72,19 @@ export const PRESET_FORMULAS: Formula[] = [
   },
   {
     id: 'p-inventory-turnover',
-    name: '存货周转率',
+    name: '存货周转率（期末余额口径）',
     expr: 'pl_营业成本 / bs_存货',
     unit: '',
     preset: true,
+    description: '当期累计营业成本 / 期末存货；未年化，不等同于使用平均存货余额的周转率。',
   },
   {
     id: 'p-receivable-turnover',
-    name: '应收账款周转率',
+    name: '应收账款周转率（期末余额口径）',
     expr: 'pl_营业收入 / bs_应收账款',
     unit: '',
     preset: true,
+    description: '当期累计营业收入 / 期末应收账款；未年化，不等同于使用平均应收账款余额的周转率。',
   },
   {
     id: 'p-fcf',
@@ -94,7 +93,6 @@ export const PRESET_FORMULAS: Formula[] = [
       'cf_经营活动产生的现金流量净额 - cf_购建固定资产、无形资产和其他长期资产所支付的现金',
     unit: 'wan',
     preset: true,
-    nullAsZero: true,
   },
   {
     id: 'p-equity-multiplier',

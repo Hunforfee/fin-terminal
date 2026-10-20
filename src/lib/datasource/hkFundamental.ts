@@ -58,13 +58,15 @@ const positive = (v: unknown): number | null => {
 };
 const dateOnly = (v: unknown): string => {
   const s = typeof v === 'string' ? v.slice(0, 10) : '';
-  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '';
+  const parsed = Date.parse(`${s}T00:00:00Z`);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) && Number.isFinite(parsed) && new Date(parsed).toISOString().slice(0, 10) === s ? s : '';
 };
 const HK_HEADERS = { Referer: 'https://emweb.securities.eastmoney.com/' };
 
 export function parseHkFundamental(rows: Row[]): HkFundamental | null {
+  const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
   const latest = [...rows]
-    .filter((row) => dateOnly(row.REPORT_DATE))
+    .filter((row) => dateOnly(row.REPORT_DATE) && dateOnly(row.REPORT_DATE) <= today)
     .sort((a, b) =>
       dateOnly(b.REPORT_DATE).localeCompare(dateOnly(a.REPORT_DATE)),
     )[0];

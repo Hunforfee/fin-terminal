@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import EChart from './EChart';
 import type { MinutePoint } from '@/lib/datasource/types';
+import { intervalVolumes } from '@/lib/marketDataIntegrity';
 
 export interface MinuteChartProps {
   points: MinutePoint[];
@@ -17,8 +18,9 @@ export default function MinuteChart({ points, prevClose, height = 300 }: MinuteC
     const prices = points.map((p) => p.price);
     // 均价 = 累计成交额 / 累计成交量（元/股）
     const avg = points.map((p) => (p.volume > 0 ? p.amount / (p.volume * 100) : null));
+    const interval = intervalVolumes(points);
     const vols = points.map((p, i) => ({
-      value: p.volume,
+      value: interval[i],
       itemStyle: {
         color:
           i === 0 ? 'rgba(148,163,184,0.5)' : prices[i] >= prices[i - 1] ? 'rgba(239,68,68,0.5)' : 'rgba(16,185,129,0.5)',
@@ -98,7 +100,7 @@ export default function MinuteChart({ points, prevClose, height = 300 }: MinuteC
             : undefined,
         },
         { name: '均价', type: 'line', data: avg, symbol: 'none', lineStyle: { width: 1, color: '#f59e0b' } },
-        { name: '成交量', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: vols },
+        { name: '分钟成交量（百股）', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: vols },
       ],
     };
   }, [points, prevClose]);

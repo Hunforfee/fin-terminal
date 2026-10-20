@@ -287,6 +287,7 @@ async function fetchOneStatement(
 }
 
 export interface CustomFinancials {
+  fieldCurrencies?: Record<string, string>;
   periodKinds?: Record<string, string>;
   currency?: string;
   code: string;

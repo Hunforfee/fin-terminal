@@ -82,6 +82,10 @@ test('HK list, single quote, dividend endpoint inputs and detail share current-p
     const yieldInput = await source.getHkCurrentValuation('hk02388', single.price, '2026-10-16');
     const yieldRow = await requestYield();
     assert.equal(list.pb, 1.471);
+    assert.equal(list.pe, 12.715);
+    assert.equal(single.pe, list.pe);
+    assert.equal(detail.pe, list.pe);
+    assert.equal(detail.marketComparison.pe, 12.7);
     assert.equal(list.dividendYield, 4.24);
     assert.equal(single.pb, list.pb);
     assert.equal(detail.pb, list.pb);
@@ -105,6 +109,7 @@ test('HK list, single quote, dividend endpoint inputs and detail share current-p
     assert.equal(nextList.pb, 2.943);
     assert.equal(nextList.dividendYield, 2.12);
     assert.equal(nextDetail.pb, nextList.pb);
+    assert.equal(nextDetail.pe, nextList.pe);
     assert.equal(nextDetail.dividendYield, nextList.dividendYield);
     assert.equal((await requestYield()).dy, nextList.dividendYield, 'the HTTP route also recalculates rather than retaining its old price');
     assert.equal(mainCalls, slowMainCalls, 'price changes do not refetch slow financials');
@@ -114,4 +119,30 @@ test('HK list, single quote, dividend endpoint inputs and detail share current-p
     Date.now = originalNow;
     clearCache();
   }
+});
+
+test('a stale single-quote cache cannot combine an old HK price with new financials', async()=>{
+  const nativeFetch=globalThis.fetch,nativeNow=Date.now;
+  let clock=Date.now(),fail=false;
+  globalThis.fetch=async input=>{
+    const url=new URL(input);
+    if(url.hostname==='qt.gtimg.cn'){
+      if(fail)throw Error('offline');
+      return quoteResponse(50.15);
+    }
+    if(url.searchParams.get('reportName')==='RPT_HKF10_FN_MAININDICATOR')return Response.json({success:true,result:{pages:1,data:[main]}});
+    if(url.searchParams.get('reportName')==='RPT_HKF10_INFO_DIVIDEND')return Response.json({success:true,result:{pages:1,data:dividends}});
+    throw Error('offline');
+  };
+  Date.now=()=>clock;clearCache();
+  try{
+    const current=await source.getQuote('hk02388');assert.equal(current.pb,1.471);
+    clock+=600_001;fail=true;
+    // The producer can fall back to a disk snapshot. Either it returns a stale
+    // snapshot or the cache marks its old quote stale; neither is a current price.
+    const stale=await source.getQuote('hk02388');
+    assert.equal(stale.stale,true);
+    assert.equal(stale.pe,null);assert.equal(stale.pb,null);assert.equal(stale.dividendYield,null);
+    assert.equal((await requestYield()).dy,null);
+  }finally{globalThis.fetch=nativeFetch;Date.now=nativeNow;clearCache();}
 });

@@ -34,6 +34,7 @@ import {
 } from '@/lib/financePreferences';
 
 interface CompanyFinancials {
+  fieldCurrencies?: Record<string, string>;
   currency?: string;
   code: string;
   name: string;
@@ -410,7 +411,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
     return {
       code: c?.code ?? '',
       periods: c?.periods ?? [],
-      name: `${c?.name ?? ''}${['wan', 'yuan'].includes(fieldMetas.get(key)?.unit ?? '') ? `（${c?.currency ?? 'CNY'}）` : ''}`,
+      name: `${c?.name ?? ''}${['wan', 'yuan'].includes(fieldMetas.get(key)?.unit ?? '') ? `（${c?.fieldCurrencies?.[key] ?? c?.currency ?? 'CNY'}）` : ''}`,
       // 年报视图下把「2021H2」显示为「2021」
       periodLabels:
         granularity === 'annual'

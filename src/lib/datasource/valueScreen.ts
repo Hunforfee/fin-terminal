@@ -26,6 +26,9 @@ const PAGE_SIZE = 500;
 const PAGE_CEILING_PER_PERIOD = 120;
 /** Multi-period requests get more parallelism because each run fetches ~3x the pages. */
 const PAGE_CONCURRENCY = 8;
+/** Bound URL length and avoid replacing one full-market request with thousands of calls. */
+const REPORT_CODE_BATCH = 200;
+const REPORT_BATCH_CONCURRENCY = 2;
 const MAIN_COLUMNS = [
   'SECURITY_CODE', 'SECURITY_NAME_ABBR', 'REPORT_DATE', 'NOTICE_DATE', 'UPDATE_DATE',
   'CURRENCY', 'ROEJQ', 'XSJLL', 'TOTALOPERATEREVETZ', 'PARENTNETPROFITTZ',
@@ -88,8 +91,13 @@ export async function fetchValueScreenReportPages(
   fetcher: JsonFetcher = url => fetchJson<DataPage>(url, {
     timeoutMs: 15000, headers: { Referer: 'https://data.eastmoney.com/' },
   }),
+  codes?: string[],
 ): Promise<RawRow[]> {
-  if (periods.length === 0) return [];
+  if (periods.length === 0 || codes?.length === 0) return [];
+  if (codes?.some(code => !/^\d{6}$/.test(code))) throw Error('财报股票范围无效');
+  const selectedCodes = codes ? new Set(codes) : null;
+  const codeFilter = selectedCodes
+    ? `(SECURITY_CODE in (${[...selectedCodes].map(code => `"${code}"`).join(',')}))` : '';
   const inList = periods.map(period => `'${period}'`).join(',');
   // Each report date adds roughly 30 pages of full-market rows, so the sanity
   // ceiling has to scale with the requested dates instead of a fixed 100.
@@ -97,7 +105,7 @@ export async function fetchValueScreenReportPages(
   const read = async (page: number) => {
     const params = new URLSearchParams({
       reportName, columns,
-      filter: `(REPORT_DATE in (${inList}))(NOTICE_DATE<='${today} 23:59:59')`,
+      filter: `${codeFilter}(REPORT_DATE in (${inList}))(NOTICE_DATE<='${today} 23:59:59')`,
       sortColumns: 'SECURITY_CODE,REPORT_DATE,UPDATE_DATE,NOTICE_DATE,CURRENCY', sortTypes: '1,-1,-1,-1,1',
       pageNumber: String(page), pageSize: String(PAGE_SIZE),
     });
@@ -105,6 +113,8 @@ export async function fetchValueScreenReportPages(
     const result = response.result;
     if (!response.success || !result || !Array.isArray(result.data))
       throw Error('财报数据暂不可用，请稍后重试');
+    if (selectedCodes && result.data.some(row => !selectedCodes.has(String(row.SECURITY_CODE))))
+      throw Error('财报接口返回范围之外的股票，请重试');
     const pages = Number(result.pages), count = Number(result.count);
     if (!Number.isInteger(pages) || pages < 0 || pages > pageCeiling ||
       !Number.isInteger(count) || count < 0 ||
@@ -124,15 +134,23 @@ export async function fetchValueScreenReportPages(
 }
 
 /** Cache only raw reports. Prices and final valuation/filter results never use this TTL. */
-export async function fetchValueScreenReports(periods: string[], today: string): Promise<ValueScreenReports> {
+export async function fetchValueScreenReports(periods: string[], today: string, codes?: string[]): Promise<ValueScreenReports> {
+  if (periods.length === 0 || codes?.length === 0) return { main: [], income: [] };
+  if (codes?.some(code => !/^\d{6}$/.test(code))) throw Error('财报股票范围无效');
   const key = [...new Set(periods)].sort().join('~');
-  return cached(`value-screen-reports-v2:${key}:${today}`, 300e3, async () => {
-    const [main, income] = await Promise.all([
-      fetchValueScreenReportPages('RPT_F10_FINANCE_MAINFINADATA', MAIN_COLUMNS, periods, today),
-      fetchValueScreenReportPages('RPT_F10_FINANCE_GINCOME', INCOME_COLUMNS, periods, today),
-    ]);
-    return { main, income };
-  });
+  const selected = codes ? [...new Set(codes)].sort() : undefined;
+  const batches = selected
+    ? Array.from({ length: Math.ceil(selected.length / REPORT_CODE_BATCH) }, (_, index) => selected.slice(index * REPORT_CODE_BATCH, (index + 1) * REPORT_CODE_BATCH))
+    : [undefined];
+  const results = await mapLimit(batches, REPORT_BATCH_CONCURRENCY, batch =>
+    cached(`value-screen-reports-v3:${key}:${today}:${batch ? batch.join(',') : 'all'}`, 300e3, async () => {
+      const [main, income] = await Promise.all([
+        fetchValueScreenReportPages('RPT_F10_FINANCE_MAINFINADATA', MAIN_COLUMNS, periods, today, undefined, batch),
+        fetchValueScreenReportPages('RPT_F10_FINANCE_GINCOME', INCOME_COLUMNS, periods, today, undefined, batch),
+      ]);
+      return { main, income };
+    }));
+  return { main: results.flatMap(result => result.main), income: results.flatMap(result => result.income) };
 }
 
 function validReport(row: RawRow, allowedPeriods: Set<string>, today: string): boolean {
@@ -194,7 +212,7 @@ export interface ValueScreenOptions {
   now?: Date;
   universe?: ValueScreenCandidate[];
   periods?: string[];
-  reports?: (periods: string[], today: string) => Promise<ValueScreenReports>;
+  reports?: (periods: string[], today: string, codes?: string[]) => Promise<ValueScreenReports>;
 }
 
 /** Financial conditions run first; at most four 50-symbol quote batches run together. */
@@ -214,7 +232,11 @@ export async function runValueScreen(
     updatedAt: now.toISOString(), partial: false,
   };
   if (candidates.length === 0) return empty;
-  const reports = await (options.reports ?? fetchValueScreenReports)(periods, valueScreenToday(now));
+  // Keep the bulk path for a genuinely unrestricted full-directory scan. Every
+  // narrower industry/watchlist selection must constrain the upstream request.
+  const codes = !options.universe && candidates.length === universe.length
+    ? undefined : candidates.map(candidate => candidate.code);
+  const reports = await (options.reports ?? fetchValueScreenReports)(periods, valueScreenToday(now), codes);
   const financials = parseValueScreenFinancials(reports, periods, valueScreenToday(now));
   const all = candidates.map(candidate => {
     const financial = financials.get(candidate.code);

@@ -46,8 +46,7 @@ export default function IndustryMultiSelect({ options, included, onIncludedChang
     </summary>
     <div className="absolute left-0 top-full z-40 mt-1 w-64 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
       <input aria-label="搜索行业" placeholder="搜索行业" value={query} onChange={event => setQuery(event.target.value)} className="input !min-h-7 w-full !py-1 !text-xs" />
-      <div className="mt-2 flex items-center justify-between px-1 text-xs">
-        <span className="text-[11px] text-slate-500">只看这些行业</span>
+      <div className="mt-2 flex items-center justify-start px-1 text-xs">
         <button type="button" disabled={!options.length} onClick={() => onIncludedChange(allSelected ? [] : options.map(option => option.name))} className="text-brand-700 disabled:opacity-50">{allSelected ? '取消全选' : '全选'}</button>
       </div>
       <div className="mt-2 max-h-56 space-y-0.5 overflow-auto">

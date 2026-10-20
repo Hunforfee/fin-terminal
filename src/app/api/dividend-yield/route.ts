@@ -56,7 +56,7 @@ async function hkYield(
 ): Promise<Omit<DividendYieldRow, 'symbol'>> {
   try {
     const quote = await getQuote(symbol);
-    const v = await getHkCurrentValuation(symbol, quote?.price ?? null);
+    const v = await getHkCurrentValuation(symbol, quote?.stale ? null : quote?.price ?? null);
     return { dy: v.dividendYield, method: 'hk-static', fiscalYear: v.fiscalYear,
       perShare: { ordinary: v.ordinaryDps, special: v.specialDps, total: v.ttmDps } };
   } catch {

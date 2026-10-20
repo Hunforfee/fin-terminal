@@ -16,6 +16,7 @@ import {
 } from '@/lib/financeFieldSemantics';
 
 interface CompanyFinancials {
+  fieldCurrencies?: Record<string, string>;
   periodKinds?: Record<string,string>;
   currency?: string;
   code: string;
@@ -434,7 +435,7 @@ export default function FinanceTable({ code }: { code: string }) {
           return v === null ? '' : String(v);
         });
         lines.push(
-          [name || (r.meta?.label ?? r.key), unit, ...cells].map((x) => `"${x}"`).join(',')
+          [name || (r.meta?.label ?? r.key), `${unit}${['wan', 'yuan'].includes(r.meta?.unit ?? '') && c.fieldCurrencies?.[r.key] ? ` · ${c.fieldCurrencies[r.key]}` : ''}`, ...cells].map((x) => `"${x}"`).join(',')
         );
       }
     }
@@ -672,7 +673,7 @@ export default function FinanceTable({ code }: { code: string }) {
                                   <span className="font-medium text-slate-800">
                                     {r.meta?.label ?? r.key}
                                   </span>
-                                  <span className="text-[11px] font-normal text-slate-500">{unitText}</span>
+                                  <span className="text-[11px] font-normal text-slate-500">{unitText}{['wan', 'yuan'].includes(unit) && c.fieldCurrencies?.[r.key] ? ` · ${c.fieldCurrencies[r.key]}` : ''}</span>
                                 </div>
                               )}
                               {ci > 0 && (

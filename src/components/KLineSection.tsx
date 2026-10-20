@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { calendarRangeStart } from '@/lib/marketDataIntegrity';
 import KLineChart from '@/components/KLineChart';
 import MinuteChart from '@/components/MinuteChart';
 import type { Candle, MinutePoint, Period, Adjust } from '@/lib/datasource/types';
@@ -17,11 +18,11 @@ const ADJUSTS: { key: Adjust; label: string }[] = [
   { key: 'hfq', label: '后复权' },
 ];
 
-const RANGES: { key: string; label: string; count: number }[] = [
-  { key: '6m', label: '近半年', count: 130 },
-  { key: '1y', label: '近一年', count: 250 },
-  { key: '3y', label: '近三年', count: 640 },
-  { key: '5y', label: '近五年', count: 640 },
+const RANGES: { key: string; label: string; months: number }[] = [
+  { key: '6m', label: '近半年', months: 6 },
+  { key: '1y', label: '近一年', months: 12 },
+  { key: '3y', label: '近三年', months: 36 },
+  { key: '5y', label: '近五年', months: 60 },
 ];
 
 export interface KLineSectionProps {
@@ -34,9 +35,11 @@ export interface KLineSectionProps {
 /** K 线 / 分时区块：周期、复权、区间均可切换，切换后按需拉取 */
 export default function KLineSection({ code, isIndex = false, prevClose = null }: KLineSectionProps) {
   const [period, setPeriod] = useState<Period>('day');
-  const [adjust, setAdjust] = useState<Adjust>('qfq');
+  const isHk = /^(?:hk\d+|\d{4,5}(?:\.hk)?)$/i.test(code);
+  const [adjust, setAdjust] = useState<Adjust>(isHk ? 'none' : 'qfq');
   const [range, setRange] = useState(RANGES[1]);
   const [candles, setCandles] = useState<Candle[]>([]);
+  const [meta, setMeta] = useState<{ source: string; stale: boolean; adjust: Adjust } | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -49,11 +52,12 @@ export default function KLineSection({ code, isIndex = false, prevClose = null }
     setLoading(true);
     setErr(null);
     const adj = isIndex ? 'none' : adjust;
-    fetch(`/api/kline?code=${code}&period=${period}&adjust=${adj}&count=${range.count}`)
+    const count = period === 'day' ? range.months * 31 + 10 : period === 'week' ? Math.ceil(range.months * 4.5) + 2 : range.months + 2;
+    fetch(`/api/kline?code=${encodeURIComponent(code)}&period=${period}&adjust=${adj}&count=${count}&start=${calendarRangeStart(range.months)}`)
       .then((r) => r.json())
       .then((j) => {
         if (!alive) return;
-        if (j.ok) setCandles((j.data.candles ?? []) as Candle[]);
+        if (j.ok) { setCandles((j.data.candles ?? []) as Candle[]); setMeta({ source: j.data.source, stale: j.data.stale, adjust: j.data.adjust }); }
         else setErr(j.error ?? 'K 线获取失败');
       })
       .catch((e) => alive && setErr(String(e)))
@@ -61,7 +65,9 @@ export default function KLineSection({ code, isIndex = false, prevClose = null }
     return () => {
       alive = false;
     };
-  }, [code, period, adjust, range.count, isIndex]);
+  }, [code, period, adjust, range.months, isIndex]);
+
+  useEffect(() => { setMinute([]); }, [code]);
 
   useEffect(() => {
     if (!showMinute || minute.length > 0) return;
@@ -159,7 +165,10 @@ export default function KLineSection({ code, isIndex = false, prevClose = null }
         </>
       )}
       {!err && !loading && !showMinute && candles.length > 0 && (
-        <KLineChart candles={candles} height={430} />
+        <>
+          <div className="mb-2 text-xs text-slate-500">{candles[0].date} 至 {candles.at(-1)?.date} · 实际 {candles.length} 根 · {ADJUSTS.find(a => a.key === meta?.adjust)?.label} · {meta?.source}{meta?.stale ? ' · 历史快照，非实时' : ''}</div>
+          <KLineChart candles={candles} height={430} />
+        </>
       )}
     </div>
   );

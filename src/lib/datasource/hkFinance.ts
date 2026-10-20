@@ -59,7 +59,7 @@ function reportDate(row: DcRow): string | null {
 }
 
 function num(v: unknown): number | null {
-  if (v === null || v === undefined || v === '') return null;
+  if ((typeof v !== 'string' && typeof v !== 'number') || (typeof v === 'string' && !v.trim())) return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
@@ -87,12 +87,13 @@ export async function fetchHkIndicatorPoints(secucode: string, years = 12): Prom
     headers: { Referer: 'https://emweb.securities.eastmoney.com/' },
   });
   const rows = j.result?.data ?? [];
+  const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
   const cutoff = new Date();
   cutoff.setUTCFullYear(cutoff.getUTCFullYear() - years);
   const points = rows
     .map((r) => {
       const d = reportDate(r);
-      if (!d) return null;
+      if (!d || d > today) return null;
       const raw: Record<string, number | null> = {};
       for (const [k, v] of Object.entries(r)) {
         if (typeof v === 'number' || (typeof v === 'string' && v !== '' && Number.isFinite(Number(v)))) {
@@ -122,7 +123,8 @@ const METRIC_FNS: Record<string, Fn> = {
     const inc = num(p.raw.OPERATE_INCOME);
     return op !== null && inc !== null && inc !== 0 ? (op / inc) * 100 : null;
   },
-  mainMargin: (p) => num(p.raw.GROSS_PROFIT_RATIO),
+  // Gross margin is not operating/main-business profit margin.
+  mainMargin: () => null,
   roa: (p) => num(p.raw.ROA),
   revenueGrowth: (p) => num(p.raw.OPERATE_INCOME_YOY),
   profitGrowth: (p) => num(p.raw.HOLDER_PROFIT_YOY),
@@ -145,8 +147,10 @@ const METRIC_FNS: Record<string, Fn> = {
   },
   ocfToProfit: (p) => {
     const ocf = num(p.raw.NETCASH_OPERATE);
-    const np = num(p.raw.HOLDER_PROFIT);
-    return ocf !== null && np !== null && np !== 0 ? (ocf / np) * 100 : null;
+    // Match the consolidated-profit denominator used by the A-share metric.
+    // HOLDER_PROFIT excludes minority interests and must not replace it.
+    const np = num(p.raw.NET_PROFIT);
+    return ocf !== null && np !== null && np > 0 ? (ocf / np) * 100 : null;
   },
   cashFlowRatio: () => null,
   eps: (p) => num(p.raw.BASIC_EPS),
@@ -370,7 +374,10 @@ export async function fetchHkCustomFinancials(
     periods,
     periodLabels: periods.map(d => points.find(p => p.date === d)?.label ?? d),
     periodKinds: Object.fromEntries(points.map(p => [p.date,p.kind])),
-    currency: points.at(-1)?.currency,
+    // Main-indicator CURRENCY is the trading counter, not the long statements'
+    // accounting currency. Never label CNY Tencent statements as HKD.
+    currency: statementFields.length ? '原币未核实' : 'CNY',
+    fieldCurrencies: Object.fromEntries(fields.map(key => [key, /^(bs|pl|cf)_/i.test(key) ? '原币未核实' : 'CNY'])),
     series,
     source: PROVIDER_NAME,
   };
@@ -386,7 +393,7 @@ export function filterHkPeriods<T extends {periods:string[];periodLabels:string[
 /** Current metrics share the list calculation; no unverified historical curves. */
 export function summarizeHkSnapshot(
   points: IndicatorPoint[], code: string,
-  quote: { price: number | null; pe: number | null; pb?: number | null; ts?: string | null },
+  quote: { price: number | null; pe: number | null; marketPe?: number | null; pb?: number | null; ts?: string | null },
   date: string, years: number, current?: HkValuation,
 ): Valuation {
   const latest = points.filter(p => p.date <= date).at(-1);
@@ -412,7 +419,7 @@ export function summarizeHkSnapshot(
     stats: { pe: empty(pe), pb: empty(pb), dy: empty(dy), from: date, to: date },
     method: 'disclosure', source: PROVIDER_NAME, stale: false,
     historyUnavailableReason: '港股财报接口未提供可核验的历史公告日及历史分红快照，暂不计算历史估值曲线和分位。',
-    marketComparison: { pe: quote.pe, pb: quote.pb ?? null, ts: quote.ts ?? null },
+    marketComparison: { pe: quote.marketPe === undefined ? quote.pe : quote.marketPe, pb: quote.pb ?? null, ts: quote.ts ?? null },
     warnings: [
       '港股当前 PB 使用同一快照的港元市值、普通股数与 PB 恢复港元每股净资产，再按当前价计算。PE 保留上游 TTM 口径并按当前价更新，不将人民币 EPS_TTM 直接除以港元股价。',
       '港股股息率为最新完整财年已实施现金分红（含特别现金股息）除以当前港元股价；未验证的历史公告日期、分红时点不回填历史曲线。',

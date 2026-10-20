@@ -169,7 +169,6 @@ export function downsample<T>(arr: T[], max: number): T[] {
 export function buildFinancialSummary(q: Quote, real?: FinancialSummary): FinancialSummary {
   if (real && real.provenance === 'fetched') return real;
   const d = deriveFinancials(q);
-  const g = impliedGrowth(q);
   // 单期：只有 TTM 口径是可靠的
   return {
     code: q.code,
@@ -180,11 +179,11 @@ export function buildFinancialSummary(q: Quote, real?: FinancialSummary): Financ
     grossMargin: [null],
     debtRatio: [null],
     revenueGrowth: [null],
-    profitGrowth: [g === null ? null : g * 100],
+    profitGrowth: [null],
     provenance: 'derived',
     note:
       '营收/毛利率/负债率需三表数据，当前由行情估值字段按 PE/PB 恒等式派生出净利润、净资产与 ROE；' +
-      '接入同花顺 iFinD 后可自动切换为真实财报口径',
+      'PB/PE 派生值不等于披露的加权平均 ROE；静态与动态 PE 的比值不作为净利润同比。接入同花顺 iFinD 后可切换为真实财报口径',
   };
 }
 

@@ -107,7 +107,8 @@ test('HK EPS is not divided by ten thousand; statement amounts still normalize t
     assert.deepEqual(data.series.pl_irevenue, [20000]);
     assert.deepEqual(data.series.pl_ieps, [1.25]);
     assert.deepEqual(data.series['pl_ieps-cent'], [125]);
-    assert.equal(data.currency, 'HKD');
+    assert.equal(data.currency, '原币未核实');
+    assert.equal(data.fieldCurrencies.pl_ieps, '原币未核实');
   } finally {
     globalThis.fetch = originalFetch;
   }

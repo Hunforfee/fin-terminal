@@ -257,13 +257,13 @@ export default function IndustryNavigator({
                 {renderRow(group.first)}
                 {openFirst(group.first.selection.l1) && (
                   <div className="relative">
-                    <span aria-hidden="true" className={`pointer-events-none absolute bottom-0 left-[13px] top-0 w-[1.5px] rounded-full ${LEVEL_GUIDE[2]}`} />
+                    <span aria-hidden="true" className={`pointer-events-none absolute bottom-0 left-[13px] top-0 z-10 w-[1.5px] rounded-full ${LEVEL_GUIDE[2]}`} />
                     {group.seconds.map(entry => (
                       <div key={`s:${entry.second.selection.l2}`} className="relative">
                         {renderRow(entry.second)}
                         {openSecond(`${entry.second.selection.l1}/${entry.second.selection.l2}`) && entry.thirds.length > 0 && (
                           <div className="relative">
-                            <span aria-hidden="true" className={`pointer-events-none absolute bottom-0 left-[23px] top-0 w-[1.5px] rounded-full ${LEVEL_GUIDE[3]}`} />
+                            <span aria-hidden="true" className={`pointer-events-none absolute bottom-0 left-[23px] top-0 z-10 w-[1.5px] rounded-full ${LEVEL_GUIDE[3]}`} />
                             {entry.thirds.map(row => (
                               <div key={`t:${row.selection.l3}`} className="relative">
                                 {renderRow(row)}

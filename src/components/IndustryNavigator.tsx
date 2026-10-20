@@ -193,7 +193,7 @@ export default function IndustryNavigator({
                   {guideLeft !== null && (
                     <span
                       aria-hidden="true"
-                      className="pointer-events-none absolute bottom-0 top-0 border-l border-slate-300"
+                      className="pointer-events-none absolute bottom-0 top-0 w-[1.5px] rounded-full bg-brand-400"
                       style={{ left: guideLeft }}
                     />
                   )}

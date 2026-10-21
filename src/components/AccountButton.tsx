@@ -4,23 +4,20 @@ import { useEffect, useRef, useState } from 'react';
 import { useAccount } from './AccountProvider';
 import Modal from './Modal';
 
-/** 大陆手机号：11 位、1 开头。 */
-const PHONE_RE = /^1\d{10}$/;
+const USERNAME_RE = /^[\w\u4e00-\u9fa5-]{3,24}$/;
 
 export default function AccountButton() {
   const account = useAccount();
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<'phone' | 'workbuddy'>('phone');
-  const [phone, setPhone] = useState('');
-  const [code, setCode] = useState('');
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [codeSent, setCodeSent] = useState(false);
-  const [retryAfter, setRetryAfter] = useState(0);
-  const [countdown, setCountdown] = useState(0);
   const menu = useRef<HTMLDetailsElement>(null);
-  const validPhone = PHONE_RE.test(phone);
-  const validCode = /^\d{4,8}$/.test(code);
+  const validUsername =
+    USERNAME_RE.test(username) && !/^\d{11}$/.test(username);
+  const validPassword = password.length >= 8;
   useEffect(() => {
     const outside = (event: PointerEvent) => {
       if (menu.current && !menu.current.contains(event.target as Node))
@@ -36,64 +33,32 @@ export default function AccountButton() {
       document.removeEventListener('keydown', escape);
     };
   }, []);
-  useEffect(() => {
-    if (retryAfter <= 0) return;
-    const id = setInterval(() => setRetryAfter((v) => Math.max(0, v - 1)), 1000);
-    return () => clearInterval(id);
-  }, [retryAfter]);
-  useEffect(() => {
-    if (countdown <= 0) return;
-    const id = setInterval(() => setCountdown((v) => Math.max(0, v - 1)), 1000);
-    return () => clearInterval(id);
-  }, [countdown]);
-  async function handleSendCode() {
-    if (!validPhone || submitting) return;
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!validUsername || !validPassword || submitting) return;
     setSubmitting(true);
     setError('');
     try {
-      await account.sendPhoneCode(phone);
-      setCodeSent(true);
-      setRetryAfter(60);
-      setCountdown(60);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '发送失败');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-  async function handleVerify() {
-    if (!validPhone || !validCode || submitting) return;
-    setSubmitting(true);
-    setError('');
-    try {
-      await account.verifyPhoneCode(phone, code);
+      if (mode === 'register') {
+        await account.register(username, password);
+      } else {
+        await account.login(username, password);
+      }
       setOpen(false);
-      setCode('');
-      setCodeSent(false);
+      setPassword('');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '验证失败');
+      setError(cause instanceof Error ? cause.message : '操作失败');
     } finally {
       setSubmitting(false);
     }
   }
-  async function handleWorkBuddy() {
-    setSubmitting(true);
-    setError('');
-    try {
-      await account.signInWithWorkBuddy();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '登录失败');
-      setSubmitting(false);
-    }
-  }
-  const syncText =
-    {
-      loading: '正在同步',
-      saving: '正在保存',
-      synced: '已同步',
-      local: '本机已保存',
-      conflict: '同步冲突',
-    }[account.status] ?? '';
+  const syncText = {
+    loading: '正在同步',
+    saving: '正在保存',
+    synced: '已同步',
+    local: '本机已保存',
+    conflict: '同步冲突',
+  }[account.status];
   return (
     <>
       {account.user ? (
@@ -123,14 +88,12 @@ export default function AccountButton() {
                   本机与云端都有修改，请选择保留的版本。
                 </div>
                 <button
-                  type="button"
                   className="w-full rounded-md bg-brand-50 px-2 py-2 text-left text-xs text-brand-700"
                   onClick={() => account.resolveConflict('cloud')}
                 >
                   使用云端版本
                 </button>
                 <button
-                  type="button"
                   className="w-full rounded-md px-2 py-2 text-left text-xs text-slate-600 hover:bg-slate-50"
                   onClick={() => account.resolveConflict('local')}
                 >
@@ -185,25 +148,25 @@ export default function AccountButton() {
         </button>
       )}
       <Modal open={open} title="账号登录" onClose={() => setOpen(false)}>
-        <div className="space-y-4">
-          <div className="flex gap-1.5" role="tablist" aria-label="登录方式">
+        <form onSubmit={submit} className="space-y-4">
+          <div className="flex gap-1.5" role="tablist" aria-label="登录或注册">
             {(
               [
-                ['phone', '手机号登录'],
-                ['workbuddy', 'WorkBuddy 登录'],
+                ['login', '登录'],
+                ['register', '注册新账号'],
               ] as const
             ).map(([k, label]) => (
               <button
                 key={k}
                 type="button"
                 role="tab"
-                aria-selected={tab === k}
+                aria-selected={mode === k}
                 onClick={() => {
-                  setTab(k);
+                  setMode(k);
                   setError('');
                 }}
                 className={`min-h-8 flex-1 rounded-lg px-3 text-xs font-medium transition ${
-                  tab === k
+                  mode === k
                     ? 'bg-brand-600 text-white'
                     : 'border border-slate-200 bg-white text-slate-600 hover:border-brand-300'
                 }`}
@@ -212,90 +175,60 @@ export default function AccountButton() {
               </button>
             ))}
           </div>
-
-          {tab === 'phone' ? (
-            <div className="space-y-3">
-              <label className="block">
-                <span className="mb-2 block text-xs text-slate-500">手机号</span>
-                <input
-                  aria-label="手机号"
-                  inputMode="numeric"
-                  autoComplete="tel"
-                  value={phone}
-                  maxLength={11}
-                  onChange={(e) => {
-                    setPhone(e.target.value.replace(/\D/g, '').slice(0, 11));
-                    setError('');
-                    setCodeSent(false);
-                  }}
-                  placeholder="请输入 11 位手机号"
-                  className="input min-h-11 w-full"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-xs text-slate-500">验证码</span>
-                <div className="flex gap-2">
-                  <input
-                    aria-label="验证码"
-                    inputMode="numeric"
-                    value={code}
-                    maxLength={8}
-                    onChange={(e) => {
-                      setCode(e.target.value.replace(/\D/g, ''));
-                      setError('');
-                    }}
-                    placeholder="6 位短信验证码"
-                    className="input min-h-11 w-full"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSendCode}
-                    disabled={!validPhone || submitting || countdown > 0}
-                    className="shrink-0 rounded-lg border border-slate-200 px-3 text-xs text-slate-600 hover:border-brand-300 hover:text-brand-700 disabled:opacity-50"
-                  >
-                    {countdown > 0 ? `${countdown}s` : '获取验证码'}
-                  </button>
-                </div>
-              </label>
-              {error && (
-                <p role="alert" className="text-xs text-red-600">
-                  {error}
-                </p>
-              )}
-              <button
-                type="button"
-                onClick={handleVerify}
-                disabled={!validPhone || !validCode || submitting}
-                className="btn-primary w-full"
-              >
-                {submitting ? '验证中…' : '登录 / 注册'}
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {error && (
-                <p role="alert" className="text-xs text-red-600">
-                  {error}
-                </p>
-              )}
-              <button
-                type="button"
-                onClick={handleWorkBuddy}
-                disabled={submitting}
-                className="btn-primary w-full"
-              >
-                {submitting ? '跳转中…' : '使用 WorkBuddy 登录'}
-              </button>
-              <p className="text-center text-[11px] leading-4 text-slate-400">
-                将跳转到 WorkBuddy 统一登录，授权后返回本应用。
-              </p>
-            </div>
+          <label className="block">
+            <span className="mb-2 block text-xs text-slate-500">用户名</span>
+            <input
+              aria-label="用户名"
+              autoComplete="username"
+              value={username}
+              maxLength={24}
+              onChange={(e) => {
+                setUsername(e.target.value.trim());
+                setPassword('');
+                setError('');
+              }}
+              placeholder="3-24 位字母、数字、下划线或中文"
+              className="input min-h-11 w-full"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-xs text-slate-500">密码</span>
+            <input
+              aria-label="密码"
+              autoComplete={
+                mode === 'register' ? 'new-password' : 'current-password'
+              }
+              type="password"
+              value={password}
+              maxLength={128}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setError('');
+              }}
+              placeholder="至少 8 位"
+              className="input min-h-11 w-full"
+            />
+          </label>
+          {error && (
+            <p role="alert" className="text-xs text-red-600">
+              {error}
+            </p>
           )}
-
+          <button
+            type="submit"
+            disabled={!validUsername || !validPassword || submitting}
+            className="btn-primary w-full"
+          >
+            {submitting
+              ? '提交中…'
+              : mode === 'register'
+                ? '注册并登录'
+                : '登录'}
+          </button>
           <p className="text-center text-[11px] leading-4 text-slate-400">
-            登录后自选分组、研究笔记、财务配置与 AI 分析历史随账号保存在云端。
+            登录后自选分组、研究笔记、财务配置与 AI 分析历史随账号保存。
           </p>
-        </div>
+        </form>
       </Modal>
     </>
   );

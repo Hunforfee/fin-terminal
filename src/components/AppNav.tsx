@@ -15,6 +15,8 @@ const items = [
   ['/screener', '条件选股'],
   ['/fund', '基金'],
 ] as const;
+// 数据查看器是独立只读应用，经反代挂在 /market-data，用普通 <a> 整页导航（非 Link）
+const externalItems = [['/market-data', '数据查看器']] as const;
 export default function AppNav() {
   const pathname = usePathname();
   const { codes } = useWatchlist();
@@ -42,6 +44,19 @@ export default function AppNav() {
             >
               {label}
             </Link>
+        );
+      })}
+      {externalItems.map(([href, label]) => {
+        const active = pathname.startsWith(href);
+        return (
+          <a
+            key={href}
+            href={href}
+            aria-current={active ? 'page' : undefined}
+            className={`shrink-0 rounded-md px-2.5 py-1.5 text-xs font-medium transition ${active ? 'bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-100' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+          >
+            {label}
+          </a>
         );
       })}
       <div role="group" aria-label="研究工具" className="ml-2 flex shrink-0 items-center gap-2 border-l border-slate-200 pl-3">

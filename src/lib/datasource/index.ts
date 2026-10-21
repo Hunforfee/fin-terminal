@@ -22,6 +22,7 @@ import { fetchDisclosureDates } from './disclosures';
 import * as tencent from './tencent';
 import * as sina from './sina';
 import * as eastmoney from './eastmoney';
+import * as eastmoneyKline from './eastmoneyKline';
 import * as ifind from './ifind';
 import * as snapshot from './snapshot';
 import * as hkFinance from './hkFinance';
@@ -375,6 +376,10 @@ export async function getKLine(
           return { ...series, candles: series.candles.filter(c => !request.start || c.date >= request.start).slice(-request.count) };
         } catch { /* historical snapshot remains explicitly stale */ }
       }
+      try{
+        const value=await eastmoneyKline.fetchKLine(n.symbol,period,adjust,request.count,request.start,request.end);
+        validateKLine(value,request);return value;
+      }catch{ /* Unavailable is never substituted with another adjustment basis. */ }
       const snap = await snapshot.snapshotKLine(n.symbol, period);
       if (snap && snap.adjust === adjust) return { ...snap, stale: true, complete: false,
         candles: snap.candles.filter(c => (!request.start || c.date >= request.start) && (!request.end || c.date <= request.end)).slice(-request.count) };

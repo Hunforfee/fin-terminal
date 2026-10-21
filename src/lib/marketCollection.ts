@@ -31,7 +31,12 @@ export async function scheduleMarketClose(store:MarketStore,now=Date.now()){
     let previous=await store.read<{date:string;symbols:string[];cursor:number;done:boolean}>(SCHEDULE);
     if(previous?.payload.date===target && previous.payload.done)return {scheduled:0};
     const registry=await store.read<Registry>(KEY);
-    const symbols=previous?.payload.date===target ? previous.payload.symbols : [...new Set(Object.values(registry?.payload.owners??{}).flatMap(v=>v.symbols))].sort();
+    const registered=[...new Set(Object.values(registry?.payload.owners??{}).flatMap(v=>v.symbols))].sort();
+    // Group-by-group initialization is explicit. Merely opening a watchlist
+    // must not enqueue the untouched remainder at the next daily close.
+    const symbols=previous?.payload.date===target ? previous.payload.symbols :
+      (await Promise.all(registered.map(async symbol=>await store.read(`market-coverage:v1:${symbol}:5`)?symbol:null)))
+        .filter((symbol):symbol is string=>symbol!==null);
     const cursor=previous?.payload.date===target?previous.payload.cursor:0;
     if(previous?.payload.date!==target){
       const snapshot=marketRecord(SCHEDULE,'market-close-schedule','internal',{date:target,symbols,cursor:0,done:false,at:now},864e5,now);

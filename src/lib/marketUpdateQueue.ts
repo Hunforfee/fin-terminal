@@ -7,7 +7,7 @@ const COOLDOWN = 10 * 60e3;
 const LEASE = 5 * 60e3;
 type State = 'queued' | 'running' | 'done' | 'failed';
 export type UpdateMode = 'recent' | 'five-year';
-interface Item { symbol: string; state: State; attempts: number; nextAt: number; mode?:UpdateMode; phase?:number; doneAt?: number; error?: string; lease?: string; leaseUntil?: number }
+interface Item { symbol: string; state: State; attempts: number; nextAt: number; mode?:UpdateMode; initialize?:boolean; phase?:number; phaseErrors?:Record<string,string>; doneAt?: number; error?: string; lease?: string; leaseUntil?: number }
 interface Job { id: string; owner: string; symbols: string[]; skipped: string[]; createdAt: number; mode?:UpdateMode; finishedAt?: number; result?: { done: number; failed: number; errors: { symbol: string; message: string }[] } }
 interface Queue { jobs: Job[]; items: Record<string, Item>; workerAt: number; pauseUntil: number }
 export interface UpdateProgress { id: string; mode?:UpdateMode; phase?:number; total: number; done: number; skipped: number; failed: number; running: number; waiting: number; finished: boolean; workerOnline: boolean; pausedUntil: number; errors: { symbol: string; message: string }[] }
@@ -47,6 +47,8 @@ export class MarketUpdateQueue {
   }
   async submit(owner: string, codes: unknown, retry = false, mode:UpdateMode='recent'): Promise<UpdateProgress> {
     const symbols = updateSymbols(codes);
+    const initialization=new Map(await Promise.all(symbols.map(async symbol=>[symbol,mode==='five-year' ||
+      (await this.store.read<{status:string}>(`market-coverage:v1:${symbol}:5`))?.payload.status!=='ready'] as const)));
     return this.change((q, now) => {
       const previous = q.jobs.filter(j => j.owner === owner).at(-1);
       if (previous && !this.progress(q, previous, now).finished) return this.progress(q, previous, now);
@@ -68,7 +70,9 @@ export class MarketUpdateQueue {
           continue;
         }
         if (item?.state === 'failed' && now - (item.doneAt ?? 0) < 60e3) throw new UpdateQueueError('失败后请稍候再重试', 429);
-        q.items[symbol] = { symbol, state: 'queued', attempts: 0, nextAt: now, mode, phase:retry && item?.mode===mode ? item.phase??0 : 0 };
+        const resume=retry && item?.mode===mode;
+        const phase=resume?Math.min(item.phase??0,...Object.keys(item.phaseErrors??{}).map(Number)):0;
+        q.items[symbol] = { symbol, state: 'queued', attempts: 0, nextAt: now, mode,initialize:resume?item.initialize:initialization.get(symbol),phase,...(resume?{phaseErrors:item.phaseErrors}:{}) };
       }
       const job: Job = { id: randomUUID(), owner, symbols, skipped, createdAt: now,mode };
       q.jobs.push(job); return this.progress(q, job, now);
@@ -79,7 +83,7 @@ export class MarketUpdateQueue {
     const job = q?.jobs.filter(j => j.owner === owner).at(-1);
     return q && job ? this.progress(q, job, this.clock()) : null;
   }
-  async claim(): Promise<{ symbol: string; lease: string; mode:UpdateMode;phase:number } | null> {
+  async claim(): Promise<{ symbol: string; lease: string; mode:UpdateMode;phase:number;initialize?:boolean } | null> {
     return this.change((q, now) => {
       q.workerAt = now;
       if (q.pauseUntil > now) return null;
@@ -90,7 +94,7 @@ export class MarketUpdateQueue {
       const item = Object.values(q.items).find(i => i.state === 'queued' && i.nextAt <= now);
       if (!item) return null;
       item.state = 'running'; item.attempts++; item.lease = randomUUID(); item.leaseUntil = now + LEASE;
-      return { symbol: item.symbol, lease: item.lease,mode:item.mode??'recent',phase:item.phase??0 };
+      return { symbol: item.symbol, lease: item.lease,mode:item.mode??'recent',phase:item.phase??0,initialize:item.initialize };
     });
   }
   async renew(symbol: string, lease: string): Promise<boolean> {
@@ -105,8 +109,12 @@ export class MarketUpdateQueue {
       const i = q.items[symbol];
       if (!i || i.state !== 'running' || i.lease !== lease || (i.leaseUntil ?? 0) <= now) return false;
       q.workerAt = now; i.error = error?.slice(0, 180);
-      if(!error && nextPhase!==undefined){i.state='queued';i.phase=nextPhase;i.attempts=0;i.nextAt=now+1000;}
-      else if (!error) { i.state = 'done'; i.doneAt = now; }
+      if(!error && i.phaseErrors)delete i.phaseErrors[String(i.phase??0)];
+      if(nextPhase!==undefined){
+        if(error){i.phaseErrors??={};i.phaseErrors[String(i.phase??0)]=error.slice(0,180);}
+        i.state='queued';i.phase=nextPhase;i.attempts=0;i.nextAt=now+1000;
+      }
+      else if (!error) { i.state = 'done'; i.doneAt = now;delete i.phaseErrors; }
       else if (i.attempts < 3) { i.state = 'queued'; i.nextAt = now + Math.min(15 * 60e3, 60e3 * 3 ** (i.attempts - 1)); }
       else { i.state = 'failed'; i.doneAt = now; }
       if (limited) q.pauseUntil = Math.max(q.pauseUntil, now + 5 * 60e3);

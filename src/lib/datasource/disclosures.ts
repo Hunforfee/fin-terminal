@@ -1,4 +1,5 @@
 import { fetchText, fetchJson } from './http';
+import { validMarketDate } from '../marketSecurityBasics';
 
 /** Original Chinese reports only: translated versions and corrections are not first disclosure dates. */
 export function parseDisclosureDates(html: string): Map<string, string> {
@@ -29,7 +30,11 @@ export async function fetchDisclosureDates(code: string, fromYear: number): Prom
     fetchDisclosureDatesFromEastmoney(code, fromYear).catch(() => new Map<string, string>()),
   ]);
   const result = new Map<string, string>();
+  const today=new Date(Date.now()+8*3600e3).toISOString().slice(0,10);
   for (const dates of [sina, eastmoney]) for (const [report, date] of dates) {
+    // The schedule API can already list tomorrow's planned announcement.
+    // Keep earlier actual disclosures; a plan is not an effective report date.
+    if(!validMarketDate(report) || !validMarketDate(date) || date<=report || date>today)continue;
     if (!result.has(report) || date < result.get(report)!) result.set(report, date);
   }
   return result;

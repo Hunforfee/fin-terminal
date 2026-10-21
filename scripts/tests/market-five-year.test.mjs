@@ -116,6 +116,7 @@ test('multi-phase jobs checkpoint and resume, and a recent update cannot satisfy
 
 test('close scheduler deduplicates overlapping groups and only schedules once per close date',async()=>{
  const store=memory();await registerCollection(store,'one',['600519','300498']);await registerCollection(store,'two',['600519']);
+ for(const symbol of ['sh600519','sz300498'])await store.write(marketRecord(`market-coverage:v1:${symbol}:5`,'market-coverage','test',{status:'ready'},60000,now),null);
  assert.equal(closeTarget(Date.parse('2026-10-21T10:29:00Z')),'2026-10-20');
  assert.equal(closeTarget(Date.parse('2026-10-21T10:30:00Z')),'2026-10-21');
  assert.equal(closeTarget(Date.parse('2026-10-24T10:30:00Z')),'2026-10-23');
@@ -124,4 +125,11 @@ test('close scheduler deduplicates overlapping groups and only schedules once pe
  const q=new MarketUpdateQueue(store,()=>now);assert.ok(await q.claim());assert.equal(await q.claim(),null);
  await registerCollection(store,'one',[]);await registerCollection(store,'two',[]);
  assert.equal((await scheduleMarketClose(store,now+864e5)).scheduled,0);
+});
+
+test('daily updates do not initialize untouched stocks from other watchlist groups',async()=>{
+ const store=memory();await registerCollection(store,'one',['600519','300498']);
+ await store.write(marketRecord('market-coverage:v1:sh600519:5','market-coverage','test',{status:'ready'},60000,now),null);
+ assert.equal((await scheduleMarketClose(store,now)).scheduled,1);
+ const q=new MarketUpdateQueue(store,()=>now),task=await q.claim();assert.equal(task.symbol,'sh600519');assert.equal(task.initialize,false);
 });

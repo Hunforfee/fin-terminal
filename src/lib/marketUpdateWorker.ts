@@ -24,9 +24,13 @@ export async function runMarketUpdateTick() {
   const budget = new UpstreamBudget(abort.signal);
   let error: string | undefined;
   let nextPhase:number|undefined;
+  let initializing=task.mode==='five-year';
   try {
-    const historical=task.mode==='five-year' || !!await store.read(coverageKey(task.symbol));
-    const phases=task.mode==='five-year' ? [0,1,2,3,4,5,6,7,8,9,10,11,13,12] : historical ? [2,0,1,3,4,10,11,13,12] : [2];
+    const coverage=await store.read<{status:string}>(coverageKey(task.symbol));
+    // New/partial stocks must initialize from website APIs even when added after
+    // deployment or submitted by the daily "recent" scheduler. No broker seed.
+    const initialize=initializing=task.initialize??(task.mode==='five-year' || coverage?.payload.status!=='ready');
+    const phases=initialize ? [0,1,2,3,4,5,6,7,8,9,10,11,13,12] : [2,0,1,3,4,10,11,13,12];
     const phase=phases[task.phase];
     if(phase===undefined)throw Error('后台任务阶段无效');
     await withUpstreamBudget(budget, async () => {
@@ -71,7 +75,13 @@ export async function runMarketUpdateTick() {
       abort.signal.throwIfAborted();
     });
     if(task.phase<phases.length-1)nextPhase=task.phase+1;
-  } catch (e) { error = e instanceof Error ? e.message : '更新失败'; }
+  } catch (e) {
+    error = e instanceof Error ? e.message : '更新失败';
+    // A failing price mirror must not prevent independent financial inputs from
+    // being saved. The final DB-only readiness gate still rejects missing facts.
+    const last=initializing?13:8;
+    if(task.phase<last && !abort.signal.aborted)nextPhase=task.phase+1;
+  }
   finally { abort.abort(Error('本次任务已结束')); clearInterval(heartbeat); clearTimeout(deadline); }
   const accepted = await queue.finish(task.symbol, task.lease, error, budget.limited,nextPhase);
   return { processed: true, accepted, symbol: task.symbol, ok: !error };

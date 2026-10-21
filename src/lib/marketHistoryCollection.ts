@@ -18,6 +18,7 @@ import { getFinancialReports } from './datasource/financialReports';
 import { fetchDebtRatios } from './datasource/debtRatios';
 import { fetchInterestExpenses } from './datasource/interestExpenses';
 import { fetchDeductedPeriods } from './datasource/deductedPe';
+import { getSecurityBasics,securityBasicsKey,type SecurityBasics } from './marketSecurityBasics';
 
 export const COLLECTION_LAST_PHASE=13;
 export const coverageKey=(symbol:string)=>`market-coverage:v1:${symbol}:5`;
@@ -34,6 +35,7 @@ export async function collectHistoryPhase(symbol:string,phase:number,signal:Abor
   const store=getMarketStore();if(!store)throw Error('市场数据库尚未配置');
   const n=normalizeStockCode(symbol)!;
   if(phase===0 || phase===1){
+    if(phase===0)try{await getSecurityBasics(symbol);}catch{await store.incident(symbol,'listing_date_unavailable');}
     const adjust=phase===0?'none':'qfq';
     const prices=await getKLine(symbol,'day',adjust,1500,fiveYearStart());
     if(prices.stale || prices.complete===false || prices.storage?.backend!=='persistent')throw Error('五年价格未确认完整入库');
@@ -54,7 +56,9 @@ export async function collectHistoryPhase(symbol:string,phase:number,signal:Abor
       // Confirm an old year already has rows before requesting it. A new listing is
       // allowed to retain a shorter range only with a verified listing date.
       const imported=await store.read<ImportedBars>(importedBarsKey(symbol));
-      if(imported?.payload.listingDate && year<Number(imported.payload.listingDate.slice(0,4)))return;
+      const basics=await store.read<SecurityBasics>(securityBasicsKey(symbol));
+      const listingDate=basics?.payload.listingDate??imported?.payload.listingDate;
+      if(listingDate && year<Number(listingDate.slice(0,4)))return;
       for(const id of ['balance','profit','cashflow'] as const){
         await fetchStatementSourcePage(n.code,id,year);
         await persistCheck(store,`source-sina-page:v1:${n.code}:${id}:${year}`);
@@ -89,15 +93,44 @@ export async function collectHistoryPhase(symbol:string,phase:number,signal:Abor
     await withUpstreamBudget(new UpstreamBudget(signal,1500,40,true),async()=>{
       const prices=await getKLine(symbol,'day','none',1500,fiveYearStart());
       const imported=await store.read<ImportedBars>(importedBarsKey(symbol));
-      const expected=imported?.payload.listingDate && imported.payload.listingDate>fiveYearStart()?imported.payload.listingDate:fiveYearStart();
+      const basics=await store.read<SecurityBasics>(securityBasicsKey(symbol));
+      const listingDate=basics?.payload.listingDate??imported?.payload.listingDate;
+      const expected=listingDate && listingDate>fiveYearStart()?listingDate:fiveYearStart();
       const rangeCovered=Date.parse(prices.candles[0].date)-Date.parse(expected)<=14*864e5;
-      const valuation=await getValuation(symbol,5);
-      const valuationMissing=n.market!=='HK' && (!valuation.history.length || valuation.history[0].date>prices.candles[0].date);
+      const missingInputs:string[]=[];
+      if(n.market!=='HK'){
+        const required=[`screen-company-input:v1:${n.code}:eastmoney:CNY`,`watchlist-financial-inputs:v1:${symbol}`,
+          `shares-v3:${n.code}`,`implemented-dividends-v4:${n.code}`,`dividend-plans-v2:${n.code}`,`disclosures-v3:${n.code}:7`,`statements-v3:${n.code}:6`];
+        for(let year=new Date().getUTCFullYear();year>=new Date().getUTCFullYear()-6;year--){
+          if(listingDate && year<Number(listingDate.slice(0,4)))continue;
+          for(const id of ['balance','profit','cashflow'])required.push(`source-sina-page:v1:${n.code}:${id}:${year}`);
+          required.push(`source-sina-indicators:v1:${n.code}:${year}`);
+        }
+        for(const key of required)if(!await store.read(key))missingInputs.push(key);
+      }else{
+        const secucode=`${n.code}.HK`;
+        const required=[`source-hk-indicators:v1:${secucode}`,`watchlist-financial-inputs:v1:${symbol}`,
+          `hk-main-currency-v4:${symbol}`,`hk-dividend-events-v4:${symbol}`];
+        const points=await fetchHkIndicatorPoints(secucode,6).catch(()=>[]);
+        // Full three statements are required for annual/interim reports, not
+        // an earnings-only quarterly trading update.
+        const dates=points.filter(p=>p.date>=fiveYearStart() && ['annual','semi'].includes(p.kind)).map(p=>p.date);
+        if(!dates.length)missingInputs.push('港股五年年报/中报指标');
+        for(const date of dates)for(const id of ['balance','profit','cashflow'])required.push(`source-hk-statement:v1:${secucode}:${id}:${date}`);
+        for(const key of required)if(!await store.read(key))missingInputs.push(key);
+      }
+      let valuationMissing=false,valuationError='';
+      try{
+        const valuation=await getValuation(symbol,5);
+        valuationMissing=n.market!=='HK' && (!valuation.history.length || valuation.history[0].date>prices.candles[0].date || valuation.history.length<prices.candles.length);
+      }catch(error){valuationMissing=true;valuationError=error instanceof Error?error.message:'估值输入未通过校验';}
       const gaps=[...(!rangeCovered?['历史起点覆盖不足，或缺少已核实的上市日期']:[]),...(valuationMissing?['部分交易日缺少已披露财报、股本或复权数据']:[]),
+        ...(missingInputs.length?[`${missingInputs.length} 项财报或分红基础数据尚未入库`]:[]),
+        ...(valuationError?[valuationError]:[]),
         ...(n.market==='HK'?['港股历史估值仍缺少可核验的公告与分红快照，不生成历史分位']:[])];
       const record={symbol,years:5,requestedFrom:fiveYearStart(),from:prices.candles[0].date,to:prices.candles.at(-1)!.date,count:prices.candles.length,
-        status:rangeCovered&&!valuationMissing?'ready':'partial',priceSource:prices.source,valuationHistory:n.market==='HK'?'unavailable':valuationMissing?'partial':'available',
-        validation:'structural-and-source-overlap',gaps,checkedAt:new Date().toISOString()};
+        status:rangeCovered&&!valuationMissing&&!missingInputs.length?'ready':'partial',priceSource:prices.source,valuationHistory:n.market==='HK'?'unavailable':valuationMissing?'partial':'available',
+        collection:'website-apis',listingDate,missingInputs,validation:'structural-and-source-overlap',gaps,checkedAt:new Date().toISOString()};
       const key=coverageKey(symbol),old=await store.read(key);
       if(!await store.write(marketRecord(key,'market-coverage','internal',record,864e5),old?.digest??null))throw Error('覆盖记录保存失败');
       if(record.status==='partial')throw Error(`已保存可用数据；${gaps.join('；')}`);

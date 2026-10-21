@@ -48,8 +48,9 @@ export default function MarketUpdateButton({ codes, groupId, onComplete }: { cod
   async function start(retry = false, mode:'recent'|'five-year'='recent') {
     setBusy(true); setError('');
     try {
+      const selectedMode=retry?progress?.mode??mode:mode;
       const targets = retry ? progress?.errors.map(e => e.symbol).filter(s => eligible.includes(s)) ?? [] : eligible;
-      const value = await requestUpdate({ codes: targets, groupId, retry,mode:retry?progress?.mode??mode:mode });
+      const value = await requestUpdate({ codes: targets, groupId, retry,mode:selectedMode });
       setProgress(value);
       if (value) {
         observed.current = value.finished ? null : value.id;
@@ -60,7 +61,7 @@ export default function MarketUpdateButton({ codes, groupId, onComplete }: { cod
   }
   return <div className="relative shrink-0">
     <button type="button" disabled={busy || active || !eligible.length} onClick={()=>void start(false,'five-year')}
-      title="分阶段补齐当前分组五年行情及估值、财报所需输入，完成后加入每日收盘更新"
+      title="从网站接口补齐当前分组五年行情、财报及估值输入，无需导入文件；完成后每日收盘更新"
       className="mr-1 h-8 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2.5 text-xs text-slate-600 hover:text-brand-600 disabled:opacity-60">补齐5年</button>
     <button type="button" disabled={busy || active || !eligible.length} onClick={() => void start()}
       title="只更新当前分组缺失或过期的近期价格、财务和分红，后台排队执行"
@@ -74,7 +75,7 @@ export default function MarketUpdateButton({ codes, groupId, onComplete }: { cod
       {error && <p className="mb-2 text-orange-700">{error}</p>}
       {progress && <>
         <p>已完成 {progress.done} · 近期已更新 {progress.skipped} · 失败 {progress.failed}</p>
-        {active && progress.mode==='five-year' && phaseText && <p className="mt-1">正在处理：{phaseText}</p>}
+        {active && phaseText && <p className="mt-1">正在处理：{phaseText}</p>}
         {active && <p className="mt-1">{!progress.workerOnline ? '等待后台执行器恢复，任务已保存' : progress.pausedUntil > Date.now() ? '来源限流，已自动暂停' : `排队 ${progress.waiting} · 执行 ${progress.running}`}</p>}
         <p className="mt-2 text-slate-400">缺失或校验失败的数据保留原记录。</p>
         {!!progress.errors.length && <ul className="mt-2 max-h-40 space-y-1 overflow-auto">{progress.errors.slice(0, 20).map(e => <li key={e.symbol}>{e.symbol}：{e.message}</li>)}</ul>}

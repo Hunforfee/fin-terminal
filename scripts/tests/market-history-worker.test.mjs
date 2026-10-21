@@ -23,9 +23,17 @@ test('history worker checkpoints each successful phase instead of reporting the 
  assert.equal(result.ok,true);assert.equal(w.calls.length,1);assert.equal(w.calls[0][1],0);
  assert.equal(w.finished[0][4],1);
 });
-test('history worker failure retains the current phase for bounded retry',async()=>{
+test('an unavailable phase is recorded while independent collection continues',async()=>{
  const w=worker({phase:4,failure:true});const result=await w.run();
- assert.equal(result.ok,false);assert.equal(w.calls[0][1],4);assert.equal(w.finished[0][2],'校验失败');assert.equal(w.finished[0][4],undefined);
+ assert.equal(result.ok,false);assert.equal(w.calls[0][1],4);assert.equal(w.finished[0][2],'校验失败');assert.equal(w.finished[0][4],5);
+});
+
+test('a recent job without initialized coverage also starts the full website collection',async()=>{
+ const w=worker({mode:'recent'});await w.run();assert.equal(w.calls[0][1],0);assert.equal(w.finished[0][4],1);
+});
+
+test('readiness failure never advances the stock to an apparent success',async()=>{
+ const w=worker({phase:13,failure:true});const result=await w.run();assert.equal(result.ok,false);assert.equal(w.finished[0][4],undefined);
 });
 test('last history phase is the readiness check and only it finishes the stock',async()=>{
  const w=worker({phase:13});await w.run();assert.equal(w.calls[0][1],12);assert.equal(w.finished[0][4],undefined);

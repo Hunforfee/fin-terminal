@@ -41,14 +41,16 @@ export async function storedKLine(request: KLineRequest, fetcher: KLineFetcher,
     if (!store) throw marketDataMissing('行情数据库');
     if(request.period==='minute')throw marketDataMissing('分钟行情');
     const candidates:MarketRecord<StoredSeries>[]=[];
-    for (const source of ['canonical','tencent','sina']) {
+    const basics=await store.read<{listingDate:string}>(`security-basics:v1:${request.symbol}`);
+    for (const source of ['canonical','tencent','sina','eastmoney']) {
       const row=await store.read<StoredSeries>(keyOf({...request,period:'day'},source));
       if(row?.payload.candles.length)candidates.push(row);
     }
     const covers=(r:MarketRecord<StoredSeries>)=>{
       // An IPO's verified listing date is the earliest possible history. A newer
       // short source tail must not outrank the complete imported IPO history.
-      const expected=request.start && r.payload.listingDate && r.payload.listingDate>request.start ? r.payload.listingDate : request.start;
+      const listingDate=r.payload.listingDate??basics?.payload.listingDate;
+      const expected=request.start && listingDate && listingDate>request.start ? listingDate : request.start;
       return expected ? Date.parse(r.payload.candles[0].date)-Date.parse(expected)<=14*864e5
         : (request.period==='week' || request.period==='month'?aggregateDaily(r.payload.candles,request.period):r.payload.candles).length>=request.count;
     };
@@ -89,7 +91,7 @@ export async function storedKLine(request: KLineRequest, fetcher: KLineFetcher,
     }
     const old: MarketRecord<StoredSeries>[] = [];
     let storageFailed = false;
-    for (const source of ['tencent', 'sina']) {
+    for (const source of ['tencent', 'sina','eastmoney']) {
       try {
         const row = await store.read<StoredSeries>(keyOf(request, source));
         if (row) { row.payload=retainMarketPayload('kline',row.payload,now); if(request.period==='day')row.payload.candles=row.payload.candles.filter(c=>c.date<=completedDate(now)); if(row.payload.candles.length){validateKLine(row.payload, request, now); old.push(row);} }

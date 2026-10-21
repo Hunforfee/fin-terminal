@@ -61,7 +61,7 @@ export async function importQmtPackage(bundle,store,runtime,{apply=false}={}){
  for(const {symbol,payload,warnings} of bundle.companies){
   const wanted=payload.candles,byDate=new Map(wanted.map(c=>[c.date,c]));
   let conflict;
-  for(const source of ['canonical','tencent','sina']){
+  for(const source of ['canonical','tencent','sina','eastmoney']){
    const row=await store.read(`kline:v2:${symbol}:day:none:${source}:prices-only`);
    if(!row)continue;
    const differences=row.payload.candles.filter(c=>byDate.has(c.date) && different(c,byDate.get(c.date)));

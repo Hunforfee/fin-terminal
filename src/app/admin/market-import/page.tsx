@@ -7,6 +7,8 @@ type Result = { symbol: string; type: string; ok: boolean; message: string };
 
 const TYPE_NAMES: Record<string, string> = {
   kline: 'K线', finance: '财务', 'dividend-plans': '分红预案', 'dividend-impl': '已实施分红',
+  'financial-history': '估值财务历史',
+  'share-history': '实际股本变动',
 };
 
 export default function AdminMarketImportPage() {
@@ -49,6 +51,7 @@ export default function AdminMarketImportPage() {
       const msg = d.skipped ? '内容未变化，跳过'
         : d.imported !== undefined ? `导入 ${d.imported} 根（${d.from}~${d.to}）`
         : d.totalDates !== undefined ? `写入 ${d.totalDates} 个报告期`
+        : d.rows !== undefined ? `合并 ${d.rows} 个报告期`
         : `写入 ${d.count ?? '?'} 条`;
       return { symbol: d.symbol ?? d.code ?? codeParts.join('_'), type: realType, ok: true, message: msg };
     } catch (e) {

@@ -31,7 +31,7 @@ let ok = 0, skip = 0, fail = 0;
 console.log(`\n========== 导入 tdx bundle: ${bundlePath} (${bundle.records.length} 只) ==========\n`);
 for (const rec of bundle.records) {
   try {
-    const r = await importDailyPrices(store, { symbol: rec.symbol, candles: rec.candles, source: 'qmt' });
+    const r = await importDailyPrices(store, { symbol: rec.symbol, candles: rec.candles, source: 'tdx', mergeBatch: true });
     ok++;
     console.log(`  ✓ ${rec.symbol}: ${r.count} 根 (${r.from}~${r.to})`);
   } catch (e) {

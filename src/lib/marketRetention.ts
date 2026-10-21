@@ -39,6 +39,7 @@ export function retainMarketPayload<T>(kind: string, payload: T, now = Date.now(
   if (kind === 'source-sina-page') {
     const indices = p.dates.flatMap((date: string,i: number) => keep(date) ? [i] : []);
     return { ...p, dates: indices.map((i: number) => p.dates[i]),
+      ...(Array.isArray(p.announceDates) ? { announceDates: indices.map((i: number) => p.announceDates[i] ?? null) } : {}),
       rows: p.rows.map((r: any) => r.kind === 'group' ? r : { ...r, vals: indices.map((i: number) => r.vals[i] ?? null) }) };
   }
   if (kind === 'source-sina-indicators') {

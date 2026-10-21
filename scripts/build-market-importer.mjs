@@ -22,7 +22,7 @@ export async function buildMarketImporter(root=process.cwd()){
   const target=path.join(out,relative.replace(/\.ts$/,'.mjs'));
   await fs.mkdir(path.dirname(target),{recursive:true});await fs.writeFile(target,code);
  };
- await visit('marketImportedBars.ts');await visit('klineStorage.ts');
+ await visit('marketImportedBars.ts');await visit('klineStorage.ts');await visit('marketImportRecords.ts');
  await fs.writeFile(path.join(out,'manifest.json'),JSON.stringify({version:1,sources},null,2));
  return {modules:Object.keys(sources).length};
 }

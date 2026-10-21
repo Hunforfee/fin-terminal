@@ -9,6 +9,8 @@ export interface MarketRecord<T = unknown> {
   digest: string; acquiredAt: string; refreshAfter: string;
   validation: 'structural'; // Never means audited against original disclosures.
 }
+export type MarketRecordMeta = Pick<MarketRecord, 'key'|'kind'|'source'|'digest'|'acquiredAt'|'refreshAfter'>;
+const metadata = ({key,kind,source,digest,acquiredAt,refreshAfter}:MarketRecord):MarketRecordMeta=>({key,kind,source,digest,acquiredAt,refreshAfter});
 export interface MarketStore {
   close?(): Promise<void>;
   coordinated?: boolean;
@@ -19,7 +21,8 @@ export interface MarketStore {
   writeInputs?(items: { record: MarketRecord; expected: string | null }[]): Promise<number>;
   scan?(after: string, limit: number): Promise<{ records: MarketRecord[]; cursor: string; done: boolean }>;
   /** 按 key 前缀枚举（元信息级，不含 K 线 bars 体量）。用于只读查询端点。 */
-  scanPrefix?(prefix: string, limit: number): Promise<MarketRecord[]>;
+  scanPrefix?(prefix: string, limit: number, after?: string): Promise<MarketRecordMeta[]>;
+  readVersions?(key: string, limit: number): Promise<MarketRecord[]>;
   remove?(key: string, expected: string): Promise<boolean>;
   pruneAux?(now: number): Promise<void>;
 }
@@ -67,18 +70,22 @@ export function fileMarketStore(directory: string): MarketStore {
       }
       return { records, cursor: selected.at(-1) ?? '', done: !selected.length || selected.at(-1) === names.at(-1) };
     },
-    async scanPrefix(prefix, limit) {
-      const out: MarketRecord[] = [];
-      let after = '';
-      const scan = adapter.scan;
-      if (!scan) return out;
-      for (let page = 0; page < 40 && out.length < limit; page++) {
-        const { records, cursor, done } = await scan(after, 500);
-        for (const r of records) if (r.key.startsWith(prefix)) out.push(r);
-        if (done || !cursor || cursor === after) break;
-        after = cursor;
+    async scanPrefix(prefix, limit, after='') {
+      const out: MarketRecordMeta[] = [];
+      // Hash filenames are not key order. Collect matching metadata before slicing by key.
+      let names:string[];
+      try{names=await fs.readdir(root);}catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return out;throw e;}
+      for(const name of names.filter(n=>/^[a-f0-9]{64}\.json$/.test(n))){
+        const r=JSON.parse(await fs.readFile(path.join(root,name),'utf8'));
+        if(r?.schema===1 && typeof r.key==='string' && r.key.startsWith(prefix) && r.key>after && file(r.key)===path.join(root,name))out.push(metadata(checked(r,r.key)));
       }
-      return out.slice(0, limit);
+      return out.sort((a,b)=>a.key.localeCompare(b.key)).slice(0,limit);
+    },
+    async readVersions(key,limit){
+      try{
+        const rows:MarketRecord[]=JSON.parse(await fs.readFile(file(key)+'.history.json','utf8'));
+        return rows.slice(-limit).reverse().map(r=>checked(r,key));
+      }catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return [];throw e;}
     },
     remove: (key, expected) => serial(key, async () => {
       const old = await read(key); if (!old || old.digest !== expected) return false;
@@ -148,7 +155,7 @@ export function fileMarketStore(directory: string): MarketStore {
   return adapter;
 }
 
-export function postgresMarketStore(connectionString: string, poolFactory?: () => Promise<any>): MarketStore {
+export function postgresMarketStore(connectionString: string, poolFactory?: () => Promise<any>, options:{initialize?:boolean;readOnly?:boolean}={}): MarketStore {
   let pool: any;
   let ready: Promise<void> | undefined;
   const database = async () => {
@@ -157,10 +164,12 @@ export function postgresMarketStore(connectionString: string, poolFactory?: () =
       else {
         const { Pool } = await import('pg');
         pool = new Pool({ connectionString, max: 4, connectionTimeoutMillis: 1500, query_timeout: 4000,
+          ...(options.readOnly?{options:'-c default_transaction_read_only=on'}:{}),
           statement_timeout: 3500, idleTimeoutMillis: 30000 });
         pool.on('error', () => {}); // Connection errors are handled at the request boundary.
       }
     }
+    if(options.initialize===false)return pool;
     ready ??= pool.query(`
       CREATE TABLE IF NOT EXISTS fin_market_records (key text PRIMARY KEY, body jsonb NOT NULL);
       CREATE TABLE IF NOT EXISTS fin_market_bars (key text NOT NULL, date text NOT NULL, body jsonb NOT NULL, PRIMARY KEY(key,date));
@@ -185,14 +194,23 @@ export function postgresMarketStore(connectionString: string, poolFactory?: () =
       }
       return { records, cursor: result.rows.at(-1)?.key ?? '', done: result.rows.length < limit };
     },
-    async scanPrefix(prefix, limit) {
+    async scanPrefix(prefix, limit, after='') {
       const db = await database();
+      // K-line metadata omits candles in PostgreSQL: never hash that partial payload.
       const result = await db.query(
-        `SELECT body FROM fin_market_records WHERE key LIKE $1 ESCAPE '\\' ORDER BY key LIMIT $2`,
-        [`${prefix.replace(/[\\%_]/g, (c) => '\\' + c)}%`, limit]);
-      return result.rows.map((r: any) => checked(r.body, r.body.key));
+        `SELECT key, body->>'kind' kind, body->>'source' source, body->>'digest' digest,
+          body->>'acquiredAt' "acquiredAt", body->>'refreshAfter' "refreshAfter"
+          FROM fin_market_records WHERE key LIKE $1 ESCAPE '\\' AND key>$3 ORDER BY key LIMIT $2`,
+        [`${prefix.replace(/[\\%_]/g, (c) => '\\' + c)}%`, limit, after]);
+      return result.rows as MarketRecordMeta[];
+    },
+    async readVersions(key,limit){
+      const db=await database();
+      const result=await db.query('SELECT body FROM fin_market_revisions WHERE key=$1 ORDER BY id DESC LIMIT $2',[key,limit]);
+      return result.rows.map((r:any)=>checked(r.body,key));
     },
     async remove(key, expected) {
+      if(options.readOnly)throw Error('只读市场连接禁止写入');
       const db = await database(), client = await db.connect();
       try {
         await client.query('BEGIN'); await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[key]);
@@ -205,6 +223,7 @@ export function postgresMarketStore(connectionString: string, poolFactory?: () =
       } catch (e) { await client.query('ROLLBACK').catch(()=>{}); throw e; } finally { client.release(); }
     },
     async pruneAux(now) {
+      if(options.readOnly)throw Error('只读市场连接禁止写入');
       const db = await database();
       await db.query('DELETE FROM fin_market_revisions WHERE at < $1',[new Date(now-7*864e5).toISOString()]);
       let after='0';
@@ -228,6 +247,7 @@ export function postgresMarketStore(connectionString: string, poolFactory?: () =
       });
     },
     async writeInputs(items) {
+      if(options.readOnly)throw Error('只读市场连接禁止写入');
       if (!items.length) return 0;
       if (items.some(item => item.record.kind === 'kline')) throw Error('K线必须使用事务版本写入');
       const db = await database(), client = await db.connect();
@@ -258,6 +278,7 @@ export function postgresMarketStore(connectionString: string, poolFactory?: () =
       return checked<T>(record, key);
     },
     async write(record, expected) {
+      if(options.readOnly)throw Error('只读市场连接禁止写入');
       const db = await database(), client = await db.connect();
       try {
         await client.query('BEGIN');
@@ -283,6 +304,7 @@ export function postgresMarketStore(connectionString: string, poolFactory?: () =
       finally { client.release(); }
     },
     async incident(key, reason, details) {
+      if(options.readOnly)throw Error('只读市场连接禁止写入');
       const db = await database();
       await db.query('INSERT INTO fin_market_incidents(key,reason,details) VALUES($1,$2,$3)', [key, reason, JSON.stringify(details ?? null)]);
       await db.query("DELETE FROM fin_market_incidents WHERE at < now() - interval '30 days'");
@@ -300,4 +322,15 @@ export function getMarketStore(): MarketStore | null {
   if (process.env.MARKET_DATA_DIR || process.env.NODE_ENV !== 'production')
     return configured = fileMarketStore(process.env.MARKET_DATA_DIR || path.join(process.cwd(), 'data', 'market'));
   return null; // No implicit ephemeral-file storage in a hosted production deployment.
+}
+
+let readConfigured:MarketStore|undefined;
+/** Dedicated diagnostic reader: no schema initialization, cache refresh, cleanup or write methods. */
+export function getMarketReadStore():Pick<MarketStore,'read'|'scanPrefix'|'readVersions'>|null{
+  if(process.env.MARKET_DATA_STORE==='off')return null;
+  if(readConfigured)return readConfigured;
+  const url=process.env.MARKET_DATABASE_READONLY_URL || process.env.MARKET_DATABASE_URL || process.env.DATABASE_URL;
+  if(url)return readConfigured=postgresMarketStore(url,undefined,{initialize:false,readOnly:true});
+  if(process.env.MARKET_DATA_DIR || process.env.NODE_ENV!=='production')return readConfigured=fileMarketStore(process.env.MARKET_DATA_DIR || path.join(process.cwd(),'data','market'));
+  return null;
 }

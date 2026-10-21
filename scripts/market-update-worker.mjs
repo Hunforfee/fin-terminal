@@ -14,6 +14,7 @@ while (!stop) {
     const j = await r.json();
     if (!r.ok || !j.ok) throw Error('Worker service unavailable');
     if (j.data.maintenance?.error) console.error('Market retention sweep failed; inspect server logs');
+    if (j.data.schedule?.error) console.error('Market close scheduling delayed; queue processing continues');
     else if (j.data.maintenance?.enabled && !j.data.maintenance.skipped) console.log(JSON.stringify({maintenance:true,scanned:j.data.maintenance.scanned,trimmed:j.data.maintenance.trimmed,removed:j.data.maintenance.removed}));
     if (j.data.processed) { console.log(JSON.stringify({ symbol: j.data.symbol, ok: j.data.ok })); delay = 3000; }
   } catch (e) { console.error(e instanceof Error ? e.message : 'Worker request failed'); delay = 60000; }

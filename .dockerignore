@@ -1,0 +1,10 @@
+node_modules
+.next
+.market-importer
+.git
+.env
+.env.*
+!.env.example
+/data/
+**/__pycache__
+*.log

@@ -29,6 +29,8 @@ RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/.market-importer ./.market-importer
+COPY --from=builder /app/scripts ./scripts
 # 兜底快照（运行时 fs 读取，必须随镜像分发）
 COPY --from=builder /app/src/data ./src/data
 COPY --from=builder /app/public ./public

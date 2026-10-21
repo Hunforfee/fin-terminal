@@ -25,6 +25,9 @@ export default function MarketUpdateButton({ codes, groupId, onComplete }: { cod
   const observed = useRef<string | null>(null);
   const eligible = [...new Set(codes.flatMap(c => { const n = normalizeStockCode(c); return n ? [n.symbol] : []; }))];
   const active = !!progress && !progress.finished;
+  const phase=progress?.phase;
+  const phaseText=phase===undefined?'':phase>=3 && phase<=9 ? `${new Date(Date.now()+8*3600e3).getUTCFullYear()-(phase-3)} 年财报`
+    : ({0:'历史行情',1:'复权行情',2:'最新财务与分红',10:'估值基础数据',11:'财报公告日期',12:'公司资料',13:'完整性检查'} as Record<number,string>)[phase];
   useEffect(() => {
     let alive = true; let timer: ReturnType<typeof setTimeout>;
     async function poll() {
@@ -42,11 +45,11 @@ export default function MarketUpdateButton({ codes, groupId, onComplete }: { cod
     return () => { alive = false; clearTimeout(timer); };
   }, [user?.id, busy]);
   useEffect(() => { setProgress(null); setError(''); observed.current = null; }, [user?.id]);
-  async function start(retry = false) {
+  async function start(retry = false, mode:'recent'|'five-year'='recent') {
     setBusy(true); setError('');
     try {
       const targets = retry ? progress?.errors.map(e => e.symbol).filter(s => eligible.includes(s)) ?? [] : eligible;
-      const value = await requestUpdate({ codes: targets, groupId, retry });
+      const value = await requestUpdate({ codes: targets, groupId, retry,mode:retry?progress?.mode??mode:mode });
       setProgress(value);
       if (value) {
         observed.current = value.finished ? null : value.id;
@@ -56,6 +59,9 @@ export default function MarketUpdateButton({ codes, groupId, onComplete }: { cod
     finally { setBusy(false); }
   }
   return <div className="relative shrink-0">
+    <button type="button" disabled={busy || active || !eligible.length} onClick={()=>void start(false,'five-year')}
+      title="分阶段补齐当前分组五年行情及估值、财报所需输入，完成后加入每日收盘更新"
+      className="mr-1 h-8 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2.5 text-xs text-slate-600 hover:text-brand-600 disabled:opacity-60">补齐5年</button>
     <button type="button" disabled={busy || active || !eligible.length} onClick={() => void start()}
       title="只更新当前分组缺失或过期的近期价格、财务和分红，后台排队执行"
       className="h-8 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2.5 text-xs text-slate-600 hover:border-brand-300 hover:text-brand-600 disabled:cursor-default disabled:opacity-60">
@@ -64,10 +70,11 @@ export default function MarketUpdateButton({ codes, groupId, onComplete }: { cod
     {(progress || error) && <button type="button" aria-expanded={details} aria-label="查看更新进度" onClick={() => setDetails(v => !v)}
       className="ml-1 text-xs text-slate-500 hover:text-brand-600">{progress?.failed ? `${progress.failed} 失败` : active ? '进度' : error ? '详情' : '完成'}</button>}
     {details && <div role="status" className="absolute right-0 top-10 z-30 w-72 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600 shadow-lg">
-      <div className="mb-2 flex justify-between font-medium text-slate-900"><span>数据更新</span><button type="button" onClick={() => setDetails(false)} className="text-slate-400">关闭</button></div>
+      <div className="mb-2 flex justify-between font-medium text-slate-900"><span>{progress?.mode==='five-year'?'五年数据入库':'数据更新'}</span><button type="button" onClick={() => setDetails(false)} className="text-slate-400">关闭</button></div>
       {error && <p className="mb-2 text-orange-700">{error}</p>}
       {progress && <>
         <p>已完成 {progress.done} · 近期已更新 {progress.skipped} · 失败 {progress.failed}</p>
+        {active && progress.mode==='five-year' && phaseText && <p className="mt-1">正在处理：{phaseText}</p>}
         {active && <p className="mt-1">{!progress.workerOnline ? '等待后台执行器恢复，任务已保存' : progress.pausedUntil > Date.now() ? '来源限流，已自动暂停' : `排队 ${progress.waiting} · 执行 ${progress.running}`}</p>}
         <p className="mt-2 text-slate-400">缺失或校验失败的数据保留原记录。</p>
         {!!progress.errors.length && <ul className="mt-2 max-h-40 space-y-1 overflow-auto">{progress.errors.slice(0, 20).map(e => <li key={e.symbol}>{e.symbol}：{e.message}</li>)}</ul>}

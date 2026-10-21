@@ -7,6 +7,8 @@
  */
 
 import { cached } from './cache';
+import { fetchJson } from './http';
+import { cachedMarketInput } from '../marketInputs';
 
 export interface CompanyAnnouncement {
   artCode: string;
@@ -36,11 +38,13 @@ export async function fetchAnnouncements(
   code: string,
   pageSize = 15,
 ): Promise<CompanyAnnouncement[]> {
+  return cachedMarketInput(`company-announcements:v1:${code}:${pageSize}`,'company-announcements','eastmoney:announcements',1800e3,
+    ()=>fetchAnnouncementList(code,pageSize),value=>{if(!Array.isArray(value))throw Error('公告目录无效');});
+}
+async function fetchAnnouncementList(code:string,pageSize:number):Promise<CompanyAnnouncement[]>{
   const url = `https://np-anotice-stock.eastmoney.com/api/security/ann?sr=-1&page_size=${pageSize}&page_index=1&ann_type=A&client_source=web&stock_list=${encodeURIComponent(code)}`;
-  const raw = await fetch(url, {
-    headers: { 'User-Agent': UA },
-    signal: AbortSignal.timeout(8000),
-  }).then((r) => r.json());
+  const raw = await fetchJson<any>(url, {timeoutMs:8000});
+  if(!Array.isArray(raw?.data?.list))throw Error('公告目录未有效返回');
   const list: RawAnn[] = Array.isArray(raw?.data?.list) ? raw.data.list : [];
   return list
     .filter((a) => a.art_code && (a.title_ch || a.title))
@@ -64,10 +68,8 @@ export async function fetchAnnouncementContent(
   limit = 600,
 ): Promise<string> {
   const url = `https://np-cnotice-stock.eastmoney.com/api/content/ann?art_code=${encodeURIComponent(artCode)}&client_source=web&page_index=1`;
-  const raw = await fetch(url, {
-    headers: { 'User-Agent': UA },
-    signal: AbortSignal.timeout(8000),
-  }).then((r) => r.json());
+  return cachedMarketInput(`announcement-content:v1:${artCode}:${limit}`,'announcement-content','eastmoney:announcements',7*864e5,async()=>{
+  const raw = await fetchJson<any>(url, {timeoutMs:8000});
   const text: string =
     typeof raw?.data?.notice_content === 'string'
       ? raw.data.notice_content
@@ -78,6 +80,7 @@ export async function fetchAnnouncementContent(
     .replace(/\n{3,}/g, '\n\n')
     .trim()
     .slice(0, limit);
+  },value=>{if(!value)throw Error('公告正文暂缺');});
 }
 
 /** 单家公司最近公告（缓存 30 分钟） */

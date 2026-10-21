@@ -40,6 +40,7 @@ test('persistent freshness and later database writes are not hidden by a second 
       if(name==='./datasource/cache')return {cached(){throw Error('Persistent inputs must not get a second TTL');}};
       if(name==='./marketRefresh')return {withMarketRefresh:(_store,_key,work)=>work()};
       if(name==='./marketRetention')return {retainMarketPayload:(_kind,value)=>value};
+      if(name==='./marketReadPolicy')return {databaseOnly:()=>false};
       throw Error(name);
     },
   });

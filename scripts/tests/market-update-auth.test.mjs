@@ -64,6 +64,7 @@ test('route rejects foreign group symbols, cross-site creation and oversized bod
     require(name){
       if(name==='next/server')return {NextResponse:{json:(body,options)=>({body,status:options?.status??200})}};
       if(name==='@/lib/marketStore')return {getMarketStore:()=>({})};
+      if(name==='@/lib/marketCollection')return {registerCollection:async()=>{}};
       if(name==='@/lib/marketUpdateAuth')return {localUpdatePreview:()=>false,updateIdentity:async()=>({owner:'real',allowed:['sh600519']})};
       if(name==='@/lib/auth/session')return {sameOriginMutation:r=>r.safe};
       if(name==='@/lib/marketUpdateQueue')return {UpdateQueueError:class extends Error{constructor(m,status){super(m);this.status=status;}},updateSymbols:v=>v,MarketUpdateQueue:class{async submit(...args){submitted.push(args);return {id:'job'};}}};

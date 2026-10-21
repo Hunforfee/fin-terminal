@@ -1,4 +1,5 @@
 import { isShanghaiTradingTime, isHongKongTradingTime } from './tradingTime';
+import { databaseOnly } from '../marketReadPolicy';
 /**
  * 进程内 TTL 缓存。
  * 行情类接口上游有频率限制，且同一页面多个组件会重复请求同一标的，
@@ -22,6 +23,7 @@ export function defaultTtl(market: 'A' | 'HK' = 'A', date?: Date): number {
 }
 
 export async function cached<T>(key: string, ttlMs: number, producer: () => Promise<T>): Promise<T> {
+  if(databaseOnly())key=`database:${key}`;
   const now = Date.now();
   const hit = store.get(key);
   if (hit && hit.expireAt > now) return hit.value as T;

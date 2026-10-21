@@ -16,6 +16,7 @@
  */
 
 import { fetchJson } from './http';
+import { cachedMarketInput } from '../marketInputs';
 import { isResearchDate, todayResearchDate } from '../researchNotes';
 
 export interface BusinessSegment {
@@ -167,7 +168,9 @@ export async function fetchBusiness(
 ): Promise<BusinessInfo | null> {
   if (market === 'HK') return null; // 港股暂未覆盖 F10 概况
   try {
-    return await fetchA(code);
+    return await cachedMarketInput(`company-business:v1:${code}`,'company-business','eastmoney-f10',864e5,()=>fetchA(code),value=>{
+      if(!value || !value.summary && !value.groups.length)throw Error('主营业务资料暂缺');
+    });
   } catch {
     return null;
   }

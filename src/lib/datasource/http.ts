@@ -4,6 +4,7 @@
  */
 
 import { currentUpstreamBudget } from '../upstreamBudget';
+import { allowMarketNetwork, marketDataMissing } from '../marketReadPolicy';
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
@@ -33,6 +34,7 @@ export class UpstreamError extends Error {
 }
 
 export async function fetchText(url: string, opts: FetchOpts = {}): Promise<string> {
+  if (!allowMarketNetwork(url)) throw marketDataMissing('来源数据');
   const { timeoutMs = DEFAULT_TIMEOUT, retries = 1, headers = {}, encoding = 'utf-8', retryStatuses, backoffMs = 200 } = opts;
   let lastErr: unknown;
 

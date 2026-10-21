@@ -111,7 +111,7 @@ function parseStatementPage(html: string): { dates: string[]; rows: ParsedRow[];
 export function fetchStatementSourcePage(code: string, id: StatementId, year: number) {
   if (!/^\d{6}$/.test(code) || !STATEMENT_META[id] || !Number.isInteger(year) || year < Number(marketCutoff().slice(0,4)))
     throw Error('财报范围超出十年保留期限');
-  return cachedMarketInput(`source-sina-page:v1:${code}:${id}:${year}`,'source-sina-page','sina:reported:wan',1800e3,
+  return cachedMarketInput(`source-sina-page:v1:${code}:${id}:${year}`,'source-sina-page','sina:reported:wan',new Date().getUTCFullYear()-year<=1?1800e3:7*864e5,
     async()=>parseStatementPage(await fetchText(STATEMENT_META[id].url.replace('{code}',code).replace('{year}',String(year)),{encoding:'gbk',timeoutMs:12000})),
     value=>{if(!value.dates.length || !value.rows.some(r=>r.kind==='field') || value.dates.some(d=>!/^\d{4}-\d{2}-\d{2}$/.test(d)))throw Error('财报来源页缺少有效数据');});
 }

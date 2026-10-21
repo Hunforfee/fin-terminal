@@ -1,5 +1,6 @@
 node_modules
 .next
+.market-importer/
 out
 build
 dist
@@ -9,6 +10,8 @@ dist
 .env.local
 .env*.local
 coverage
+__pycache__/
+*.py[cod]
 .turbo
 next-env.d.ts
 .vercel

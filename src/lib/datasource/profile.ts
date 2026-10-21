@@ -9,6 +9,7 @@
  */
 
 import { fetchJson } from './http';
+import { cachedMarketInput } from '../marketInputs';
 import { swAllNodes } from '../sw2021';
 
 export interface CompanyProfile {
@@ -104,6 +105,6 @@ export async function fetchCompanyProfile(
   code: string,
   market: 'A' | 'HK',
 ): Promise<CompanyProfile> {
-  if (market === 'HK') return fetchHkProfile(`${code}.HK`);
-  return fetchAProfile(code);
+  return cachedMarketInput(`company-profile:v1:${market}:${code}`,'company-profile',PROVIDER_NAME,864e5,
+    ()=>market==='HK'?fetchHkProfile(`${code}.HK`):fetchAProfile(code),value=>{if(!value?.source)throw Error('公司资料暂缺');});
 }

@@ -1,23 +1,30 @@
-import { cached } from './cache';
+import { cachedMarketInput } from '../marketInputs';
+import { allowMarketNetwork, marketDataMissing } from '../marketReadPolicy';
+import { currentUpstreamBudget } from '../upstreamBudget';
 import { normalizeStockCode } from './codes';
 import { reportWindowStart, selectFinancialReportLinks, shanghaiDate, type RawReportAnnouncement } from '../financialReportLinks';
 
 const BASE = 'https://www.cninfo.com.cn';
 async function post<T>(path: string, body: Record<string, string>): Promise<T> {
+  if(!allowMarketNetwork(`${BASE}${path}`))throw marketDataMissing('财报原文目录');
+  const budget=currentUpstreamBudget(),release=await budget?.enter(`${BASE}${path}`);
+  try{
   const res = await fetch(`${BASE}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0', Referer: `${BASE}/` },
-    body: new URLSearchParams(body), signal: AbortSignal.timeout(12000), cache: 'no-store',
+    body: new URLSearchParams(body), signal: budget?AbortSignal.any([budget.signal,AbortSignal.timeout(12000)]):AbortSignal.timeout(12000), cache: 'no-store',
   });
+  budget?.observe(res.status,`${BASE}${path}`);
   if (!res.ok) throw Error('原文目录暂不可用');
-  return res.json();
+  return await res.json();
+  }finally{release?.();}
 }
 
 export function getFinancialReports(input: string, calendarYear = false) {
   const stock = normalizeStockCode(input);
   if (!stock) throw Error('股票代码无效');
   const today = shanghaiDate();
-  return cached(`financial-report-links:v1:${stock.symbol}:${today}:${calendarYear}`, 3600e3, async () => {
+  return cachedMarketInput<RawReportAnnouncement[]>(`financial-report-announcements:v1:${stock.symbol}`, 'financial-report-links','cninfo:original-announcements',3600e3, async () => {
     const hk = stock.market === 'HK';
     const matches = await post<{ code: string; orgId: string; category: string }[]>('/new/information/topSearch/query', { keyWord: stock.code, maxNum: '10' });
     if (!Array.isArray(matches)) throw Error('原文目录暂不可用');
@@ -39,6 +46,6 @@ export function getFinancialReports(input: string, calendarYear = false) {
       throw Error('原文目录未完整返回，请稍后重试');
     };
     const batches = await Promise.all((hk ? ['年报', '中期报告', '中报', '季度报告'] : ['']).map(query));
-    return selectFinancialReportLinks(batches.flat(), stock.code, today, calendarYear);
-  });
+    return batches.flat();
+  },value=>{if(!Array.isArray(value))throw Error('财报目录无效');}).then(rows=>selectFinancialReportLinks(rows,stock.code,today,calendarYear));
 }

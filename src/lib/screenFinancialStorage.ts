@@ -1,6 +1,7 @@
 import { marketRecord, getMarketStore, type MarketStore, type MarketRecord } from './marketStore';
 import { withMarketRefresh } from './marketRefresh';
 import { marketCutoff } from './marketRetention';
+import { databaseOnly, marketDataMissing } from './marketReadPolicy';
 type Raw = Record<string, unknown>;
 interface Reports { main: Raw[]; income: Raw[] }
 interface Input extends Reports { fetchedPeriods: Record<string, number> }
@@ -12,8 +13,8 @@ export async function storedScreenFinancials(codes: string[], periods: string[],
   const unique = [...new Set(codes)].sort();
   periods = periods.filter(date=>date>=marketCutoff(now));
   if (!unique.length) return { main: [], income: [] };
-  if (!store) return producer(unique);
-  return withMarketRefresh(store,'screen-financial-inputs',async()=>{
+  if (!store) { if(databaseOnly())throw marketDataMissing('选股财报');return producer(unique); }
+  const read = async()=>{
   const records = new Map<string, MarketRecord<Input>>();
   try {
     if (store.readInputs) for (const row of await store.readInputs(unique.map(key))) records.set(row.key, row as MarketRecord<Input>);
@@ -21,8 +22,9 @@ export async function storedScreenFinancials(codes: string[], periods: string[],
   } catch { records.clear(); }
   const missing = unique.filter(code => {
     const row = records.get(key(code));
-    return !row || !periods.every(period => now - (row.payload.fetchedPeriods?.[period] ?? 0) < 300_000);
+    return !row || !periods.every(period => databaseOnly() ? !!row.payload.fetchedPeriods?.[period] : now - (row.payload.fetchedPeriods?.[period] ?? 0) < 300_000);
   });
+  if(databaseOnly() && missing.length)throw marketDataMissing(`${missing.length} 家公司的选股财报`);
   const fresh = missing.length ? await producer(missing) : { main: [], income: [] };
   const set = new Set(missing);
   if ([...fresh.main, ...fresh.income].some(row => !set.has(String(row.SECURITY_CODE)))) throw Error('财报存储证券范围不匹配');
@@ -55,5 +57,6 @@ export async function storedScreenFinancials(codes: string[], periods: string[],
     }
   } catch { /* Current validated fetch remains usable during a database outage. */ }
   return output;
-  });
+  };
+  return databaseOnly() ? read() : withMarketRefresh(store,'screen-financial-inputs',read);
 }

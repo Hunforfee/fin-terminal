@@ -1,4 +1,5 @@
 import { crossCheckMainlandRaw, MarketDataConflict } from '../klineCrossCheck';
+import { databaseOnly } from '../marketReadPolicy';
 import { getMarketStore } from '../marketStore';
 import { sharedQuotes } from '../quoteInputs';
 import { getValuationPlans, getValuationDividends } from '../valuationInputs';
@@ -347,7 +348,7 @@ export async function getKLine(
   const n = normalizeCode(input);
   if (!n) throw new Error(`无法解析代码 ${input}`);
   const key = `kline:${n.symbol}:${period}:${adjust}:${count}:${startDate ?? ''}${recentOnly ? ':recent-only' : ''}`;
-  return cached(key, Math.min(defaultTtl(n.market === 'HK' ? 'HK' : 'A'), 60_000), () =>
+  const read = () =>
     storedKLine({ symbol: n.symbol, period, adjust, count, start: startDate, recentOnly }, async request => {
       try {
         const value = await tencent.fetchKLine(n.symbol, period, adjust, request.count, request.start, request.end);
@@ -378,7 +379,8 @@ export async function getKLine(
       if (snap && snap.adjust === adjust) return { ...snap, stale: true, complete: false,
         candles: snap.candles.filter(c => (!request.start || c.date >= request.start) && (!request.end || c.date <= request.end)).slice(-request.count) };
       throw new Error(`无法获取 ${n.symbol} 的 ${period} 线数据（${adjust}）`);
-    }));
+    });
+  return databaseOnly() ? read() : cached(key, Math.min(defaultTtl(n.market === 'HK' ? 'HK' : 'A'), 60_000), read);
 }
 
 export async function getMinute(input: string): Promise<MinutePoint[]> {
@@ -401,7 +403,7 @@ export async function getMinute(input: string): Promise<MinutePoint[]> {
  * 历史序列用**已披露定期报告**还原当期 TTM EPS 与 BPS（见 `lib/valuation.ts`），
  * 价格为不复权收盘价 —— 与前复权价倒推的旧口径相比，不会因除权而低估历史 PE。
  */
-export async function getValuation(input: string, years = 10, method: ValuationMethod = 'disclosure'): Promise<Valuation> {
+export async function getValuation(input: string, years = 5, method: ValuationMethod = 'disclosure'): Promise<Valuation> {
   const n = normalizeStockCode(input);
   if (!n || n.kind !== 'stock') throw new Error('真实财报估值仅支持 A 股 / 港股股票');
   if (n.market === 'HK') {
@@ -418,20 +420,21 @@ export async function getValuation(input: string, years = 10, method: ValuationM
     return { ...result, stale: q.stale };
   }
   const span = Math.min(Math.max(years, 1), 10);
-  return cached(`val-qfq-forward-dy-v2:${n.symbol}:${span}:${method}`, defaultTtl(), async () => {
-    const start = ymdYearsAgo(span + 1);
+  return cached(`val-qfq-forward-dy-v3:${n.symbol}:${span}:${method}:${databaseOnly()}`, databaseOnly()?0:defaultTtl(), async () => {
+    const start = ymdYearsAgo(span);
     // 行情两条 3200 根分页链（raw/qfq）并行会触发上游限频，改为串行；
     // qfq 失败时用 raw 兜底占位（下方会因口径不匹配报错，但至少给出明确信息）
     const [q, points, shares, dates, dividends, plans] = await Promise.all([
       getQuote(n.symbol),
-      storedMarketInput(`statements-v3:${n.code}:${span + 2}`, 'financial-history', 'sina-statements:CNY:yuan:current-revisions', 1800e3, () => sinaFinStmt.fetchStatementHistory(n.code, span + 2), rows => validateDatedRows(rows as unknown as Record<string, unknown>[], 'date', ['npParent', 'equityParent'])),
+      storedMarketInput(`statements-v3:${n.code}:${span + 1}`, 'financial-history', 'sina-statements:CNY:yuan:current-revisions', 1800e3, () => sinaFinStmt.fetchStatementHistory(n.code, span + 1), rows => validateDatedRows(rows as unknown as Record<string, unknown>[], 'date', ['npParent', 'equityParent'])),
       storedMarketInput(`shares-v3:${n.code}`, 'share-events', 'sina-shares:10000shares', 1800e3, () => sinaFinance.fetchShareHistory(n.code), rows => { validateDatedRows(rows as unknown as Record<string, unknown>[], 'date', ['sharesWan']); if (rows.some(r => !(r.sharesWan > 0))) throw Error('股本数值无效'); }),
       storedMarketInput(`disclosures-v3:${n.code}:${span + 2}`, 'disclosure-dates', 'sina+eastmoney:first-original-publication', 1800e3, () => fetchDisclosureDates(n.code, new Date().getUTCFullYear() - span - 2), dates => { if (!dates.size) throw Error('缺少原始公告日期'); const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10); for (const [report, published] of dates) if (!/^\d{4}-\d{2}-\d{2}$/.test(published) || published <= report || published > today) throw Error('公告日期无效'); }),
       getValuationDividends(n.code).catch(() => null),
       getValuationPlans(n.code).catch(() => null),
     ]).catch(error => { throw Error(`财报数据不可用或股本/公告输入未通过核验：${error instanceof Error ? error.message : String(error)}`); });
-    const raw = await getKLine(n.symbol, 'day', 'none', 3200, start);
-    const adjusted = await getKLine(n.symbol, 'day', 'qfq', 3200, start);
+    const count=Math.min(3200,span*280+60);
+    const raw = await getKLine(n.symbol, 'day', 'none', count, start);
+    const adjusted = await getKLine(n.symbol, 'day', 'qfq', count, start);
     if (!q) throw new Error('行情获取失败');
     if (!points.length) throw new Error('财报数据不可用，已停止估值计算，请稍后重试');
     if (!shares.length) throw new Error('真实股本变动史不可用，已停止估值计算');
@@ -471,7 +474,7 @@ export async function getValuation(input: string, years = 10, method: ValuationM
     if (missingDates) warnings.push(`${missingDates} 个报告期未取得原始公告日期，不用于建立新估值点。`);
     if (completePoints.some(p => !points.includes(p) && p.date >= cutoff)) warnings.push('部分已公告报告缺少财务金额，相应区间不计算估值。');
     if (history.length < candles.length) warnings.push('部分交易日缺少可对齐的前复权价格或已披露财报，已排除。');
-    if (history[0].date > cutoff && history[0].date > candles[0]?.date) warnings.push('数据覆盖不足所选区间，请以实际起止日期和样本数为准。');
+    if (raw.complete===false || adjusted.complete===false || Date.parse(history[0].date)-Date.parse(cutoff)>14*864e5) warnings.push('数据覆盖不足所选区间，请以实际起止日期和样本数为准。');
     if (dividends === null) warnings.push('分红数据源不可用，股息率暂不计算。');
     if (dividends?.some(e => e.cashConflict)) warnings.push('部分历史分红来源金额有冲突，相关十二个月静态股息率留空，不将争议金额计入。');
     if (plans === null) warnings.push('分红方案数据不可用，预期股息率暂不计算；静态值仍按可取得的已实施分红计算。');
@@ -490,7 +493,7 @@ export async function getValuation(input: string, years = 10, method: ValuationM
         realDates: true, adjustGaps: 0 },
       ...(alt && alt.stats ? { alt: { method: method === 'cutoff' ? 'disclosure' as const : 'cutoff' as const,
         history: alt.history, stats: alt.stats, current: { pe: alt.pe, pb: alt.pb, dy: alt.dividendYield } } } : {}),
-      source: 'sina-statements + sina-disclosures + eastmoney-dividend-plans + tencent-qfq',
+      source: `sina-statements + sina-disclosures + eastmoney-dividend-plans + ${raw.source}-raw + ${adjusted.source}-qfq`,
       stale: q.stale || raw.stale || adjusted.stale,
     };
   });
@@ -578,7 +581,7 @@ import * as sinaFinancial from './sinaFinancial';
  */
 export async function getFinancialCompare(
   codes: string[],
-  years = 6,
+  years = 5,
   granularity: sinaFinancial.Granularity = 'semi',
 ) {
   const list = codes.slice(0, 4);
@@ -681,7 +684,7 @@ function hkDefaultFields(catalog: { id: string; groups: { fields: { key: string 
 export async function getCustomFinancialCompare(
   codes: string[],
   fields: string[],
-  years = 6,
+  years = 5,
   granularity: sinaFinancial.Granularity = 'semi',
 ) {
   const list = codes.slice(0, 4);

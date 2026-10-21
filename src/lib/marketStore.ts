@@ -10,6 +10,7 @@ export interface MarketRecord<T = unknown> {
   validation: 'structural'; // Never means audited against original disclosures.
 }
 export interface MarketStore {
+  close?(): Promise<void>;
   coordinated?: boolean;
   read<T>(key: string): Promise<MarketRecord<T> | null>;
   write<T>(record: MarketRecord<T>, expected: string | null): Promise<boolean>;
@@ -155,6 +156,7 @@ export function postgresMarketStore(connectionString: string, poolFactory?: () =
     await ready; return pool;
   };
   return {
+    async close() { if(pool)await pool.end(); },
     coordinated: true,
     async scan(after, limit) {
       const db = await database();

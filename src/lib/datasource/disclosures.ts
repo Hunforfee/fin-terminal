@@ -1,4 +1,4 @@
-import { fetchText } from './http';
+import { fetchText, fetchJson } from './http';
 
 /** Original Chinese reports only: translated versions and corrections are not first disclosure dates. */
 export function parseDisclosureDates(html: string): Map<string, string> {
@@ -79,13 +79,7 @@ async function fetchDisclosureDatesFromEastmoney(
       sortColumns: 'REPORTDATE',
       sortTypes: '-1',
     }).toString();
-    const raw = await fetch(url, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
-      },
-      signal: AbortSignal.timeout(12000),
-    }).then((r) => r.json());
+    const raw = await fetchJson<any>(url.toString(), {timeoutMs:12000});
     const rows: { REPORTDATE?: string; NOTICE_DATE?: string }[] =
       Array.isArray(raw?.result?.data) ? raw.result.data : [];
     if (!rows.length) break;

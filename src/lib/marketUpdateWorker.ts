@@ -9,6 +9,7 @@ import { getValuationDividends, getValuationPlans } from './valuationInputs';
 import { cachedMarketInput, validateDatedRows } from './marketInputs';
 import { fetchShareHistory } from './datasource/sinaFinance';
 import { getWatchlistFinancialInputs } from './watchlistFinancialInputs';
+import { collectHistoryPhase, coverageKey } from './marketHistoryCollection';
 
 /** One short-range stock per tick. Slow work never runs in the browser POST. */
 export async function runMarketUpdateTick() {
@@ -22,8 +23,16 @@ export async function runMarketUpdateTick() {
   }, 20e3);
   const budget = new UpstreamBudget(abort.signal);
   let error: string | undefined;
+  let nextPhase:number|undefined;
   try {
+    const historical=task.mode==='five-year' || !!await store.read(coverageKey(task.symbol));
+    const phases=task.mode==='five-year' ? [0,1,2,3,4,5,6,7,8,9,10,11,13,12] : historical ? [2,0,1,3,4,10,11,13,12] : [2];
+    const phase=phases[task.phase];
+    if(phase===undefined)throw Error('后台任务阶段无效');
     await withUpstreamBudget(budget, async () => {
+      if(phase!==2){
+        await collectHistoryPhase(task.symbol,phase,abort.signal);
+      }else{
       const n = normalizeStockCode(task.symbol)!;
       const start = new Date(Date.now() - 60 * 864e5).toISOString().slice(0, 10);
       const prices = await getKLine(n.symbol, 'day', 'none', 40, start, true);
@@ -57,11 +66,13 @@ export async function runMarketUpdateTick() {
       await getWatchlistFinancialInputs(n.symbol);
       const displayed = await store.read(`watchlist-financial-inputs:v1:${n.symbol}`);
       if (!displayed || Date.parse(displayed.refreshAfter) <= Date.now()) throw Error('列表财务尚未确认入库');
+      }
       if (budget.limited) throw Error('上游限流，更新已暂停');
       abort.signal.throwIfAborted();
     });
+    if(task.phase<phases.length-1)nextPhase=task.phase+1;
   } catch (e) { error = e instanceof Error ? e.message : '更新失败'; }
   finally { abort.abort(Error('本次任务已结束')); clearInterval(heartbeat); clearTimeout(deadline); }
-  const accepted = await queue.finish(task.symbol, task.lease, error, budget.limited);
+  const accepted = await queue.finish(task.symbol, task.lease, error, budget.limited,nextPhase);
   return { processed: true, accepted, symbol: task.symbol, ok: !error };
 }

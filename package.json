@@ -5,9 +5,11 @@
   "description": "类理杏仁的金融数据查询与分析终端 - 股票/指数/基金行情、估值、财务与筛选",
   "scripts": {
     "dev": "next dev -H 0.0.0.0",
-    "build": "next build",
+    "build": "node scripts/build-market-importer.mjs && next build",
     "start": "next start -H 0.0.0.0",
     "market:worker": "node scripts/market-update-worker.mjs",
+    "market:import:build": "node scripts/build-market-importer.mjs",
+    "market:import": "node scripts/import-qmt-watchlist.mjs",
     "typecheck": "tsc --noEmit",
     "seed": "node scripts/fetch-snapshots.mjs",
     "test": "node --test scripts/tests/*.test.mjs",

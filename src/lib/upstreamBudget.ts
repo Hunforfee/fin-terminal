@@ -5,7 +5,7 @@ export class UpstreamBudget {
   private calls = 0;
   private blockedHosts = new Set<string>();
   limited = false;
-  constructor(readonly signal: AbortSignal, private interval = 1500, private maxCalls = 40) {}
+  constructor(readonly signal: AbortSignal, private interval = 1500, private maxCalls = 40, readonly readOnly = false) {}
   async enter(url?: string): Promise<() => void> {
     const previous = this.tail; let release!: () => void;
     this.tail = new Promise<void>(resolve => { release = resolve; });

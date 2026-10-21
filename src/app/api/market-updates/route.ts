@@ -3,6 +3,7 @@ import { getMarketStore } from '@/lib/marketStore';
 import { MarketUpdateQueue, UpdateQueueError, updateSymbols } from '@/lib/marketUpdateQueue';
 import { localUpdatePreview, updateIdentity } from '@/lib/marketUpdateAuth';
 import { sameOriginMutation } from '@/lib/auth/session';
+import { registerCollection } from '@/lib/marketCollection';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -29,7 +30,11 @@ async function readBody(request: NextRequest): Promise<string> {
   } finally { reader.releaseLock(); }
 }
 export async function GET(request: NextRequest) {
-  try { const q = queue(request); const identity = await updateIdentity(request); return json({ ok: true, data: await q.status(identity.owner) }); }
+  try {
+    const q = queue(request); const identity = await updateIdentity(request,'all');
+    if(identity.allowed)await registerCollection(getMarketStore()!,identity.owner,identity.allowed);
+    return json({ ok: true, data: await q.status(identity.owner) });
+  }
   catch (e) { return failure(e); }
 }
 export async function POST(request: NextRequest) {
@@ -43,6 +48,10 @@ export async function POST(request: NextRequest) {
     const codes = updateSymbols(body.codes);
     const identity = await updateIdentity(request, body.groupId);
     if (identity.allowed && codes.some(c => !identity.allowed!.includes(c))) throw new UpdateQueueError('只能更新当前已同步分组中的公司', 403);
-    return json({ ok: true, data: await q.submit(identity.owner, codes, body.retry === true) });
+    if(body.mode!==undefined && !['recent','five-year'].includes(body.mode))throw new UpdateQueueError('更新模式无效',400);
+    const all=await updateIdentity(request,'all');
+    await registerCollection(getMarketStore()!,identity.owner,all.allowed??codes);
+    const data=await q.submit(identity.owner, codes, body.retry === true,body.mode??'recent');
+    return json({ ok: true, data });
   } catch (e) { return failure(e); }
 }

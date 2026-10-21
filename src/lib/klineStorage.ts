@@ -2,11 +2,13 @@ import type { Candle, KLineSeries, Period, Adjust } from './datasource/types';
 import { getMarketStore, marketDigest, marketRecord, type MarketStore, type MarketRecord } from './marketStore';
 import { marketCutoff, retainMarketPayload } from './marketRetention';
 import { withMarketRefresh } from './marketRefresh';
+import { databaseOnly, marketDataMissing } from './marketReadPolicy';
+import { importedBarsKey, extendImportedPrices, completedDate, type ImportedBars } from './marketImportedBars';
 
 export interface KLineRequest { symbol: string; period: Period; adjust: Adjust; count: number; start?: string; recentOnly?: boolean }
 export type KLineFetcher = (request: KLineRequest & { end?: string }) => Promise<KLineSeries>;
 interface Query { start?: string; count: number; at: number; complete: boolean }
-interface StoredSeries extends KLineSeries { queries: Query[]; lastFullAt?: number }
+interface StoredSeries extends KLineSeries { queries?: Query[]; lastFullAt?: number; listingDate?: string }
 const day = (now: number) => new Date(now + 8 * 3600e3).toISOString().slice(0, 10);
 const validDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && new Date(s + 'T00:00:00Z').toISOString().slice(0, 10) === s;
 const keyOf = (r: KLineRequest, source: string) => `kline:v2:${r.symbol}:${r.period}:${r.adjust}:${source}:prices-only`;
@@ -35,18 +37,62 @@ const active = new Map<string, Promise<KLineSeries>>();
 export async function storedKLine(request: KLineRequest, fetcher: KLineFetcher,
   store: MarketStore | null = getMarketStore(), now = Date.now()): Promise<KLineSeries> {
   if (request.start && request.start < marketCutoff(now)) request = { ...request,start:marketCutoff(now) };
+  if (databaseOnly()) {
+    if (!store) throw marketDataMissing('行情数据库');
+    if(request.period==='minute')throw marketDataMissing('分钟行情');
+    const candidates:MarketRecord<StoredSeries>[]=[];
+    for (const source of ['canonical','tencent','sina']) {
+      const row=await store.read<StoredSeries>(keyOf({...request,period:'day'},source));
+      if(row?.payload.candles.length)candidates.push(row);
+    }
+    const covers=(r:MarketRecord<StoredSeries>)=>{
+      // An IPO's verified listing date is the earliest possible history. A newer
+      // short source tail must not outrank the complete imported IPO history.
+      const expected=request.start && r.payload.listingDate && r.payload.listingDate>request.start ? r.payload.listingDate : request.start;
+      return expected ? Date.parse(r.payload.candles[0].date)-Date.parse(expected)<=14*864e5
+        : (request.period==='week' || request.period==='month'?aggregateDaily(r.payload.candles,request.period):r.payload.candles).length>=request.count;
+    };
+    candidates.sort((a,b)=>Number(covers(b))-Number(covers(a)) || b.payload.candles.at(-1)!.date.localeCompare(a.payload.candles.at(-1)!.date) || a.payload.candles[0].date.localeCompare(b.payload.candles[0].date));
+    for (const row of candidates) {
+      const series=retainMarketPayload('kline',row.payload,now);
+      series.candles=series.candles.filter(c=>c.date<=completedDate(now));
+      if(!series.candles.length)continue;
+      const selected=request.period==='day'?series:{...series,period:request.period,candles:aggregateDaily(series.candles,request.period)};
+      const result=take(selected,request);if(!result.candles.length)continue;
+      validateKLine(result,request,now);
+      return {...result,complete:result.complete!==false && covers(row),storage:{backend:'persistent',acquiredAt:row.acquiredAt,validation:'structural'},warnings:[...(result.warnings??[]),`数据库行情截至 ${result.candles.at(-1)!.date}`]};
+    }
+    throw marketDataMissing('所选复权方式的日线');
+  }
   if (!store) {
     const value = retainMarketPayload('kline',await fetcher(request),now); validateKLine(value, request, now); return value;
   }
   const lock = `${request.symbol}:${request.period}:${request.adjust}:${request.start}:${request.count}:${!!request.recentOnly}`;
   const pending = active.get(lock); if (pending) return pending;
   const work: Promise<KLineSeries> = withMarketRefresh(store,`kline:${request.symbol}:${request.period}:${request.adjust}`,async (): Promise<KLineSeries> => {
+    if(request.period==='day' && request.adjust==='none'){
+      const imported=await store.read<ImportedBars>(importedBarsKey(request.symbol)).catch(()=>null);
+      if(imported){
+        const old=imported.payload;validateKLine(old,request,now);
+        const expected=request.start && old.listingDate && old.listingDate>request.start ? old.listingDate : request.start;
+        const covers=expected ? Date.parse(old.candles[0].date)-Date.parse(expected)<=14*864e5 : old.candles.length>=request.count;
+        if(covers || request.recentOnly){
+          if(Date.parse(imported.refreshAfter)>now)return {...take(old,request),storage:{backend:'persistent',acquiredAt:imported.acquiredAt,validation:'structural'}};
+          const overlap=old.candles[Math.max(0,old.candles.length-8)].date;
+          const gap=Math.max(0,Math.ceil((now-Date.parse(overlap))/864e5));
+          const tail=await fetcher({...request,start:overlap,count:Math.min(3200,Math.max(16,gap+10))});
+          validateKLine(tail,request,now);
+          const extended=await extendImportedPrices(store,imported,tail,now);
+          return {...take(extended,request),storage:{backend:'persistent',acquiredAt:new Date(now).toISOString(),validation:'structural'}};
+        }
+      }
+    }
     const old: MarketRecord<StoredSeries>[] = [];
     let storageFailed = false;
     for (const source of ['tencent', 'sina']) {
       try {
         const row = await store.read<StoredSeries>(keyOf(request, source));
-        if (row) { row.payload=retainMarketPayload('kline',row.payload,now); if(row.payload.candles.length){validateKLine(row.payload, request, now); old.push(row);} }
+        if (row) { row.payload=retainMarketPayload('kline',row.payload,now); if(request.period==='day')row.payload.candles=row.payload.candles.filter(c=>c.date<=completedDate(now)); if(row.payload.candles.length){validateKLine(row.payload, request, now); old.push(row);} }
       } catch { storageFailed = true; }
     }
     const saved = old[0];
@@ -54,7 +100,7 @@ export async function storedKLine(request: KLineRequest, fetcher: KLineFetcher,
       if (!request.recentOnly && now - (row.payload.lastFullAt ?? 0) >= 7 * 864e5) return false;
       const matches = take(row.payload, request).candles;
       const rangeCovered = matches.length >= request.count || !!request.start && row.payload.candles[0].date <= request.start;
-      const lastQuery = row.payload.queries.find(q => q.start === request.start && q.count >= request.count);
+      const lastQuery = row.payload.queries?.find(q => q.start === request.start && q.count >= request.count);
       return Date.parse(row.refreshAfter) > now && (rangeCovered || !!lastQuery && now - lastQuery.at < 60_000);
     });
     if (reusable) return { ...take(reusable.payload, request), storage: { backend: 'persistent', acquiredAt: reusable.acquiredAt, validation: 'structural' } };
@@ -67,7 +113,8 @@ export async function storedKLine(request: KLineRequest, fetcher: KLineFetcher,
       const historicalReviewDue = !!saved && !request.recentOnly && now - (saved.payload.lastFullAt ?? 0) >= 7 * 864e5;
       if (saved && request.adjust === 'none' && !request.recentOnly) {
         const bars = saved.payload.candles;
-        const needOlder = !!request.start && request.start < bars[0].date || !request.start && request.count > bars.length;
+        const priorComplete=saved.payload.queries?.some(q=>q.start===request.start && q.count>=request.count && q.complete);
+        const needOlder = !priorComplete && (!!request.start && request.start < bars[0].date || !request.start && request.count > bars.length);
         if (historicalReviewDue) {
           const elapsed = Math.max(0, Math.ceil((now - Date.parse(bars.at(-1)!.date)) / 864e5));
           const extra = request.period === 'week' ? Math.ceil(elapsed / 7) : request.period === 'month' ? Math.ceil(elapsed / 28) : elapsed;
@@ -94,6 +141,10 @@ export async function storedKLine(request: KLineRequest, fetcher: KLineFetcher,
         if (tail.source !== fetched.source) throw Error('补抓区间来源不一致，未合并');
         fetched = { ...fetched, complete: fetched.complete !== false && tail.complete !== false,
           candles: [...new Map([...fetched.candles, ...tail.candles].map(c => [c.date, c])).values()].sort((a, b) => a.date.localeCompare(b.date)) };
+      }
+      if(request.period==='day'){
+        fetched={...fetched,candles:fetched.candles.filter(c=>c.date<=completedDate(now))};
+        if(!fetched.candles.length)throw Error('尚无已确认收盘的日线，请收盘后再更新');
       }
       if (fetched.stale) return { ...fetched, warnings: [...(fetched.warnings ?? []), '来源为历史快照，未作为最新数据入库。'] };
       const key = keyOf(request, fetched.source);
@@ -139,4 +190,14 @@ export async function storedKLine(request: KLineRequest, fetcher: KLineFetcher,
   });
   active.set(lock, work);
   try { return await work; } finally { if (active.get(lock) === work) active.delete(lock); }
+}
+
+export function aggregateDaily(candles:Candle[],period:'week'|'month'):Candle[]{
+  const groups=new Map<string,Candle>();
+  for(const c of candles){
+    const d=new Date(c.date+'T00:00:00Z');d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7));
+    const key=period==='month'?c.date.slice(0,7):d.toISOString().slice(0,10),old=groups.get(key);
+    groups.set(key,old?{date:c.date,open:old.open,high:Math.max(old.high,c.high),low:Math.min(old.low,c.low),close:c.close}:{date:c.date,open:c.open,high:c.high,low:c.low,close:c.close});
+  }
+  return [...groups.values()];
 }

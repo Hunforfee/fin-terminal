@@ -19,6 +19,7 @@ import { cachedMarketInput, validateDatedRows } from '../marketInputs';
 import { retainedDate } from '../marketRetention';
 import { getMarketStore, marketRecord } from '../marketStore';
 import { withMarketRefresh } from '../marketRefresh';
+import { databaseOnly, marketDataMissing } from '../marketReadPolicy';
 import type { CompanyFinancials, Granularity } from './sinaFinancial';
 import type { StatementCatalog, CustomFinancials } from './sinaStatements';
 import type { Candle, Valuation, ValuationPoint, ValuationStats, SeriesStats } from './types';
@@ -248,16 +249,17 @@ export async function fetchHkStatement(
   if (!selected.length) return [];
   const fetchRows = async (missing: string[]) => parseHkStatementRows(await dcQuery(STATEMENT_REPORTS[id],
     `(SECUCODE="${secucode}")(REPORT_DATE in (${missing.map(d=>`'${d}'`).join(',')}))`));
-  const store = getMarketStore(); if (!store) return fetchRows(selected);
-  return withMarketRefresh(store,`hk-statement:${secucode}:${id}`,async()=>{
+  const store = getMarketStore(); if (!store) {if(databaseOnly())throw marketDataMissing('港股原始报表');return fetchRows(selected);}
+  const read=async()=>{
     const values = new Map<string,HkStatementRow[]>(), prior = new Map<string,string>();
     const key = (date: string)=>`source-hk-statement:v1:${secucode}:${id}:${date}`;
     for (const date of selected) {
       const row = await store.read<HkStatementRow[]>(key(date));
       if (row) prior.set(date,row.digest);
-      if (row && Date.parse(row.refreshAfter)>Date.now() && row.payload.length && row.payload.every(r=>r.date===date)) values.set(date,row.payload);
+      if (row && (Date.parse(row.refreshAfter)>Date.now() || databaseOnly()) && row.payload.length && row.payload.every(r=>r.date===date)) values.set(date,row.payload);
     }
     const missing = selected.filter(d=>!values.has(d));
+    if(databaseOnly() && missing.length)throw marketDataMissing('港股原始报表');
     if (missing.length) {
       const rows = await fetchRows(missing);
       for (const date of missing) {
@@ -268,7 +270,8 @@ export async function fetchHkStatement(
       }
     }
     return selected.flatMap(date=>values.get(date)??[]);
-  });
+  };
+  return databaseOnly()?read():withMarketRefresh(store,`hk-statement:${secucode}:${id}`,read);
 }
 
 export function parseHkStatementRows(rows: DcRow[]): HkStatementRow[] {

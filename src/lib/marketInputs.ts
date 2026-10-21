@@ -3,13 +3,14 @@ import { getMarketStore, marketRecord, type MarketStore } from './marketStore';
 import { cached } from './datasource/cache';
 import { withMarketRefresh } from './marketRefresh';
 import { retainMarketPayload } from './marketRetention';
+import { databaseOnly, marketDataMissing } from './marketReadPolicy';
 
 export function cachedMarketInput<T>(key: string, kind: string, source: string, ttl: number,
   producer: () => Promise<T>, validate: (value: T) => void): Promise<T> {
   const store = getMarketStore();
   // The persistent record owns freshness. A second full TTL on a nearly expired
   // record would hide later writes and extend its effective lifetime.
-  if (store) return storedMarketInput(key, kind, source, ttl, producer, validate, store);
+  if (store || databaseOnly()) return storedMarketInput(key, kind, source, ttl, producer, validate, store);
   return cached(`market-input:${key}`, ttl, () => storedMarketInput(key, kind, source, ttl, producer, validate, null));
 }
 
@@ -29,16 +30,17 @@ export async function storedMarketInput<T>(key: string, kind: string, source: st
   const owner = store ?? withoutStore;
   let pending = pendingInputs.get(owner);
   if (!pending) { pending = new Map(); pendingInputs.set(owner, pending); }
-  const identity = JSON.stringify([key, kind, source, ttl]);
+  const identity = JSON.stringify([key, kind, source, ttl, databaseOnly()]);
   const existing = pending.get(identity);
   if (existing) { const value = await existing as T; validate(value); return value; }
   const work = (async()=>{
     if (store) {
       const row = await store.read(key).catch(()=>null);
-      if (row && Date.parse(row.refreshAfter)>now) {
+      if (row && (Date.parse(row.refreshAfter)>now || databaseOnly())) {
         try { const value=retainMarketPayload(kind,decode<T>(row.payload),now);validate(value);return value; } catch {}
       }
     }
+    if (databaseOnly()) throw marketDataMissing('财务或分红输入');
     return withMarketRefresh(store, key, () => readOrFetchInput(key, kind, source, ttl, producer, validate, store, now));
   })()
     .finally(() => pending!.delete(identity));
@@ -52,11 +54,12 @@ async function readOrFetchInput<T>(key: string, kind: string, source: string, tt
   if (store) {
     try {
       old = await store.read(key);
-      if (old && Date.parse(old.refreshAfter) > now) {
+      if (old && (Date.parse(old.refreshAfter) > now || databaseOnly())) {
         const value = retainMarketPayload(kind, decode<T>(old.payload),now); validate(value); return value;
       }
     } catch { /* Store outage must not prevent source access. */ }
   }
+  if (databaseOnly()) throw marketDataMissing('财务或分红输入');
   let value: T;
   try {
     value = retainMarketPayload(kind, await producer(),now); validate(value);

@@ -361,7 +361,7 @@ function MetricChart({
 
 export default function ValuationSection({ code }: { code: string }) {
   const [selected, setSelected] = useState<Metric>('pe');
-  const [years, setYears] = useState<5 | 10>(10);
+  const [years, setYears] = useState<5 | 10>(5);
   const [data, setData] = useState<ValuationResp | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);

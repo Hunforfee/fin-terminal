@@ -104,15 +104,12 @@ export async function fetchSinaFinancial(
 ): Promise<CompanyFinancials> {
   const thisYear = new Date().getFullYear();
   const yearList: number[] = [];
-  for (let y = thisYear; yearList.length < Math.min(11,Math.max(1,years)) && y >= 1998; y--) yearList.push(y);
+  for (let y = thisYear; yearList.length < Math.min(10,Math.max(1,years))+1 && y >= 1998; y--) yearList.push(y);
 
   const pages = await Promise.all(
     yearList.map(async (y) => {
-      const url = URL_TEMPLATE.replace('{code}', code).replace('{year}', String(y));
       try {
-        return await cachedMarketInput(`source-sina-indicators:v1:${code}:${y}`,'source-sina-indicators','sina:reported-indicators',1800e3,
-          async()=>parsePage(await fetchText(url,{encoding:'gbk',timeoutMs:10000})),
-          value=>{if(!value.dates.length || !value.rows.size)throw Error('财务指标来源为空');});
+        return await fetchIndicatorSourceYear(code,y);
       } catch {
         return null;
       }
@@ -158,6 +155,15 @@ export async function fetchSinaFinancial(
     series,
     source: PROVIDER_NAME,
   };
+}
+
+/** Annual source unit for bounded background collection; foreground readers share these rows. */
+export function fetchIndicatorSourceYear(code:string,year:number){
+  const url=URL_TEMPLATE.replace('{code}',code).replace('{year}',String(year));
+  const age=new Date().getUTCFullYear()-year;
+  return cachedMarketInput(`source-sina-indicators:v1:${code}:${year}`,'source-sina-indicators','sina:reported-indicators',age<=1?1800e3:7*864e5,
+    async()=>parsePage(await fetchText(url,{encoding:'gbk',timeoutMs:10000})),
+    value=>{if(!value.dates.length || !value.rows.size)throw Error('财务指标来源为空');});
 }
 
 /**

@@ -18,6 +18,8 @@ export interface MarketStore {
   readInputs?(keys: string[]): Promise<MarketRecord[]>;
   writeInputs?(items: { record: MarketRecord; expected: string | null }[]): Promise<number>;
   scan?(after: string, limit: number): Promise<{ records: MarketRecord[]; cursor: string; done: boolean }>;
+  /** 按 key 前缀枚举（元信息级，不含 K 线 bars 体量）。用于只读查询端点。 */
+  scanPrefix?(prefix: string, limit: number): Promise<MarketRecord[]>;
   remove?(key: string, expected: string): Promise<boolean>;
   pruneAux?(now: number): Promise<void>;
 }
@@ -64,6 +66,19 @@ export function fileMarketStore(directory: string): MarketStore {
         if (value?.schema === 1 && file(value.key) === path.join(root,name)) records.push(checked(value,value.key));
       }
       return { records, cursor: selected.at(-1) ?? '', done: !selected.length || selected.at(-1) === names.at(-1) };
+    },
+    async scanPrefix(prefix, limit) {
+      const out: MarketRecord[] = [];
+      let after = '';
+      const scan = adapter.scan;
+      if (!scan) return out;
+      for (let page = 0; page < 40 && out.length < limit; page++) {
+        const { records, cursor, done } = await scan(after, 500);
+        for (const r of records) if (r.key.startsWith(prefix)) out.push(r);
+        if (done || !cursor || cursor === after) break;
+        after = cursor;
+      }
+      return out.slice(0, limit);
     },
     remove: (key, expected) => serial(key, async () => {
       const old = await read(key); if (!old || old.digest !== expected) return false;
@@ -169,6 +184,13 @@ export function postgresMarketStore(connectionString: string, poolFactory?: () =
         records.push(checked(row,r.key));
       }
       return { records, cursor: result.rows.at(-1)?.key ?? '', done: result.rows.length < limit };
+    },
+    async scanPrefix(prefix, limit) {
+      const db = await database();
+      const result = await db.query(
+        `SELECT body FROM fin_market_records WHERE key LIKE $1 ESCAPE '\\' ORDER BY key LIMIT $2`,
+        [`${prefix.replace(/[\\%_]/g, (c) => '\\' + c)}%`, limit]);
+      return result.rows.map((r: any) => checked(r.body, r.body.key));
     },
     async remove(key, expected) {
       const db = await database(), client = await db.connect();

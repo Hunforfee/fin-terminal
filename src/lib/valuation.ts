@@ -219,17 +219,21 @@ export function buildRealValuationSeries(
     // Select the latest report that was available, even when announcement dates cross.
     const f = timeline.filter(p => p.eff <= c.date).sort((a,b) => a.report.localeCompare(b.report)).at(-1);
     if (!f) continue;
+    if (!(c.close > 0) || !Number.isFinite(c.close)) continue;
     const adjusted = opts?.adjustedByDate?.get(c.date);
-    if (opts?.adjustedByDate && !adjusted) continue;
-    const close = adjusted?.close ?? c.close;
-    const factor = close / c.close;
-    if (!(factor > 0) || !Number.isFinite(factor)) continue;
+    // An unavailable adjusted price is a chart gap, not a missing valuation input.
+    // Never pass an unadjusted price off as a point on the qfq price curve.
+    const price = opts?.adjustedByDate ? adjusted?.close : c.close;
+    const close = typeof price === 'number' && price > 0 && Number.isFinite(price) ? price : null;
+    const factor = close === null ? null : close / c.close;
     const dailyShares = opts?.shareHistory ? sharesAt(opts.shareHistory, c.date) : null;
     const shareRatio = dailyShares !== null && f.shares ? f.shares / (dailyShares / 1e4) : 1;
-    const eps = f.epsTTM !== null ? f.epsTTM * shareRatio * factor : null;
-    const bps = f.bps !== null ? f.bps * shareRatio * factor : null;
-    const pe = eps !== null && eps > 0 ? close / eps : null;
-    const pb = bps !== null && bps > 0 ? close / bps : null;
+    // Price and denominators use the same raw share basis. Qfq factors cancel
+    // from PE/PB and must never determine which dates enter their percentiles.
+    const eps = f.epsTTM !== null ? f.epsTTM * shareRatio : null;
+    const bps = f.bps !== null ? f.bps * shareRatio : null;
+    const pe = eps !== null && eps > 0 ? c.close / eps : null;
+    const pb = bps !== null && bps > 0 ? c.close / bps : null;
     out.push({ date: c.date, close, rawClose: c.close, adjustmentFactor: factor,
       pe: pe !== null && Number.isFinite(pe) ? round2(pe) : null,
       pb: pb !== null && Number.isFinite(pb) ? round2(pb) : null,

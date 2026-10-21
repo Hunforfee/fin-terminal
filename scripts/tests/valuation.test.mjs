@@ -30,6 +30,23 @@ test('qfq prices and denominators share a factor; PE/PB remain invariant', () =>
  const b=v.buildRealValuationSeries(raw,timeline,{adjustedByDate})[0];
  assert.equal(b.close,10);assert.equal(b.rawClose,20);assert.equal(b.pe,a.pe);assert.equal(b.pb,a.pb);
 });
+test('partial adjusted prices never truncate valuation dates or change their percentiles', () => {
+ const timeline=v.buildTimelineFromStatements([point('2024-12-31',100e8)]);
+ const raw=[candle('2025-05-02',20),candle('2025-05-06',25),candle('2025-05-07',30)];
+ const shareHistory=[{date:'2025-01-01',sharesWan:100000},{date:'2025-05-06',sharesWan:200000}];
+ const options={shareHistory,dyByDate:new Map(raw.map((c,i)=>[c.date,i+1]))};
+ const full=v.buildRealValuationSeries(raw,timeline,options);
+ const adjustedByDate=new Map([['2025-05-07',candle('2025-05-07',15)]]);
+ const partial=v.buildRealValuationSeries(raw,timeline,{...options,adjustedByDate});
+ assert.equal(partial.length,3);assert.deepEqual(partial.map(p=>p.close),[null,null,15]);
+ assert.deepEqual(partial.map(p=>p.rawClose),[20,25,30]);
+ assert.deepEqual(partial.map(p=>[p.pe,p.pb,p.dy]),full.map(p=>[p.pe,p.pb,p.dy]));
+ const empty=v.buildRealValuationSeries(raw,timeline,{...options,adjustedByDate:new Map()});
+ assert.equal(empty.length,3);assert.ok(empty.every(p=>p.close===null&&p.adjustmentFactor===null));
+ const quote={pe:100,pb:10,price:30};
+ assert.deepEqual(v.summarizeReal(partial,quote,{years:5}).stats,v.summarizeReal(full,quote,{years:5}).stats);
+ assert.deepEqual(v.summarizeReal(empty,quote,{years:5}).stats,v.summarizeReal(full,quote,{years:5}).stats);
+});
 test('share changes apply on the trading date, not the next reporting date', () => {
  const timeline=v.buildTimelineFromStatements([point('2024-12-31',100e8)]);
  const row=v.buildRealValuationSeries([candle('2025-06-02',10)],timeline,{shareHistory:[{date:'2025-01-01',sharesWan:100000},{date:'2025-06-01',sharesWan:200000}]})[0];

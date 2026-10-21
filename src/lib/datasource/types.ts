@@ -229,9 +229,10 @@ export interface ValuationPoint {
   date: string;
   pe: number | null;
   pb: number | null;
-  close: number;
+  /** Display-price basis; null if the requested adjusted price is unavailable. */
+  close: number | null;
   rawClose?: number;
-  adjustmentFactor?: number;
+  adjustmentFactor?: number | null;
   /** 预期股息率 %；未知数据为 null，明确零分红为 0。 */
   dy: number | null;
   /** 过去十二个月已实施分红的静态股息率 %。 */

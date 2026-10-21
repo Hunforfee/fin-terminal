@@ -428,7 +428,7 @@ export async function getValuation(input: string, years = 5, method: ValuationMe
   return cached(`val-qfq-forward-dy-v3:${n.symbol}:${span}:${method}:${databaseOnly()}`, databaseOnly()?0:defaultTtl(), async () => {
     const start = ymdYearsAgo(span);
     // 行情两条 3200 根分页链（raw/qfq）并行会触发上游限频，改为串行；
-    // qfq 失败时用 raw 兜底占位（下方会因口径不匹配报错，但至少给出明确信息）
+    // qfq 仅用于价格曲线；缺失时留空，不能缩短用 raw 计算的估值历史。
     const [q, points, shares, dates, dividends, plans] = await Promise.all([
       getQuote(n.symbol),
       storedMarketInput(`statements-v3:${n.code}:${span + 1}`, 'financial-history', 'sina-statements:CNY:yuan:current-revisions', 1800e3, () => sinaFinStmt.fetchStatementHistory(n.code, span + 1), rows => validateDatedRows(rows as unknown as Record<string, unknown>[], 'date', ['npParent', 'equityParent'])),
@@ -439,14 +439,14 @@ export async function getValuation(input: string, years = 5, method: ValuationMe
     ]).catch(error => { throw Error(`财报数据不可用或股本/公告输入未通过核验：${error instanceof Error ? error.message : String(error)}`); });
     const count=Math.min(3200,span*280+60);
     const raw = await getKLine(n.symbol, 'day', 'none', count, start);
-    const adjusted = await getKLine(n.symbol, 'day', 'qfq', count, start);
+    const adjusted = await getKLine(n.symbol, 'day', 'qfq', count, start).catch(() => null);
     if (!q) throw new Error('行情获取失败');
     if (!points.length) throw new Error('财报数据不可用，已停止估值计算，请稍后重试');
     if (!shares.length) throw new Error('真实股本变动史不可用，已停止估值计算');
-    if (raw.adjust !== 'none' || adjusted.adjust !== 'qfq') throw new Error('价格复权口径不匹配，已停止估值计算');
+    if (raw.adjust !== 'none' || adjusted && adjusted.adjust !== 'qfq') throw new Error('价格复权口径不匹配，已停止估值计算');
     const cutoff = ymdYearsAgo(span);
     const candles = raw.candles.filter(c => c.date >= cutoff);
-    const adjustedByDate = new Map(adjusted.candles.map(c => [c.date, c]));
+    const adjustedByDate = new Map((adjusted?.candles ?? []).map(c => [c.date, c]));
     const staticDyByDate = dividends ? buildDividendYieldByDate(dividends, candles) : new Map<string, number>();
     const dyByDate = plans && dividends ? buildExpectedDividendYieldByDate(plans, candles, dividends) : new Map<string, number | null>();
     const completePoints = [...points];
@@ -468,8 +468,9 @@ export async function getValuation(input: string, years = 5, method: ValuationMe
     const alternate = method === 'cutoff' ? disclosure : cutoffTimeline;
     const options = { dyByDate, staticDyByDate, adjustedByDate, shareHistory: shares };
     const history = buildRealValuationSeries(candles, timeline, options);
-    if (!history.length) throw new Error('财报、股本与前复权价格没有可对齐的日期');
+    if (!history.length) throw new Error('财报、股本与不复权价格没有可对齐的日期');
     const last = history[history.length - 1];
+    const lastRawClose = last.rawClose ?? candles.at(-1)!.close;
     const lastFin = timeline.filter(p => p.eff <= last.date).sort((a,b) => a.report.localeCompare(b.report)).at(-1);
     const main = summarizeReal(history, q, { years: span });
     const altHistory = buildRealValuationSeries(candles, alternate, options);
@@ -478,18 +479,20 @@ export async function getValuation(input: string, years = 5, method: ValuationMe
     const missingDates = points.filter(p => !dates.has(p.date) && effectiveDate(p.date) >= cutoff && p.date <= last.date).length;
     if (missingDates) warnings.push(`${missingDates} 个报告期未取得原始公告日期，不用于建立新估值点。`);
     if (completePoints.some(p => !points.includes(p) && p.date >= cutoff)) warnings.push('部分已公告报告缺少财务金额，相应区间不计算估值。');
-    if (history.length < candles.length) warnings.push('部分交易日缺少可对齐的前复权价格或已披露财报，已排除。');
-    if (raw.complete===false || adjusted.complete===false || Date.parse(history[0].date)-Date.parse(cutoff)>14*864e5) warnings.push('数据覆盖不足所选区间，请以实际起止日期和样本数为准。');
+    if (history.length < candles.length) warnings.push('部分交易日缺少已披露财报，估值不计算。');
+    const missingAdjusted = history.filter(p => p.close === null).length;
+    if (missingAdjusted) warnings.push(`${missingAdjusted} 个交易日前复权价格缺失，价格曲线留空；估值仍按不复权价格与当日股本计算。`);
+    if (raw.complete===false || Date.parse(history[0].date)-Date.parse(cutoff)>14*864e5) warnings.push('估值数据覆盖不足所选区间，请以实际起止日期和样本数为准。');
     if (dividends === null) warnings.push('分红数据源不可用，股息率暂不计算。');
     if (dividends?.some(e => e.cashConflict)) warnings.push('部分历史分红来源金额有冲突，相关十二个月静态股息率留空，不将争议金额计入。');
     if (plans === null) warnings.push('分红方案数据不可用，预期股息率暂不计算；静态值仍按可取得的已实施分红计算。');
-    if (raw.stale || adjusted.stale || q.stale) warnings.push('部分行情来自历史快照，请留意数据日期。');
+    if (raw.stale || adjusted?.stale || q.stale) warnings.push('部分行情来自历史快照，请留意数据日期。');
     warnings.push('财务金额为数据源当前披露版本，可能包含后续重述；历史序列不能替代严格的时点回测数据。');
     return { ...main, code: n.code, method, priceAdjust: 'qfq', warnings,
       dividendYieldMethod: 'announced-forward',
-      dividendForecast: { asOf: last.date, rawClose: last.rawClose ?? last.close,
-        expectedPerShare: main.dividendYield === null ? null : main.dividendYield * (last.rawClose ?? last.close) / 100,
-        staticPerShare: main.staticDividendYield === null ? null : main.staticDividendYield * (last.rawClose ?? last.close) / 100 },
+      dividendForecast: { asOf: last.date, rawClose: lastRawClose,
+        expectedPerShare: main.dividendYield === null ? null : main.dividendYield * lastRawClose / 100,
+        staticPerShare: main.staticDividendYield === null ? null : main.staticDividendYield * lastRawClose / 100 },
       netProfit: lastFin?.npTTM ?? null,
       netAssets: lastFin?.bps != null && lastFin.shares != null ? lastFin.bps * lastFin.shares : null,
       marketComparison: { pe: q.pe, pb: q.pb, ts: q.ts },
@@ -498,8 +501,8 @@ export async function getValuation(input: string, years = 5, method: ValuationMe
         realDates: true, adjustGaps: 0 },
       ...(alt && alt.stats ? { alt: { method: method === 'cutoff' ? 'disclosure' as const : 'cutoff' as const,
         history: alt.history, stats: alt.stats, current: { pe: alt.pe, pb: alt.pb, dy: alt.dividendYield } } } : {}),
-      source: `sina-statements + sina-disclosures + eastmoney-dividend-plans + ${raw.source}-raw + ${adjusted.source}-qfq`,
-      stale: q.stale || raw.stale || adjusted.stale,
+      source: `sina-statements + sina-disclosures + eastmoney-dividend-plans + ${raw.source}-raw + ${adjusted?.source ?? 'missing'}-qfq`,
+      stale: q.stale || raw.stale || adjusted?.stale || false,
     };
   });
 }

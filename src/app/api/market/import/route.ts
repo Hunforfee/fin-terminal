@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMarketStore, marketRecord } from '@/lib/marketStore';
-import { importDailyPrices } from '@/lib/marketImportedBars';
+import { importDailyPrices, importedBarsKey } from '@/lib/marketImportedBars';
 import { denyReason, importAdminIds, readImportIdentity } from '@/lib/marketImportAuth';
-import { klineCrossConflicts, writeDividendImplemented, writeDividendPlans, writeFinanceStatements } from '@/lib/marketImportRecords';
+import { klineCrossConflicts, writeDividendImplemented, writeDividendPlans, writeFinancialHistory, writeFinanceStatements } from '@/lib/marketImportRecords';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -70,14 +70,51 @@ export async function POST(request: NextRequest) {
         await appendLog(store, { at: new Date().toISOString(), userId: identity.userId, action: 'kline-conflict', detail: { symbol, conflicts } });
         return json({ ok: false, error: `与库内行情冲突 ${conflicts.length} 处，未写入`, conflicts }, 409);
       }
+      // 增量合并：与已有 canonical 按日期并集合并（重叠日以本次为准）。
+      // 重叠日价差 ≤1% 视为显示精度差异、以本次覆盖；>1% 视为冲突拒绝。
+      // 完全一致则幂等跳过，支持分批上传与重复上传。
+      const oldRow = await store.read<{ candles: { date: string; open: number; high: number; low: number; close: number }[] }>(importedBarsKey(symbol)).catch(() => null);
+      const oldCandles = oldRow?.payload?.candles ?? [];
+      const incoming = new Map(candles.map(c => [c.date, c]));
+      let merged = candles;
+      if (oldCandles.length) {
+        const bigConflicts: unknown[] = [];
+        for (const o of oldCandles) {
+          const c = incoming.get(o.date);
+          if (!c) continue;
+          const base = Math.max(Math.abs(o.close), 1e-8);
+          if (['open', 'high', 'low', 'close'].some(f => Math.abs(c[f as 'close'] - o[f as 'close']) > base * 0.01))
+            bigConflicts.push({ date: o.date, incoming: c.close, existing: o.close, source: 'canonical' });
+        }
+        if (bigConflicts.length) {
+          await appendLog(store, { at: new Date().toISOString(), userId: identity.userId, action: 'kline-conflict', detail: { symbol, conflicts: bigConflicts } });
+          return json({ ok: false, error: `与已有 canonical 数据冲突 ${bigConflicts.length} 处，未写入`, conflicts: bigConflicts }, 409);
+        }
+        const changed = oldCandles.some(o => {
+          const c = incoming.get(o.date);
+          return c && ['open', 'high', 'low', 'close'].some(f => Math.abs(c[f as 'close'] - o[f as 'close']) > 1e-8);
+        });
+        const union = new Map(oldCandles.map(c => [c.date, c]));
+        for (const [d, c] of incoming) union.set(d, c);
+        merged = [...union.values()].sort((a, b) => a.date.localeCompare(b.date));
+        if (!changed && union.size === oldCandles.length) {
+          await appendLog(store, { at: new Date().toISOString(), userId: identity.userId, action: 'import:kline', detail: { symbol, skipped: true } });
+          return json({ ok: true, type: 'kline', result: { symbol, skipped: true, imported: 0 } });
+        }
+        // 重叠日存在微小差异（原记录为其他来源样本）：删除旧记录后整体重写为本次口径
+        if (changed && store.remove && oldRow)
+          await store.remove(importedBarsKey(symbol), oldRow.digest);
+      }
       const r = await importDailyPrices(store, {
         symbol, source: 'qmt',
-        candles: candles as never,
+        candles: merged as never,
         listingDate: typeof rec.listingDate === 'string' ? rec.listingDate : undefined,
       });
-      result = { imported: r.count, from: r.from, to: r.to, symbol: r.symbol };
+      result = { imported: incoming.size, from: r.from, to: r.to, symbol: r.symbol, total: r.count };
     } else if (body.type === 'finance') {
       result = await writeFinanceStatements(store, rec as never) as unknown as Record<string, unknown>;
+    } else if (body.type === 'financial-history') {
+      result = await writeFinancialHistory(store, rec as never) as unknown as Record<string, unknown>;
     } else if (body.type === 'dividend-plans') {
       result = await writeDividendPlans(store, String(rec.symbol ?? ''), rec.plans as never) as unknown as Record<string, unknown>;
     } else if (body.type === 'dividend-impl') {

@@ -37,7 +37,7 @@ export default function AdminMarketImportPage() {
       const realType = record?.type ?? type;
       const r = await fetch('/api/market/import', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-fin-csrf': '1' },
         body: JSON.stringify({ type: realType, record }),
       });
       const j = await r.json().catch(() => ({}));

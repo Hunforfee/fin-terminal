@@ -1,4 +1,4 @@
-import { marketRecord, type MarketStore } from './marketStore';
+import { marketRecord, marketDigest, type MarketStore } from './marketStore';
 import { marketCutoff } from './marketRetention';
 
 /**
@@ -62,6 +62,7 @@ export async function writeFinanceStatements(store: MarketStore, input: FinanceI
     byYear.get(y)!.push(i);
   });
   const written: { key: string; dates: number }[] = [];
+  let identical = 0;
   for (const [year, idx] of [...byYear.entries()].sort()) {
     const yearDates = idx.map(i => dates[i]);
     const rows = input.items.map(it => ({
@@ -72,15 +73,83 @@ export async function writeFinanceStatements(store: MarketStore, input: FinanceI
     if (announce) payload.announceDates = idx.map(i => announce![i]);
     const key = `source-sina-page:v1:${code}:${input.statement}:${year}`;
     const old = await store.read(key);
-    // 相同内容幂等跳过
-    if (old && JSON.stringify(old.payload) === JSON.stringify(payload)) {
+    // 相同内容幂等跳过（digest 对键序不敏感，规避 PG jsonb 重排）
+    if (old && marketDigest(old.payload) === marketDigest(payload)) {
+      identical++;
       written.push({ key, dates: yearDates.length }); continue;
     }
     if (!await store.write(marketRecord(key, 'source-sina-page', 'sina:reported:wan', payload, 7 * 864e5, now), old?.digest ?? null))
       throw Error(`写入版本冲突: ${key}`);
     written.push({ key, dates: yearDates.length });
   }
-  return { code, statement: input.statement, written, totalDates: dates.length };
+  return { code, statement: input.statement, written, totalDates: dates.length,
+    ...(identical === byYear.size ? { skipped: true } : {}) };
+}
+
+/* ------------------------------------------------- 财务史（statements-v3） */
+
+export interface FinancialHistoryImport {
+  symbol: string;
+  reportDates: string[];
+  /** 金额字段单位万元（累计），totalShares 单位股 */
+  items: { code: string; vals: (number | null)[] }[];
+}
+
+const WAN_TO_YUAN = 1e4;
+
+/** 写入 statements-v3:<code>:<span>（financial-history，供估值/收盘/净利史读取）。 */
+export async function writeFinancialHistory(store: MarketStore, input: FinancialHistoryImport, now = Date.now()) {
+  const code = String(input.symbol ?? '').replace(/^(sh|sz|hk)/i, '');
+  if (!/^\d{6}$/.test(code)) throw Error('财务史导入仅支持 6 位 A 股代码');
+  const dates = input.reportDates;
+  if (!Array.isArray(dates) || dates.length < 2) throw Error('财务史报告期不足');
+  const seen = new Set<string>();
+  for (const d of dates) {
+    if (!isoDate(d)) throw Error(`报告期日期无效: ${d}`);
+    if (seen.has(d)) throw Error(`报告期重复: ${d}`);
+    seen.add(d);
+    if (d < marketCutoff(now)) throw Error('财报范围超出十年保留期限');
+  }
+  const WAN_CODES = new Set(['npParent', 'npTotal', 'equityParent', 'equityTotal', 'equityCommon']);
+  const byCode = new Map(input.items.map(it => [String(it.code), it.vals]));
+  for (const req of ['npParent', 'equityParent']) {
+    const vals = byCode.get(req);
+    if (!vals) throw Error(`缺少必需科目 ${req}`);
+  }
+  const idx = dates.map((d, i) => ({ d, i })).sort((a, b) => a.d.localeCompare(b.d));
+  const incoming = idx.map(({ d, i }) => {
+    const row: Record<string, unknown> = { date: d };
+    for (const [code2, vals] of byCode) {
+      const v = vals[i];
+      if (v === null || v === undefined) { row[code2] = null; continue; }
+      if (!Number.isFinite(Number(v))) throw Error(`科目 ${code2} 值无效: ${v}`);
+      row[code2] = code2 === 'totalShares' ? Number(v) / 1e8
+        : WAN_CODES.has(code2) ? Number(v) * WAN_TO_YUAN : Number(v);
+    }
+    return row;
+  });
+  // 按日期合并（本次覆盖同日），绝不能缩减已有历史
+  let rows: Record<string, unknown>[] = incoming;
+  const probe = await store.read('statements-v3:600415:12').catch(() => null);
+  const probeRows = (probe?.payload as Record<string, unknown>[] | undefined) ?? null;
+  if (probeRows?.length) {
+    const union = new Map(probeRows.map(r => [String(r.date), r]));
+    for (const r of incoming) union.set(String(r.date), r);
+    rows = [...union.values()].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    if (union.size === probeRows.length && marketDigest(probeRows) === marketDigest(rows))
+      return { code, rows: rows.length, spans: 0, skipped: true };
+  }
+  // 每个消费方按 span 取数，写入覆盖 2~12 年的全部 span 键
+  const written: string[] = [];
+  for (let span = 2; span <= 12; span++) {
+    const key = `statements-v3:${code}:${span}`;
+    const old = await store.read(key);
+    if (old && marketDigest(old.payload) === marketDigest(rows)) { written.push(key); continue; }
+    if (!await store.write(marketRecord(key, 'financial-history', 'sina-statements:CNY:yuan:current-revisions', rows, 1800e3, now), old?.digest ?? null))
+      throw Error(`写入版本冲突: ${key}`);
+    written.push(key);
+  }
+  return { code, rows: rows.length, spans: written.length };
 }
 
 /* ------------------------------------------------------------ 分红 */
@@ -96,7 +165,8 @@ function checkPlan(p: DividendPlanItem) {
   for (const k of ['announceDate', 'scheduleKnownDate', 'exDate'] as const)
     if (p[k] !== null && p[k] !== undefined && !isoDate(p[k])) throw Error(`分红 ${k} 无效: ${p[k]}`);
   if (!Number.isFinite(p.perShare) || p.perShare < 0) throw Error('每股分红金额无效');
-  if (p.perShareStock !== undefined && (!Number.isFinite(p.perShareStock) || p.perShareStock < 0)) throw Error('送转比例无效');
+  if (p.perShareStock !== undefined && p.perShareStock !== null &&
+      (!Number.isFinite(p.perShareStock) || p.perShareStock < 0)) throw Error('送转比例无效');
   if (typeof p.implemented !== 'boolean') throw Error('implemented 必须为布尔');
 }
 
@@ -113,10 +183,10 @@ export async function writeDividendPlans(store: MarketStore, symbol: string, pla
     exDate: p.exDate ?? null, special: !!p.special, perShare: p.perShare,
     cancelled: !!p.cancelled, reportDate: p.reportDate, implemented: !!p.implemented,
     announceDate: p.announceDate ?? null, ...(p.scheduleKnownDate ? { scheduleKnownDate: p.scheduleKnownDate } : {}),
-    ...(p.perShareStock !== undefined ? { perShareStock: p.perShareStock } : {}),
+    ...(p.perShareStock != null ? { perShareStock: p.perShareStock } : {}),
   }));
   const old = await store.read(key);
-  if (old && JSON.stringify(old.payload) === JSON.stringify(payload)) return { code, count: payload.length, skipped: true };
+  if (old && marketDigest(old.payload) === marketDigest(payload)) return { code, count: payload.length, skipped: true };
   if (!await store.write(marketRecord(key, 'announced-dividend-plans', `eastmoney:${planCurrency(symbol)}:tax-before:per-share:announced-not-implemented`, payload, 1800e3, now), old?.digest ?? null))
     throw Error('分红预案写入版本冲突，请重试');
   return { code, count: payload.length };
@@ -144,7 +214,7 @@ export async function writeDividendImplemented(store: MarketStore, symbol: strin
     precisionPerShare: r.precisionPerShare ?? 0.01,
   }));
   const old = await store.read(key);
-  if (old && JSON.stringify(old.payload) === JSON.stringify(payload)) return { code, count: payload.length, skipped: true };
+  if (old && marketDigest(old.payload) === marketDigest(payload)) return { code, count: payload.length, skipped: true };
   if (!await store.write(marketRecord(key, 'implemented-dividends', `qmt:${planCurrency(symbol)}:tax-before:per-share:ex-date`, payload, 1800e3, now), old?.digest ?? null))
     throw Error('已实施分红写入版本冲突，请重试');
   return { code, count: payload.length };

@@ -11,7 +11,7 @@ const now=new Date(),today=new Date(now.getTime()+8*3600e3).toISOString().slice(
 const codes=['600519','300498','600036','601318','000333','600900','000063','600030','601899','603866'];
 const year=Number(today.slice(0,4))-1,reportDate=`${year}-12-31`;
 const report={at:now.toISOString(),basis:'aggregator cross-check only; not original issuer/stock-exchange audit',
-  ptradeRawComparison:'pending: only user summaries received, no raw sample values',companies:[]};
+  companies:[]};
 const main=await screen.fetchValueScreenReportPages('RPT_F10_FINANCE_MAINFINADATA',
   'SECURITY_CODE,REPORT_DATE,NOTICE_DATE,UPDATE_DATE,CURRENCY,PARENTNETPROFIT', [reportDate],today,undefined,codes);
 for(const code of codes){

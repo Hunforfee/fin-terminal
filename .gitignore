@@ -23,3 +23,6 @@ finance-*.png
 
 # 预生成综述的抓取中间数据（可由 scripts/fetch-analysis-raw.mjs 重新生成）
 src/data/analyses/_raw/
+
+# 兜底行情快照（scripts/fetch-snapshots.mjs 用真实接口抓取生成，属下载数据，不入库）
+src/data/snapshots/market.json

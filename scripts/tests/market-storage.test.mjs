@@ -107,10 +107,13 @@ test('financial maps persist; expired financials never silently substitute for c
   const hit=await storedMarketInput('dates','disclosures','source',1000,async()=>{throw Error('must not fetch');},validate,fileMarketStore(dir),now+1);assert.equal(hit.size,1);
   await assert.rejects(storedMarketInput('dates','disclosures','source',1000,async()=>{throw Error('source down');},validate,store,now+2000),/source down/);
 }));
-test('partial financial histories cannot replace previously covered dates',()=>fixture(async store=>{
+test('partial financial histories never discard previously covered dates',()=>fixture(async store=>{
   const validate=v=>validateDatedRows(v,'date',['npParent']);
   await storedMarketInput('fin','financial','source',1000,async()=>[{date:'2025-12-31',npParent:1},{date:'2026-06-30',npParent:2}],validate,store,now);
-  await assert.rejects(storedMarketInput('fin','financial','source',1000,async()=>[{date:'2026-06-30',npParent:2}],validate,store,now+2000),/记录减少/);
+  const merged=await storedMarketInput('fin','financial','source',1000,async()=>[{date:'2026-06-30',npParent:2}],validate,store,now+2000);
+  assert.equal(merged.length,2);
+  assert.equal(merged[0].date,'2025-12-31');
+  assert.equal(merged[1].date,'2026-06-30');
   assert.equal((await store.read('fin')).payload.length,2);
 }));
 

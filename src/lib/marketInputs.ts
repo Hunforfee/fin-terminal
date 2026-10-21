@@ -66,17 +66,34 @@ async function readOrFetchInput<T>(key: string, kind: string, source: string, tt
     if (old) {
       const prior = retainMarketPayload(kind,decode<any>(old.payload),now), next = value as any;
       if (Array.isArray(prior) && Array.isArray(next) && prior.length && prior.every(r => r && typeof r.date === 'string')) {
-        const dates = new Set(next.map(r => r.date));
-        if (prior.some(r => !dates.has(r.date))) throw Error('历史来源记录减少，未确认完整性，暂不替换');
+        const byDate = new Map<any, any>(next.map(r => [r.date, r]));
+        // An upstream response may legitimately cover fewer report dates than the
+        // database (imported histories are often more complete, and providers
+        // paginate or rate-limit). Dropping verified local history would destroy
+        // data, so keep every known date and only let upstream add or refresh.
+        const shrunk = prior.filter(r => !byDate.has(r.date));
+        if (shrunk.length) {
+          try { await store?.incident(key, 'source_history_shrank', { missingDates: shrunk.map(r => r.date), kept: shrunk.length }); } catch {}
+          for (const row of prior) if (!byDate.has(row.date)) byDate.set(row.date, row);
+          value = [...byDate.values()].sort((a, b) => String(a.date).localeCompare(String(b.date))) as T;
+        }
         if (kind === 'financial-history') {
-          const byDate = new Map(next.map(r => [r.date, r]));
-          for (const row of prior) for (const field of ['npParent', 'equityParent', 'sharesYi'])
-            if (typeof row[field] === 'number' && (byDate.get(row.date) as any)?.[field] == null)
-              throw Error('已有财报金额变为缺失，暂不替换');
+          let repaired = false;
+          for (const row of prior) {
+            const target = byDate.get(row.date);
+            if (!target) continue;
+            for (const field of ['npParent', 'equityParent', 'sharesYi'])
+              if (typeof row[field] === 'number' && (target as any)[field] == null) { (target as any)[field] = row[field]; repaired = true; }
+          }
+          if (repaired) try { await store?.incident(key, 'source_amounts_partial', { key, keptFrom: 'local' }); } catch {}
         }
       }
-      if (prior instanceof Map && next instanceof Map && [...prior.keys()].some(k => !next.has(k)))
-        throw Error('原始公告日期覆盖减少，暂不替换');
+      // Same rule for disclosure maps: a thinner upstream reply must not erase
+      // publication dates that are already verified and stored.
+      if (prior instanceof Map && next instanceof Map && [...prior.keys()].some(k => !next.has(k))) {
+        for (const [k, v] of prior) if (!next.has(k)) next.set(k, v);
+        try { await store?.incident(key, 'disclosure_coverage_shrank', { kept: prior.size - [...prior.keys()].filter(k => ![...next.keys()].includes(k)).length }); } catch {}
+      }
     }
   }
   catch (e) {

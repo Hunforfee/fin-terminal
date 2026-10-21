@@ -3,7 +3,6 @@ import { ok, fail, sp } from '@/lib/api';
 import { normalizeStockCode } from '@/lib/datasource/codes';
 import { fetchDeductedPeriods, computeDeductedPe } from '@/lib/datasource/deductedPe';
 import { getQuote } from '@/lib/datasource';
-import { cached } from '@/lib/datasource/cache';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -43,9 +42,7 @@ async function one(symbol: string): Promise<DeductedPeRow> {
   try {
     const [periods, quote] = await Promise.all([
       // 只缓存更新较慢的财报；最终 PE 每次按行情层当前市值重新计算。
-      cached(`deducted-periods-v2:${symbol}`, 3600e3, () =>
-        fetchDeductedPeriods(symbol.slice(2)),
-      ),
+      fetchDeductedPeriods(symbol.slice(2)),
       getQuote(symbol).catch(() => null),
     ]);
     // 总市值单位为亿元，折算成元与净利润口径一致

@@ -6,7 +6,7 @@ import { personalStorage } from '@/lib/personalStorage';
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import FieldPicker, { allFieldMetas, type PickerCatalog } from '@/components/FieldPicker';
-import { INDICATORS } from '@/lib/datasource/sinaFinancial';
+import { INDICATORS } from '@/lib/datasource/financeIndicators';
 import { financeStorageKey, sanitizeFields, takeLegacyHkMergeFields } from '@/lib/financePreferences';
 import type { FinancialReportLink } from '@/lib/financialReportLinks';
 import {

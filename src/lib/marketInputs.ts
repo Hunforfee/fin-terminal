@@ -1,11 +1,20 @@
 /** Persist source inputs, not derived PE/PB/yields. Expired inputs never silently become current. */
 import { getMarketStore, marketRecord, type MarketStore } from './marketStore';
 import { cached } from './datasource/cache';
+import { withMarketRefresh } from './marketRefresh';
+import { retainMarketPayload } from './marketRetention';
 
 export function cachedMarketInput<T>(key: string, kind: string, source: string, ttl: number,
   producer: () => Promise<T>, validate: (value: T) => void): Promise<T> {
-  return cached(`market-input:${key}`, ttl, () => storedMarketInput(key, kind, source, ttl, producer, validate));
+  const store = getMarketStore();
+  // The persistent record owns freshness. A second full TTL on a nearly expired
+  // record would hide later writes and extend its effective lifetime.
+  if (store) return storedMarketInput(key, kind, source, ttl, producer, validate, store);
+  return cached(`market-input:${key}`, ttl, () => storedMarketInput(key, kind, source, ttl, producer, validate, null));
 }
+
+const withoutStore = {};
+const pendingInputs = new WeakMap<object, Map<string, Promise<unknown>>>();
 
 const wire = (v: unknown): unknown => JSON.parse(JSON.stringify(v, (_key, value) => {
   if (value instanceof Map) return { $marketMap: [...value.entries()] };
@@ -17,20 +26,42 @@ const decode = <T>(v: unknown): T => JSON.parse(JSON.stringify(v), (_key, value)
 export async function storedMarketInput<T>(key: string, kind: string, source: string, ttl: number,
   producer: () => Promise<T>, validate: (value: T) => void,
   store: MarketStore | null = getMarketStore(), now = Date.now()): Promise<T> {
+  const owner = store ?? withoutStore;
+  let pending = pendingInputs.get(owner);
+  if (!pending) { pending = new Map(); pendingInputs.set(owner, pending); }
+  const identity = JSON.stringify([key, kind, source, ttl]);
+  const existing = pending.get(identity);
+  if (existing) { const value = await existing as T; validate(value); return value; }
+  const work = (async()=>{
+    if (store) {
+      const row = await store.read(key).catch(()=>null);
+      if (row && Date.parse(row.refreshAfter)>now) {
+        try { const value=retainMarketPayload(kind,decode<T>(row.payload),now);validate(value);return value; } catch {}
+      }
+    }
+    return withMarketRefresh(store, key, () => readOrFetchInput(key, kind, source, ttl, producer, validate, store, now));
+  })()
+    .finally(() => pending!.delete(identity));
+  pending.set(identity, work);
+  return work;
+}
+async function readOrFetchInput<T>(key: string, kind: string, source: string, ttl: number,
+  producer: () => Promise<T>, validate: (value: T) => void,
+  store: MarketStore | null, now: number): Promise<T> {
   let old;
   if (store) {
     try {
       old = await store.read(key);
       if (old && Date.parse(old.refreshAfter) > now) {
-        const value = decode<T>(old.payload); validate(value); return value;
+        const value = retainMarketPayload(kind, decode<T>(old.payload),now); validate(value); return value;
       }
     } catch { /* Store outage must not prevent source access. */ }
   }
   let value: T;
   try {
-    value = await producer(); validate(value);
+    value = retainMarketPayload(kind, await producer(),now); validate(value);
     if (old) {
-      const prior = decode<any>(old.payload), next = value as any;
+      const prior = retainMarketPayload(kind,decode<any>(old.payload),now), next = value as any;
       if (Array.isArray(prior) && Array.isArray(next) && prior.length && prior.every(r => r && typeof r.date === 'string')) {
         const dates = new Set(next.map(r => r.date));
         if (prior.some(r => !dates.has(r.date))) throw Error('历史来源记录减少，未确认完整性，暂不替换');

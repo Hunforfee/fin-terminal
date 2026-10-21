@@ -14,7 +14,7 @@ import FieldPicker, {
 import {
   INDICATORS,
   type IndicatorGroup,
-} from '@/lib/datasource/sinaFinancial';
+} from '@/lib/datasource/financeIndicators';
 import {
   checkExpr,
   evalFormula,

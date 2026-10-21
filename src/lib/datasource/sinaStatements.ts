@@ -14,6 +14,8 @@
  */
 
 import { fetchText } from './http';
+import { cachedMarketInput } from '../marketInputs';
+import { marketCutoff } from '../marketRetention';
 import { fetchInterestExpenses, INTEREST_FIELDS, withInterestFields } from './interestExpenses';
 import { fetchDebtRatios } from './debtRatios';
 import { statementFieldUnit, type StatementFieldUnit } from '../financeFieldSemantics';
@@ -95,14 +97,23 @@ function parseStatementPage(html: string): { dates: string[]; rows: ParsedRow[];
       rows.push({ kind: 'group', name: colspan[1].trim(), vals: [] });
       continue;
     }
-    if (tr.includes('padding-left:30px')) {
+    if (tr.includes('padding-left:30px') || dates.length > 0 && /<a[^>]*>/.test(tr)) {
       const tds = Array.from(tr.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)).map((x) => stripTags(x[1]));
-      if (tds.length >= 2) {
+      if (tds.length >= 2 && (tr.includes('padding-left:30px') || tds.slice(1).every(v=>/^(?:[+\-]?[\d,.]+|--|—|-|)$/.test(v)))) {
         rows.push({ kind: 'field', name: tds[0], vals: tds.slice(1) });
       }
     }
   }
   return { dates, rows, unit };
+}
+
+/** Shared source page: field catalogs, custom reports and valuation read the same rows. */
+export function fetchStatementSourcePage(code: string, id: StatementId, year: number) {
+  if (!/^\d{6}$/.test(code) || !STATEMENT_META[id] || !Number.isInteger(year) || year < Number(marketCutoff().slice(0,4)))
+    throw Error('财报范围超出十年保留期限');
+  return cachedMarketInput(`source-sina-page:v1:${code}:${id}:${year}`,'source-sina-page','sina:reported:wan',1800e3,
+    async()=>parseStatementPage(await fetchText(STATEMENT_META[id].url.replace('{code}',code).replace('{year}',String(year)),{encoding:'gbk',timeoutMs:12000})),
+    value=>{if(!value.dates.length || !value.rows.some(r=>r.kind==='field') || value.dates.some(d=>!/^\d{4}-\d{2}-\d{2}$/.test(d)))throw Error('财报来源页缺少有效数据');});
 }
 
 function stripTags(s: string): string {
@@ -191,8 +202,7 @@ export async function fetchStatementCatalog(code: string): Promise<StatementCata
       (Object.keys(STATEMENT_META) as StatementId[]).map(async (id) => {
         const url = STATEMENT_META[id].url.replace('{code}', code).replace('{year}', String(y));
         try {
-          const html = await fetchText(url, { encoding: 'gbk', timeoutMs: 10000 });
-          const parsed = parseStatementPage(html);
+          const parsed = await fetchStatementSourcePage(code,id,y);
           return { id, parsed };
         } catch {
           return { id, parsed: null };
@@ -221,7 +231,7 @@ export async function fetchStatementCatalog(code: string): Promise<StatementCata
 function yearListFor(years: number): number[] {
   const thisYear = new Date().getFullYear();
   const list: number[] = [];
-  const need = years + 1;
+  const need = Math.min(10,Math.max(1,years)) + 1;
   for (let y = thisYear; list.length < need && y >= 1998; y--) list.push(y);
   return list;
 }
@@ -261,8 +271,7 @@ async function fetchOneStatement(
     yearListFor(years).map(async (y) => {
       const url = meta.url.replace('{code}', code).replace('{year}', String(y));
       try {
-        const html = await fetchText(url, { encoding: 'gbk', timeoutMs: 10000 });
-        return parseStatementPage(html);
+        return await fetchStatementSourcePage(code,id,y);
       } catch {
         return null;
       }

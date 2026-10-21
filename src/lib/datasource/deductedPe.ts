@@ -1,4 +1,5 @@
 import { fetchJson, UpstreamError } from './http';
+import { cachedMarketInput, validateDatedRows } from '../marketInputs';
 
 /**
  * 扣非市盈率（PE-TTM，扣除非经常性损益）。
@@ -118,6 +119,10 @@ export function shiftQuarter(reportDate: string, delta: number): string {
 
 /** 取最近 10 个报告期的累计扣非净利润（足够推算 4 个单季） */
 export async function fetchDeductedPeriods(code: string): Promise<DeductedPeriod[]> {
+  return cachedMarketInput(`deducted-periods:v1:${code}`,'deducted-periods','eastmoney:CNY:yuan:cumulative-deducted-profit',1800e3,
+    ()=>fetchFreshDeductedPeriods(code),rows=>validateDatedRows(rows as unknown as Record<string,unknown>[],'reportDate',['cumulative']));
+}
+async function fetchFreshDeductedPeriods(code: string): Promise<DeductedPeriod[]> {
   if (!/^\d{6}$/.test(code)) throw new Error('股票代码无效');
   const url = new URL('https://datacenter-web.eastmoney.com/api/data/v1/get');
   url.search = new URLSearchParams({

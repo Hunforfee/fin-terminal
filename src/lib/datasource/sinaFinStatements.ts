@@ -15,7 +15,8 @@ import { fetchShareHistory, sharesAt, type ShareChange } from './sinaFinance';
  *   利润表「基本每股收益」同样不可靠（新浪口径在送转后会被重述/混用）。
  */
 
-import { fetchText } from './http';
+import { fetchStatementSourcePage } from './sinaStatements';
+import { cachedMarketInput, validateDatedRows } from '../marketInputs';
 
 export interface FinStatementPoint {
   /** 报告期 YYYY-MM-DD */
@@ -33,11 +34,6 @@ export interface FinStatementPoint {
   /** Ordinary shareholders equity, excluding other equity instruments. */
   equityCommon?: number | null;
 }
-
-const BS_PAGE = (code: string, year: number) =>
-  `https://money.finance.sina.com.cn/corp/go.php/vFD_BalanceSheet/stockid/${code}/ctrl/${year}/displaytype/4.phtml`;
-const PL_PAGE = (code: string, year: number) =>
-  `https://money.finance.sina.com.cn/corp/go.php/vFD_ProfitStatement/stockid/${code}/ctrl/${year}/displaytype/4.phtml`;
 
 function stripTags(s: string): string {
   return s
@@ -108,12 +104,12 @@ const BS_EQ_TOTAL = [
  * 金额单位统一换算为「元」（页面为万元）。
  */
 export async function fetchYearStatement(code: string, year: number, shareHistory: ShareChange[] = []): Promise<FinStatementPoint[]> {
-  const [plHtml, bsHtml] = await Promise.all([
-    fetchText(PL_PAGE(code, year), { encoding: 'gbk', timeoutMs: 12000 }).catch(() => ''),
-    fetchText(BS_PAGE(code, year), { encoding: 'gbk', timeoutMs: 12000 }).catch(() => ''),
+  const [plPage, bsPage] = await Promise.all([
+    fetchStatementSourcePage(code,'profit',year).catch(() => null),
+    fetchStatementSourcePage(code,'balance',year).catch(() => null),
   ]);
-  const pl = parseStatementRows(plHtml);
-  const bs = parseStatementRows(bsHtml);
+  const convert = (page: typeof plPage) => ({dates:page?.dates ?? [],rows:new Map((page?.rows ?? []).filter(r=>r.kind==='field').map(r=>[r.name,r.vals]))});
+  const pl = convert(plPage), bs = convert(bsPage);
   if (pl.dates.length === 0 && bs.dates.length === 0) return [];
 
   const dates = Array.from(new Set([...pl.dates, ...bs.dates])).sort();
@@ -168,9 +164,10 @@ export async function fetchYearStatement(code: string, year: number, shareHistor
 export async function fetchStatementHistory(code: string, years = 12): Promise<FinStatementPoint[]> {
   const thisYear = new Date().getFullYear();
   const yearList: number[] = [];
-  for (let y = thisYear; yearList.length < years + 1 && y >= 1998; y--) yearList.push(y);
+  for (let y = thisYear; yearList.length < Math.min(10,Math.max(1,years)) + 1 && y >= 1998; y--) yearList.push(y);
 
-  const shareHistory = await fetchShareHistory(code);
+  const shareHistory = await cachedMarketInput(`shares-v3:${code}`,'share-events','sina-shares:10000shares',1800e3,
+    ()=>fetchShareHistory(code),rows=>validateDatedRows(rows as unknown as Record<string,unknown>[],'date',['sharesWan']));
   const pages = await Promise.all(yearList.map((y) => fetchYearStatement(code, y, shareHistory).catch(() => [] as FinStatementPoint[])));
 
   const byDate = new Map<string, FinStatementPoint>();

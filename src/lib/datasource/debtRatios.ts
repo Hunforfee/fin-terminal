@@ -1,5 +1,5 @@
 import { fetchJson } from './http';
-import { cached } from './cache';
+import { cachedMarketInput } from '../marketInputs';
 import { numOrNull } from './codes';
 
 /** Explicit provider ratio in percentage points, not a sum with missing balances treated as zero. */
@@ -22,13 +22,13 @@ export async function fetchDebtRatios(code: string, years: number): Promise<Map<
   if (!/^\d{6}$/.test(code)) throw Error('无效股票代码');
   const secucode = `${code}.${/^[023]/.test(code) ? 'SZ' : /^(4|8|92)/.test(code) ? 'BJ' : 'SH'}`;
   const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
-  return cached(`interest-debt-ratio:v1:${secucode}:${years}:${today}`, 30 * 60e3, async () => {
+  const all=await cachedMarketInput(`source-debt-ratios:v1:${secucode}`, 'source-debt-ratios','eastmoney:CNY:explicit-interest-debt-ratio',30*60e3,async () => {
     const rows: Record<string, unknown>[] = [];
     for (let page = 1; ; page++) {
       const url = new URL('https://datacenter.eastmoney.com/securities/api/data/v1/get');
       url.search = new URLSearchParams({ reportName: 'RPT_F10_FINANCE_MAINFINADATA',
         columns: 'SECUCODE,REPORT_DATE,NOTICE_DATE,CURRENCY,INTEREST_DEBT_RATIO',
-        filter: `(SECUCODE="${secucode}")(REPORT_DATE>='${Number(today.slice(0, 4)) - years}-01-01')`,
+        filter: `(SECUCODE="${secucode}")(REPORT_DATE>='${Number(today.slice(0, 4)) - 10}-01-01')`,
         pageSize: '100', pageNumber: String(page), sortColumns: 'REPORT_DATE', sortTypes: '-1' }).toString();
       const result = await fetchJson<{ success?: boolean; result?: { data?: Record<string, unknown>[]; pages?: number } | null }>(url.toString(), { timeoutMs: 15000 });
       if (result.success === false || !Array.isArray(result.result?.data)) throw Error('有息负债率数据暂不可用');
@@ -37,5 +37,6 @@ export async function fetchDebtRatios(code: string, years: number): Promise<Map<
       if (page >= 10) throw Error('有息负债率分页不完整');
     }
     return parseDebtRatios(rows, secucode, today);
-  });
+  },value=>{if(!value.size)throw Error('有息负债率报告期缺失');});
+  return new Map([...all].filter(([date])=>Number(date.slice(0,4))>=Number(today.slice(0,4))-Math.min(10,Math.max(1,years))));
 }

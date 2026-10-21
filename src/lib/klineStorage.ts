@@ -1,5 +1,7 @@
 import type { Candle, KLineSeries, Period, Adjust } from './datasource/types';
 import { getMarketStore, marketDigest, marketRecord, type MarketStore, type MarketRecord } from './marketStore';
+import { marketCutoff, retainMarketPayload } from './marketRetention';
+import { withMarketRefresh } from './marketRefresh';
 
 export interface KLineRequest { symbol: string; period: Period; adjust: Adjust; count: number; start?: string; recentOnly?: boolean }
 export type KLineFetcher = (request: KLineRequest & { end?: string }) => Promise<KLineSeries>;
@@ -32,18 +34,19 @@ const active = new Map<string, Promise<KLineSeries>>();
 /** Canonical source-specific series, independent of page count/range and user identity. */
 export async function storedKLine(request: KLineRequest, fetcher: KLineFetcher,
   store: MarketStore | null = getMarketStore(), now = Date.now()): Promise<KLineSeries> {
+  if (request.start && request.start < marketCutoff(now)) request = { ...request,start:marketCutoff(now) };
   if (!store) {
-    const value = await fetcher(request); validateKLine(value, request, now); return value;
+    const value = retainMarketPayload('kline',await fetcher(request),now); validateKLine(value, request, now); return value;
   }
   const lock = `${request.symbol}:${request.period}:${request.adjust}:${request.start}:${request.count}:${!!request.recentOnly}`;
   const pending = active.get(lock); if (pending) return pending;
-  const work: Promise<KLineSeries> = (async (): Promise<KLineSeries> => {
+  const work: Promise<KLineSeries> = withMarketRefresh(store,`kline:${request.symbol}:${request.period}:${request.adjust}`,async (): Promise<KLineSeries> => {
     const old: MarketRecord<StoredSeries>[] = [];
     let storageFailed = false;
     for (const source of ['tencent', 'sina']) {
       try {
         const row = await store.read<StoredSeries>(keyOf(request, source));
-        if (row) { validateKLine(row.payload, request, now); old.push(row); }
+        if (row) { row.payload=retainMarketPayload('kline',row.payload,now); if(row.payload.candles.length){validateKLine(row.payload, request, now); old.push(row);} }
       } catch { storageFailed = true; }
     }
     const saved = old[0];
@@ -115,7 +118,7 @@ export async function storedKLine(request: KLineRequest, fetcher: KLineFetcher,
       }
       const cutoff = new Date(now + 8 * 3600e3); cutoff.setUTCFullYear(cutoff.getUTCFullYear() - 10);
       candles = candles.filter(c => c.date >= cutoff.toISOString().slice(0, 10));
-      const series: StoredSeries = { ...fetched, candles: candles.map(({date, open, high, low, close}) => ({date, open, high, low, close})),
+      const series: StoredSeries = { ...fetched, candles: candles.filter(c=>c.date>=marketCutoff(now)).map(({date, open, high, low, close}) => ({date, open, high, low, close})),
         lastFullAt: !matching || historicalReviewDue && fetched.complete !== false && fetched.candles[0].date <= matching.payload.candles[0].date
           ? now : matching.payload.lastFullAt,
         queries: [...(matching?.payload.queries ?? []).slice(-15), { start: request.start, count: request.count, at: now, complete: fetched.complete !== false }] };
@@ -133,7 +136,7 @@ export async function storedKLine(request: KLineRequest, fetcher: KLineFetcher,
         storage: { backend: 'persistent', acquiredAt: saved.acquiredAt, validation: 'structural' } };
       throw e;
     }
-  })();
+  });
   active.set(lock, work);
   try { return await work; } finally { if (active.get(lock) === work) active.delete(lock); }
 }

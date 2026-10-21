@@ -6,11 +6,13 @@ import ts from 'typescript';
 import { load } from './load-modules.mjs';
 
 const { computeDeductedPe, parseDeductedPeriods } = await load('datasource/deductedPe');
+const {validateDatedRows}=await load('marketInputs');
 const compile = file => ts.transpileModule(fs.readFileSync(file, 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 const routeCode = compile('src/app/api/deducted-pe/route.ts');
 const cacheCode = compile('src/lib/datasource/cache.ts');
+const providerCode=compile('src/lib/datasource/deductedPe.ts');
 const periods = parseDeductedPeriods([
   ['2026-06-30', 100e6], ['2026-03-31', 40e6], ['2025-12-31', 200e6],
   ['2025-09-30', 140e6], ['2025-06-30', 90e6],
@@ -24,6 +26,15 @@ function harness() {
     exports: cacheExports, Date: { now: () => now },
     require: () => ({ isShanghaiTradingTime: () => true }),
   });
+  const providerExports={};
+  vm.runInNewContext(providerCode,{
+    exports:providerExports,URL,URLSearchParams,
+    require(name){
+      if(name==='./http')return {fetchJson:async()=>{financialReads++;return {success:true,result:{data:periods.map(p=>({REPORT_DATE:p.reportDate,KCFJCXSYJLR:p.cumulative}))}};},UpstreamError:Error};
+      if(name==='../marketInputs')return {validateDatedRows,cachedMarketInput:(key,_kind,_source,ttl,producer,validate)=>cacheExports.cached(key,ttl,async()=>{const value=await producer();validate(value);return value;})};
+      throw Error(name);
+    },
+  });
   const routeExports = {};
   vm.runInNewContext(routeCode, {
     exports: routeExports,
@@ -35,7 +46,7 @@ function harness() {
       if (name === '@/lib/datasource/codes') return { normalizeStockCode: () => ({ symbol: 'sh600519' }) };
       if (name === '@/lib/datasource/deductedPe') return {
         computeDeductedPe,
-        fetchDeductedPeriods: async () => { financialReads++; return periods; },
+        fetchDeductedPeriods: providerExports.fetchDeductedPeriods,
       };
       if (name === '@/lib/datasource') return {
         getQuote: async () => { quoteReads++; if (quoteFails) throw Error('quote unavailable'); return { totalMarketCap: cap }; },
@@ -53,7 +64,7 @@ function harness() {
   };
 }
 
-test('route caches only financial periods and recalculates PE when current market cap changes', async () => {
+test('route reuses shared source periods and recalculates PE when current market cap changes', async () => {
   const h = harness();
   const first = await h.get();
   assert.equal(first.data[0].pe, 10);

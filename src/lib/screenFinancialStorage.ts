@@ -1,4 +1,6 @@
 import { marketRecord, getMarketStore, type MarketStore, type MarketRecord } from './marketStore';
+import { withMarketRefresh } from './marketRefresh';
+import { marketCutoff } from './marketRetention';
 type Raw = Record<string, unknown>;
 interface Reports { main: Raw[]; income: Raw[] }
 interface Input extends Reports { fetchedPeriods: Record<string, number> }
@@ -8,8 +10,10 @@ const key = (code: string) => `screen-company-input:v1:${code}:eastmoney:CNY`;
 export async function storedScreenFinancials(codes: string[], periods: string[],
   producer: (missing: string[]) => Promise<Reports>, store: MarketStore | null = getMarketStore(), now = Date.now()): Promise<Reports> {
   const unique = [...new Set(codes)].sort();
+  periods = periods.filter(date=>date>=marketCutoff(now));
   if (!unique.length) return { main: [], income: [] };
   if (!store) return producer(unique);
+  return withMarketRefresh(store,'screen-financial-inputs',async()=>{
   const records = new Map<string, MarketRecord<Input>>();
   try {
     if (store.readInputs) for (const row of await store.readInputs(unique.map(key))) records.set(row.key, row as MarketRecord<Input>);
@@ -51,4 +55,5 @@ export async function storedScreenFinancials(codes: string[], periods: string[],
     }
   } catch { /* Current validated fetch remains usable during a database outage. */ }
   return output;
+  });
 }

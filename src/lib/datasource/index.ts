@@ -1,5 +1,6 @@
 import { crossCheckMainlandRaw, MarketDataConflict } from '../klineCrossCheck';
 import { getMarketStore } from '../marketStore';
+import { sharedQuotes } from '../quoteInputs';
 import { getValuationPlans, getValuationDividends } from '../valuationInputs';
 import { getWatchlistFinancialInputs, WATCHLIST_FINANCIAL_FIELDS } from '../watchlistFinancialInputs';
 import { cachedMarketInput as storedMarketInput, validateDatedRows } from '../marketInputs';
@@ -142,7 +143,7 @@ export async function getQuote(input: string): Promise<Quote | null> {
   const key = `quote:${n.symbol}${n.market === 'HK' ? `:hk-hours-v1:${ttl}` : ''}`;
   const quote = await cached(key, ttl, async () => {
     try {
-      const q = await tencent.fetchQuote(n.symbol);
+      const q = (await fetchQuotesRaw([n.symbol]))[0];
       if (q) return q;
     } catch {
       /* 落到下一级 */
@@ -306,6 +307,9 @@ async function withHkValuation(quotes: Quote[]): Promise<Quote[]> {
 }
 
 async function fetchQuotesRaw(symbols: string[]): Promise<Quote[]> {
+  return sharedQuotes(symbols,fetchQuotesRawUpstream);
+}
+async function fetchQuotesRawUpstream(symbols: string[]): Promise<Quote[]> {
   try {
     const got = await tencent.fetchQuotes(symbols);
     if (got.length > 0) {
@@ -578,7 +582,7 @@ export async function getFinancialCompare(
   granularity: sinaFinancial.Granularity = 'semi',
 ) {
   const list = codes.slice(0, 4);
-  return cached(`fincomp:${list.join(',')}:${years}:${granularity}`, 60 * 60 * 1000, async () => {
+  return (async () => {
     const results = await Promise.all(
       list.map(async (c) => {
         const n = normalizeStockCode(c);
@@ -621,7 +625,7 @@ export async function getFinancialCompare(
       indicators: sinaFinancial.INDICATORS,
       groups: sinaFinancial.GROUP_META,
     };
-  });
+  })();
 }
 
 /* ------------------------------------------------ 三大报表全字段（新浪） */
@@ -689,8 +693,7 @@ export async function getCustomFinancialCompare(
       return { ...result, name: q?.name ?? result.name };
     })) };
   }
-  const fieldKey = encodeURIComponent(fields.join(','));
-  return cached(`finfield:${list.join(',')}:${fieldKey}:${years}:${granularity}`, 60 * 60 * 1000, async () => {
+  return (async () => {
     const results = await Promise.all(
       list.map(async (c) => {
         const n = normalizeStockCode(c);
@@ -712,7 +715,7 @@ export async function getCustomFinancialCompare(
       }),
     );
     return { companies: results };
-  });
+  })();
 }
 
 /** 粒度筛选（A 股 / 港股共用逻辑） */

@@ -2,12 +2,9 @@ import { getValuationPlans, getValuationDividends } from '@/lib/valuationInputs'
 import type { NextRequest } from 'next/server';
 import { ok, fail, sp } from '@/lib/api';
 import { normalizeStockCode } from '@/lib/datasource/codes';
-import { fetchDividendPlans } from '@/lib/datasource/dividendPlans';
-import { fetchDividends } from '@/lib/datasource/sinaBonus';
 import { getKLine, getQuote, getHkCurrentValuation } from '@/lib/datasource';
 import type { Quote } from '@/lib/datasource/types';
 import { buildExpectedDividendYieldByDate } from '@/lib/dividends';
-import { cached } from '@/lib/datasource/cache';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -69,10 +66,8 @@ async function hkYield(
 async function expectedYield(symbol: string): Promise<number | null> {
   try {
     const [plans, dividends, kline] = await Promise.all([
-      cached(`expected-dividend-plans-v2:${symbol}`, 1800e3,
-        () => getValuationPlans(symbol.slice(2))).catch(() => null),
-      cached(`expected-dividend-events-v2:${symbol}`, 1800e3,
-        () => getValuationDividends(symbol.slice(2))).catch(() => null),
+      getValuationPlans(symbol.slice(2)).catch(() => null),
+      getValuationDividends(symbol.slice(2)).catch(() => null),
       getKLine(symbol, 'day', 'none', 5, undefined, true),
     ]);
     if (!plans || !dividends || kline.stale || !kline.candles.length) return null;

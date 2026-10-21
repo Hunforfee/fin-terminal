@@ -15,6 +15,10 @@
  */
 
 import { fetchJson } from './http';
+import { cachedMarketInput, validateDatedRows } from '../marketInputs';
+import { retainedDate } from '../marketRetention';
+import { getMarketStore, marketRecord } from '../marketStore';
+import { withMarketRefresh } from '../marketRefresh';
 import type { CompanyFinancials, Granularity } from './sinaFinancial';
 import type { StatementCatalog, CustomFinancials } from './sinaStatements';
 import type { Candle, Valuation, ValuationPoint, ValuationStats, SeriesStats } from './types';
@@ -78,7 +82,7 @@ export interface IndicatorPoint {
 const MAIN_URL = `${DC_URL}?reportName=RPT_HKF10_FN_MAININDICATOR&columns=ALL&filter=`;
 
 /** 拉取主要指标（近 N 年，年报 + 中报 + 季报全部披露期） */
-export async function fetchHkIndicatorPoints(secucode: string, years = 12): Promise<IndicatorPoint[]> {
+async function fetchAllHkIndicatorPoints(secucode: string): Promise<IndicatorPoint[]> {
   const url =
     `${MAIN_URL}${encodeURIComponent(`(SECUCODE="${secucode}")`)}` +
     `&pageNumber=1&pageSize=200&sortTypes=-1&sortColumns=REPORT_DATE&source=F10&client=PC`;
@@ -89,7 +93,7 @@ export async function fetchHkIndicatorPoints(secucode: string, years = 12): Prom
   const rows = j.result?.data ?? [];
   const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
   const cutoff = new Date();
-  cutoff.setUTCFullYear(cutoff.getUTCFullYear() - years);
+  cutoff.setUTCFullYear(cutoff.getUTCFullYear() - 10);
   const points = rows
     .map((r) => {
       const d = reportDate(r);
@@ -108,6 +112,13 @@ export async function fetchHkIndicatorPoints(secucode: string, years = 12): Prom
     .filter((p): p is IndicatorPoint => p !== null && new Date(`${p.date}T00:00:00Z`) >= cutoff)
     .sort((a, b) => a.date.localeCompare(b.date));
   return points;
+}
+
+export async function fetchHkIndicatorPoints(secucode: string, years = 10): Promise<IndicatorPoint[]> {
+  const points = await cachedMarketInput(`source-hk-indicators:v1:${secucode}`,'source-hk-indicators','hkf10:main:reported',1800e3,
+    ()=>fetchAllHkIndicatorPoints(secucode),rows=>validateDatedRows(rows as unknown as Record<string,unknown>[],'date'));
+  const cutoff = new Date(); cutoff.setUTCFullYear(cutoff.getUTCFullYear()-Math.min(10,Math.max(1,years)));
+  return points.filter(p=>p.date>=cutoff.toISOString().slice(0,10));
 }
 
 /* ------------------------------------------- CompanyFinancials（指标趋势） */
@@ -233,10 +244,31 @@ export async function fetchHkStatement(
   id: StatementId,
   dates: string[],
 ): Promise<HkStatementRow[]> {
-  if (dates.length === 0) return [];
-  const inList = dates.map((d) => `'${d}'`).join(',');
-  const rows = await dcQuery(STATEMENT_REPORTS[id], `(SECUCODE="${secucode}")(REPORT_DATE in (${inList}))`);
-  return parseHkStatementRows(rows);
+  const selected = [...new Set(dates)].filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d) && retainedDate(d)).sort();
+  if (!selected.length) return [];
+  const fetchRows = async (missing: string[]) => parseHkStatementRows(await dcQuery(STATEMENT_REPORTS[id],
+    `(SECUCODE="${secucode}")(REPORT_DATE in (${missing.map(d=>`'${d}'`).join(',')}))`));
+  const store = getMarketStore(); if (!store) return fetchRows(selected);
+  return withMarketRefresh(store,`hk-statement:${secucode}:${id}`,async()=>{
+    const values = new Map<string,HkStatementRow[]>(), prior = new Map<string,string>();
+    const key = (date: string)=>`source-hk-statement:v1:${secucode}:${id}:${date}`;
+    for (const date of selected) {
+      const row = await store.read<HkStatementRow[]>(key(date));
+      if (row) prior.set(date,row.digest);
+      if (row && Date.parse(row.refreshAfter)>Date.now() && row.payload.length && row.payload.every(r=>r.date===date)) values.set(date,row.payload);
+    }
+    const missing = selected.filter(d=>!values.has(d));
+    if (missing.length) {
+      const rows = await fetchRows(missing);
+      for (const date of missing) {
+        const part = rows.filter(r=>r.date===date); if (!part.length) continue;
+        if (part.some(r=>r.amount!==null && !Number.isFinite(r.amount))) throw Error('港股报表金额无效');
+        values.set(date,part);
+        await store.write(marketRecord(key(date),'source-hk-statement','hkf10:statement:reported-currency',part,1800e3),prior.get(date)??null);
+      }
+    }
+    return selected.flatMap(date=>values.get(date)??[]);
+  });
 }
 
 export function parseHkStatementRows(rows: DcRow[]): HkStatementRow[] {

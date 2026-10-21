@@ -73,7 +73,7 @@ async function expectedYield(symbol: string): Promise<number | null> {
         () => getValuationPlans(symbol.slice(2))).catch(() => null),
       cached(`expected-dividend-events-v2:${symbol}`, 1800e3,
         () => getValuationDividends(symbol.slice(2))).catch(() => null),
-      getKLine(symbol, 'day', 'none', 5),
+      getKLine(symbol, 'day', 'none', 5, undefined, true),
     ]);
     if (!plans || !dividends || kline.stale || !kline.candles.length) return null;
     const map = buildExpectedDividendYieldByDate(plans, kline.candles, dividends);

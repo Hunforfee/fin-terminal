@@ -17,6 +17,19 @@ async function fixture(fn) {
   try {await fn(fileMarketStore(dir),dir);} finally {if(!path.resolve(dir).startsWith(base+path.sep))throw Error('Unsafe test cleanup');await fs.rm(dir,{recursive:true,force:true});}
 }
 
+test('batch recent-only updates never expand into the overdue full-history review',()=>fixture(async store=>{
+  const original=now-8*864e5;
+  await storedKLine({...req,count:30},async()=>series(bars.slice(0,30)),store,original);
+  const recent=[];
+  const result=await storedKLine({...req,count:20,start:dates[40],recentOnly:true},async query=>{recent.push(query);return series(bars.slice(40));},store,now);
+  assert.equal(result.candles.length,20);assert.equal(recent.length,1);
+  assert.equal(recent[0].count,20);assert.equal(recent[0].start,dates[40]);assert.equal(recent[0].end,undefined);
+  let full;
+  await storedKLine({...req,count:60,start:dates[0]},async query=>{full=query;return series(bars);},store,now+1000);
+  assert.ok(full,'Recent updates must not mark overdue full history as reviewed');
+  assert.equal(full.start,dates[0]);assert.ok(full.count>=60);
+}));
+
 test('persistent K-line survives adapter recreation and reuses another query size',()=>fixture(async(store,dir)=>{
   let calls=0;
   await storedKLine(req,async()=>{calls++;return series();},store,now);

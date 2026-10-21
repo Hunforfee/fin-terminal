@@ -3,6 +3,7 @@
  * 只运行在服务端（Route Handler / Server Component），浏览器不直连上游。
  */
 
+import { currentUpstreamBudget } from '../upstreamBudget';
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
@@ -36,11 +37,13 @@ export async function fetchText(url: string, opts: FetchOpts = {}): Promise<stri
   let lastErr: unknown;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
+    const budget = currentUpstreamBudget();
+    const release = await budget?.enter(url);
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
       const res = await fetch(url, {
-        signal: ctrl.signal,
+        signal: budget ? AbortSignal.any([ctrl.signal, budget.signal]) : ctrl.signal,
         headers: {
           'User-Agent': UA,
           Accept: '*/*',
@@ -49,6 +52,7 @@ export async function fetchText(url: string, opts: FetchOpts = {}): Promise<stri
         },
         cache: 'no-store',
       });
+      budget?.observe(res.status, url);
       if (!res.ok && retryStatuses?.includes(res.status)) {
         // 命中可重试状态（如 WAF 501）：抛普通错误以便重试 / 交由上层切换数据源
         throw new Error(`HTTP ${res.status}`);
@@ -66,6 +70,7 @@ export async function fetchText(url: string, opts: FetchOpts = {}): Promise<stri
       if (attempt < retries) await sleep(backoffMs * (attempt + 1));
     } finally {
       clearTimeout(timer);
+      release?.();
     }
   }
   throw lastErr instanceof Error ? lastErr : new UpstreamError(String(lastErr), url, 'http');

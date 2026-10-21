@@ -1,0 +1,45 @@
+# WorkBuddy：分组更新数据接入交接
+
+## 本次更新
+
+自选公司工具栏增加“更新数据”，按当前已同步分组提交任务。后台按公司串行更新近期价格、最新财务、分红与股本，确认入库后显示完成。关闭网页不影响任务，重新打开可以继续查看进度；失败可重试。不会上传本地行情文件、任务数据或密钥。
+
+已合并远端 `dc6401c`：保留用户名密码登录、`/market-data` 查看器及行情快照忽略规则。更新按钮使用同源签名 Cookie，服务端从当前账号的 `fin_account_data` 校验股票范围，不依赖已撤下的 Cloud Auth 界面或浏览器旧 token。保留旧 Cloud token 服务端兼容路径，但当前前端不再发送它。
+
+## 使用已经建好的数据库
+
+先确认新库是服务器可连接的 PostgreSQL。网页运行环境设置 `MARKET_DATABASE_URL`，优先使用它；原 `DATABASE_URL` 继续保留账号数据用途。如果两个模块使用同一个库，也可设置同一连接，但不要新建或覆盖 `fin_account_data`。
+
+市场适配器在首次使用时创建四张表：`fin_market_records`、`fin_market_bars`、`fin_market_revisions`、`fin_market_incidents`。具体 SQL 在 `src/lib/marketStore.ts`。账号需要这些表的建表/索引及读写权限；若生产禁止自动建表，由管理员先按该文件建表。更新队列复用 `fin_market_records`，不另建一个个人表。必须使用支持事务、CAS 和咨询锁的真实 PostgreSQL 连接；仅有浏览器 Cloud Database REST 地址不能直接填入连接串，需要另行提供服务器连接或实现等价适配器。
+
+数据库已创建不等于网站已经连接。本地没有生产连接串，本次不声称已连接或验收生产库。连接串只在部署平台保存，不发到 Git、前端环境变量或聊天记录。按供应商要求启用 TLS，不关闭证书验证。
+
+## 网页服务配置
+
+```text
+MARKET_DATABASE_URL=<服务器PostgreSQL连接串>
+MARKET_UPDATE_WORKER_ENABLED=1
+MARKET_UPDATE_WORKER_TOKEN=<至少32字符的随机私密值>
+APP_ORIGIN=https://实际网站域名
+AUTH_SESSION_SECRET=<保留当前生产会话密钥>
+```
+
+生产不要设置 `MARKET_UPDATE_LOCAL_PREVIEW=1`，也不要使用 `MARKET_DATA_STORE=off`。保留原账号库和数据查看器配置；查看器是否读取同一个市场库，需要检查独立查看器服务，不能仅因导航入口存在就认定已经接通。
+
+## 必须启动后台执行器
+
+单独启动受进程管理器监管的 `npm run market:worker`，为该进程设置同一 `MARKET_UPDATE_WORKER_TOKEN` 和 `MARKET_UPDATE_ORIGIN=https://实际网站域名`。执行器通过私有接口访问网页服务，数据库连接位于网页服务中。只发布 Next.js 网页不会自动启动执行器。
+
+私有 `/api/market-updates/worker` 需要允许最长 300 秒请求，公司任务预算 210 秒。先确认平台真实时限；若部署平台不支持，改为常驻 Node 服务执行或拆分任务，再启用按钮。不能仅修改 Next.js `maxDuration` 就认定平台允许。
+
+同一时刻全站后台只处理一家公司；源请求至少间隔 1.5 秒，每家公司最多 40 次请求。403/429 暂停至少 5 分钟，失败有限重试。多开执行器用于故障接管，不增加并发。
+
+## 发布验收
+
+1. 拉取 main，安装锁定依赖，运行 `npm test`、`npm run build`，再按现有 WorkBuddy 流程发布主站及启动执行器。
+2. 用真实用户名密码登录，等待自选同步成功，选一个只有一家公司且近期尚未更新的小分组，点击“更新数据”。确认状态从等待、执行到完成，且执行器日志没有数据库或权限错误。
+3. 查询市场库中的对应价格、财务和分红记录，以及 `market-update-queue:v1` 的任务状态。不能仅以 HTTP 200 或按钮显示完成认定所有值准确；来源冲突和无法核验的数据应显示失败或缺失。
+4. 关闭网页后确认任务仍执行，重新进入可恢复进度。重启网页服务和执行器后确认数据库记录仍可读取；另一个账号不能读取或提交该账号的分组任务。
+5. `/market-data` 是远端独立只读查看器，需 WorkBuddy 确认其服务与市场库配置一致；本更新不会将数据查看器另行发布为主站。
+
+本地已用隔离数据验证真实更新、关闭页面继续执行和表格刷新；生产数据库连接、真实登录、平台时限及进程自启动仍需在部署环境完成上述验收。完整设计与测试见 `docs/market-update-jobs.md`、`docs/market-data-storage.md`。

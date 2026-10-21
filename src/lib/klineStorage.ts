@@ -1,7 +1,7 @@
 import type { Candle, KLineSeries, Period, Adjust } from './datasource/types';
 import { getMarketStore, marketDigest, marketRecord, type MarketStore, type MarketRecord } from './marketStore';
 
-export interface KLineRequest { symbol: string; period: Period; adjust: Adjust; count: number; start?: string }
+export interface KLineRequest { symbol: string; period: Period; adjust: Adjust; count: number; start?: string; recentOnly?: boolean }
 export type KLineFetcher = (request: KLineRequest & { end?: string }) => Promise<KLineSeries>;
 interface Query { start?: string; count: number; at: number; complete: boolean }
 interface StoredSeries extends KLineSeries { queries: Query[]; lastFullAt?: number }
@@ -35,7 +35,7 @@ export async function storedKLine(request: KLineRequest, fetcher: KLineFetcher,
   if (!store) {
     const value = await fetcher(request); validateKLine(value, request, now); return value;
   }
-  const lock = `${request.symbol}:${request.period}:${request.adjust}:${request.start}:${request.count}`;
+  const lock = `${request.symbol}:${request.period}:${request.adjust}:${request.start}:${request.count}:${!!request.recentOnly}`;
   const pending = active.get(lock); if (pending) return pending;
   const work: Promise<KLineSeries> = (async (): Promise<KLineSeries> => {
     const old: MarketRecord<StoredSeries>[] = [];
@@ -48,6 +48,7 @@ export async function storedKLine(request: KLineRequest, fetcher: KLineFetcher,
     }
     const saved = old[0];
     const reusable = old.find(row => {
+      if (!request.recentOnly && now - (row.payload.lastFullAt ?? 0) >= 7 * 864e5) return false;
       const matches = take(row.payload, request).candles;
       const rangeCovered = matches.length >= request.count || !!request.start && row.payload.candles[0].date <= request.start;
       const lastQuery = row.payload.queries.find(q => q.start === request.start && q.count >= request.count);
@@ -60,13 +61,15 @@ export async function storedKLine(request: KLineRequest, fetcher: KLineFetcher,
     try {
       // Adjusted series refresh coherently: never patch only their last few bars.
       let query: KLineRequest & { end?: string } = { ...request };
-      const historicalReviewDue = !!saved && now - (saved.payload.lastFullAt ?? 0) >= 7 * 864e5;
-      if (saved && request.adjust === 'none') {
+      const historicalReviewDue = !!saved && !request.recentOnly && now - (saved.payload.lastFullAt ?? 0) >= 7 * 864e5;
+      if (saved && request.adjust === 'none' && !request.recentOnly) {
         const bars = saved.payload.candles;
         const needOlder = !!request.start && request.start < bars[0].date || !request.start && request.count > bars.length;
         if (historicalReviewDue) {
+          const elapsed = Math.max(0, Math.ceil((now - Date.parse(bars.at(-1)!.date)) / 864e5));
+          const extra = request.period === 'week' ? Math.ceil(elapsed / 7) : request.period === 'month' ? Math.ceil(elapsed / 28) : elapsed;
           query = { ...request, start: request.start && request.start < bars[0].date ? request.start : bars[0].date,
-            count: Math.max(request.count, bars.length + 16) };
+            count: Math.min(3200, Math.max(request.count, bars.length + extra + 16)) };
         } else if (needOlder) {
           query = { ...request, end: new Date(Date.parse(bars[0].date) - 864e5).toISOString().slice(0, 10), count: Math.max(16, request.count - bars.length) };
           // Also refresh the recent tail; both segments must succeed before committing.
@@ -75,7 +78,7 @@ export async function storedKLine(request: KLineRequest, fetcher: KLineFetcher,
           const gap = Math.max(0, Math.ceil((now - Date.parse(bars[bars.length - 1].date)) / 864e5));
           query = { ...request, start: overlap, count: request.period === 'day' ? Math.max(16, gap + 10) : 16 };
         }
-      } else if (saved) {
+      } else if (saved && request.adjust !== 'none') {
         query = { ...request, start: request.start && request.start < saved.payload.candles[0].date ? request.start : saved.payload.candles[0].date,
           count: Math.max(request.count, saved.payload.candles.length + 16) };
       }

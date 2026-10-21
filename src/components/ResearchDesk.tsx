@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { useWatchlist } from './WatchlistProvider';
 import WatchlistButton from './WatchlistButton';
 import WatchlistGroups from './WatchlistGroups';
+import MarketUpdateButton from './MarketUpdateButton';
 import StockName from './StockName';
 import XueqiuLink from './XueqiuLink';
 import ResearchColumns from './ResearchColumns';
@@ -44,6 +45,7 @@ export default function ResearchDesk({
   const wl = useWatchlist();
   const { codes, ready, remove } = wl;
   const [activeGroup, setActiveGroup] = useState('all');
+  const [updateVersion, setUpdateVersion] = useState(0);
   const [selected, setSelected] = useState<string[]>([]);
   const [moveTarget, setMoveTarget] = useState(UNGROUPED);
   const group =
@@ -446,6 +448,39 @@ export default function ResearchDesk({
   );
   const safePage = Math.floor(start / pageSize) + 1;
   const pageRows = rows.slice(start, start + pageSize);
+  const visibleSignature = pageRows.map(q => q.symbol).join(',');
+  useEffect(() => {
+    if (!updateVersion || !visibleSignature) return;
+    const controller = new AbortController();
+    const symbols = visibleSignature.split(',');
+    const read = (url: string, init?: RequestInit) => fetch(url, { ...init, signal: controller.signal }).then(r => r.json());
+    // Completion refreshes only the visible page. Do not restart the full
+    // watchlist loader or interrupt its existing sequential requests.
+    void (async () => {
+      try {
+        const q = await read(`/api/quote?codes=${encodeURIComponent(visibleSignature)}`);
+        if (q.ok && Array.isArray(q.data)) {
+          const fresh = new Map<string, Quote>(q.data.map((v: Quote) => [v.symbol, v]));
+          setQuotes(prev => prev.map(v => fresh.get(v.symbol) ?? v));
+        }
+        for (let i = 0; i < symbols.length && !controller.signal.aborted; i += 4) {
+          const f = await read('/api/finance-compare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codes: symbols.slice(i, i + 4), years: 2, granularity: 'quarter', fields: ['roe', 'netMargin', 'ocfPerShare', 'debtRatio'] }) });
+          if (f.ok && Array.isArray(f.data?.companies)) setFinancials(prev => [...prev.filter(v => !f.data.companies.some((n: Financial) => n.code === v.code)), ...f.data.companies]);
+        }
+        if (controller.signal.aborted) return;
+        const dividends = await read(`/api/dividend-yield?codes=${encodeURIComponent(visibleSignature)}`);
+        if (dividends.ok && Array.isArray(dividends.data)) setDividendYields(prev => {
+          const next = new Map(prev); for (const row of dividends.data) next.set(row.symbol, row.dy); return next;
+        });
+        if (controller.signal.aborted) return;
+        const deducted = await read(`/api/deducted-pe?codes=${encodeURIComponent(visibleSignature)}`);
+        if (deducted.ok && Array.isArray(deducted.data)) setDeductedPes(prev => {
+          const next = new Map(prev); for (const row of deducted.data) next.set(row.symbol, row.pe); return next;
+        });
+      } catch { /* Keep dated prior rows if a display-only refresh is unavailable. */ }
+    })();
+    return () => controller.abort();
+  }, [updateVersion, visibleSignature]);
   // 翻页后列表不再有内部滚动条，把整个表格滚回视口顶部
   const goToPage = (p: number) => {
     // 用绝对行位置换算（不能用「页码 × 每页行数」以外的旧值，缩放后 pageSize 已改变）
@@ -522,6 +557,8 @@ export default function ResearchDesk({
           onChange={setActiveGroup}
           onConfigureColumns={() => setColumnsOpen(true)}
           toolbar={
+            <>
+            <MarketUpdateButton codes={savedCodes} groupId={group} onComplete={() => setUpdateVersion(v => v + 1)} />
             <input
               type="search"
               aria-label="筛选关注公司"
@@ -530,6 +567,7 @@ export default function ResearchDesk({
               placeholder="筛选自选"
               className="h-8 w-28 min-w-0 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none placeholder:text-slate-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-100 sm:w-40"
             />
+            </>
           }
         />
         {visibleSelected.length > 0 && (

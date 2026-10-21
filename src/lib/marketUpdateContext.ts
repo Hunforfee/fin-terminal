@@ -1,0 +1,6 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { installBudgetResolver, type UpstreamBudget } from './upstreamBudget';
+const runtime = globalThis as typeof globalThis & { finUpdateStorage?: AsyncLocalStorage<UpstreamBudget> };
+const storage = runtime.finUpdateStorage ??= new AsyncLocalStorage<UpstreamBudget>();
+installBudgetResolver(() => storage.getStore());
+export const withUpstreamBudget = <T>(budget: UpstreamBudget, fn: () => Promise<T>): Promise<T> => storage.run(budget, fn);

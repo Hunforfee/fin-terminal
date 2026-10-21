@@ -1,6 +1,7 @@
 import { crossCheckMainlandRaw, MarketDataConflict } from '../klineCrossCheck';
 import { getMarketStore } from '../marketStore';
 import { getValuationPlans, getValuationDividends } from '../valuationInputs';
+import { getWatchlistFinancialInputs, WATCHLIST_FINANCIAL_FIELDS } from '../watchlistFinancialInputs';
 import { cachedMarketInput as storedMarketInput, validateDatedRows } from '../marketInputs';
 import { storedKLine, validateKLine } from '../klineStorage';
 import { fetchDisclosureDates } from './disclosures';
@@ -337,12 +338,13 @@ export async function getKLine(
   adjust: Adjust = 'qfq',
   count = 320,
   startDate?: string,
+  recentOnly = false,
 ): Promise<KLineSeries> {
   const n = normalizeCode(input);
   if (!n) throw new Error(`无法解析代码 ${input}`);
-  const key = `kline:${n.symbol}:${period}:${adjust}:${count}:${startDate ?? ''}`;
+  const key = `kline:${n.symbol}:${period}:${adjust}:${count}:${startDate ?? ''}${recentOnly ? ':recent-only' : ''}`;
   return cached(key, Math.min(defaultTtl(n.market === 'HK' ? 'HK' : 'A'), 60_000), () =>
-    storedKLine({ symbol: n.symbol, period, adjust, count, start: startDate }, async request => {
+    storedKLine({ symbol: n.symbol, period, adjust, count, start: startDate, recentOnly }, async request => {
       try {
         const value = await tencent.fetchKLine(n.symbol, period, adjust, request.count, request.start, request.end);
         validateKLine(value, request);
@@ -679,6 +681,14 @@ export async function getCustomFinancialCompare(
   granularity: sinaFinancial.Granularity = 'semi',
 ) {
   const list = codes.slice(0, 4);
+  if (years === 2 && granularity === 'quarter' && fields.length === WATCHLIST_FINANCIAL_FIELDS.length && WATCHLIST_FINANCIAL_FIELDS.every(f => fields.includes(f))) {
+    return { companies: await Promise.all(list.map(async code => {
+      const n = normalizeStockCode(code); if (!n) throw Error('无效股票代码');
+      const result = await getWatchlistFinancialInputs(n.symbol);
+      const q = await getQuote(n.symbol).catch(() => null);
+      return { ...result, name: q?.name ?? result.name };
+    })) };
+  }
   const fieldKey = encodeURIComponent(fields.join(','));
   return cached(`finfield:${list.join(',')}:${fieldKey}:${years}:${granularity}`, 60 * 60 * 1000, async () => {
     const results = await Promise.all(

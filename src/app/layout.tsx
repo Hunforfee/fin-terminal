@@ -7,6 +7,8 @@ import { WatchlistProvider } from '@/components/WatchlistProvider';
 import AccountProvider from '@/components/AccountProvider';
 import AccountButton from '@/components/AccountButton';
 import ResearchWorkspaceProvider from '@/components/ResearchWorkspaceProvider';
+import { cookies } from 'next/headers';
+import { readSession, SESSION_COOKIE } from '@/lib/auth/session';
 export const metadata: Metadata = {
   title: 'FinTerminal · 金融数据终端',
   description: '股票 / 指数 / 基金的行情、估值、财务与条件选股分析平台',
@@ -25,8 +27,8 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // 身份由客户端 Cloud Auth 管理（会话存 localStorage），服务端不下发用户。
-  const user = null;
+  const cookieStore = await cookies();
+  const user = readSession(cookieStore.get(SESSION_COOKIE)?.value);
   return (
     <html lang="zh-CN">
       <body>

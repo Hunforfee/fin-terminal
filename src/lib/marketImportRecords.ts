@@ -130,7 +130,7 @@ export async function writeFinancialHistory(store: MarketStore, input: Financial
   });
   // 按日期合并（本次覆盖同日），绝不能缩减已有历史
   let rows: Record<string, unknown>[] = incoming;
-  const probe = await store.read('statements-v3:600415:12').catch(() => null);
+  const probe = await store.read(`statements-v3:${code}:12`).catch(() => null);
   const probeRows = (probe?.payload as Record<string, unknown>[] | undefined) ?? null;
   if (probeRows?.length) {
     const union = new Map(probeRows.map(r => [String(r.date), r]));

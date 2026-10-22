@@ -3,9 +3,10 @@ import { databaseOnly } from '../marketReadPolicy';
 import { getMarketStore } from '../marketStore';
 import { sharedQuotes } from '../quoteInputs';
 import { getValuationPlans, getValuationDividends } from '../valuationInputs';
+import { fetchHkRatioHistory, attachHkValuationHistory } from './hkValuationHistory';
 import { getWatchlistFinancialInputs, WATCHLIST_FINANCIAL_FIELDS } from '../watchlistFinancialInputs';
 import { cachedMarketInput as storedMarketInput, validateDatedRows } from '../marketInputs';
-import { storedKLine, validateKLine } from '../klineStorage';
+import { storedKLine, validateKLine, readDatabaseKLine } from '../klineStorage';
 import { fetchDisclosureDates } from './disclosures';
 /**
  * 数据源编排层 —— 全站唯一的数据入口。
@@ -287,13 +288,18 @@ export async function getHkCurrentValuation(symbol: string, price: number | null
       if (!value) throw new Error('港股财务指标暂缺');
       return value;
     }, value => validateDatedRows([value as unknown as Record<string, unknown>], 'reportDate', ['bps', 'peTTM'])).catch(() => null),
-    storedMarketInput(`hk-dividend-events-v4:${n.symbol}`, 'hk-recent-dividend-events', 'eastmoney:HKD-confirmed-DPS:tax-before:recent-100-events', 1800e3, () => fetchHkDividends(n.code), rows => {
+    getHkDividendInputs(n.symbol).catch(() => null),
+  ]);
+  return computeHkValuation(fundamental, dividends, price, asOf);
+}
+
+function getHkDividendInputs(symbol: string) {
+  const n = normalizeStockCode(symbol)!;
+  return storedMarketInput(`hk-dividend-events-v4:${n.symbol}`, 'hk-recent-dividend-events', 'eastmoney:HKD-confirmed-DPS:tax-before:recent-100-events', 1800e3, () => fetchHkDividends(n.code), rows => {
       // 空数组 = 上游已确认该证券无派息记录（从未分红的公司）；只有金额非法才算坏数据。
       // 落库空记录后，覆盖检查不再把「确认无分红」误判为缺失数据。
       if (rows.some(r => r.dps != null && (!Number.isFinite(r.dps) || r.dps < 0))) throw Error('港股分红金额无效');
-    }).catch(() => null),
-  ]);
-  return computeHkValuation(fundamental, dividends, price, asOf);
+  });
 }
 
 async function withHkValuation(quotes: Quote[]): Promise<Quote[]> {
@@ -425,7 +431,16 @@ export async function getValuation(input: string, years = 5, method: ValuationMe
     if (!q) throw new Error('行情获取失败');
     const current = await getHkCurrentValuation(n.symbol, q.stale ? null : q.price);
     const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
-    const result = hkFinance.summarizeHkSnapshot(points, n.code, q, date, span, current);
+    const snapshot = hkFinance.summarizeHkSnapshot(points, n.code, q, date, span, current);
+    const historySpan = span > 5 ? 10 : 5;
+    const store = getMarketStore();
+    const [pe, pb, prices, dividends] = await Promise.all([
+      fetchHkRatioHistory(n.symbol, 'pe', historySpan).catch(() => null),
+      fetchHkRatioHistory(n.symbol, 'pb', historySpan).catch(() => null),
+      store ? readDatabaseKLine({ symbol: n.symbol, period: 'day', adjust: 'none', count: Math.min(3200, span * 280 + 60), start: ymdYearsAgo(span) }, store).catch(() => null) : null,
+      getHkDividendInputs(n.symbol).catch(() => null),
+    ]);
+    const result = attachHkValuationHistory(snapshot, { pe, pb, prices: prices?.stale ? [] : prices?.candles, dividends });
     return { ...result, stale: q.stale };
   }
   const span = Math.min(Math.max(years, 1), 10);

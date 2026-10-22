@@ -21,6 +21,7 @@ import { fetchDeductedPeriods } from './datasource/deductedPe';
 import { getSecurityBasics,securityBasicsKey,type SecurityBasics } from './marketSecurityBasics';
 import { applyGapClassification, classifyCoverage } from './marketFillGaps';
 import { completeHkStatement } from './marketHkStatements';
+import { fetchHkRatioHistory, hkRatioHistoryKey, hkValuationHistoryCovered } from './datasource/hkValuationHistory';
 
 export const COLLECTION_LAST_PHASE=13;
 export const coverageKey=(symbol:string)=>`market-coverage:v1:${symbol}:5`;
@@ -68,6 +69,12 @@ export async function collectHistoryPhase(symbol:string,phase:number,signal:Abor
       await fetchIndicatorSourceYear(n.code,year);
       await persistCheck(store,`source-sina-indicators:v1:${n.code}:${year}`);
     }
+  }else if((phase===10 || phase===11) && n.market==='HK'){
+    const metric=phase===10?'pe':'pb';
+    for(const years of [5,10]){
+      await fetchHkRatioHistory(symbol,metric,years);
+      await persistCheck(store,hkRatioHistoryKey(symbol,metric,years));
+    }
   }else if(phase===10 && n.market!=='HK'){
     await cachedMarketInput(`statements-v3:${n.code}:6`,'financial-history','sina-statements:CNY:yuan:current-revisions',1800e3,
       ()=>withUpstreamBudget(new UpstreamBudget(signal,1500,40,true),()=>fetchStatementHistory(n.code,6)),rows=>validateDatedRows(rows as unknown as Record<string,unknown>[],'date',['npParent','equityParent']));
@@ -112,6 +119,7 @@ export async function collectHistoryPhase(symbol:string,phase:number,signal:Abor
       }else{
         const secucode=`${n.code}.HK`;
         const required=[`source-hk-indicators:v1:${secucode}`,`watchlist-financial-inputs:v1:${symbol}`,
+          hkRatioHistoryKey(symbol,'pe',5),hkRatioHistoryKey(symbol,'pb',5),
           `hk-main-currency-v4:${symbol}`,`hk-dividend-events-v4:${symbol}`];
         const points=await fetchHkIndicatorPoints(secucode,6).catch(()=>[]);
         // Full three statements are required for annual/interim reports, not
@@ -127,14 +135,14 @@ export async function collectHistoryPhase(symbol:string,phase:number,signal:Abor
       let valuationMissing=false,valuationError='';
       try{
         const valuation=await getValuation(symbol,5);
-        valuationMissing=n.market!=='HK' && (!valuation.history.length || valuation.history[0].date>prices.candles[0].date || valuation.history.length<prices.candles.length);
+        valuationMissing=n.market==='HK' ? !hkValuationHistoryCovered(valuation,expected,prices.candles.at(-1)!.date)
+          : !valuation.history.length || valuation.history[0].date>prices.candles[0].date || valuation.history.length<prices.candles.length;
       }catch(error){valuationMissing=true;valuationError=error instanceof Error?error.message:'估值输入未通过校验';}
-      const gaps=[...(!rangeCovered?['历史起点覆盖不足，或缺少已核实的上市日期']:[]),...(valuationMissing?['部分交易日缺少已披露财报、股本或复权数据']:[]),
+      const gaps=[...(!rangeCovered?['历史起点覆盖不足，或缺少已核实的上市日期']:[]),...(valuationMissing?[n.market==='HK'?'港股历史估值样本暂缺、过旧或覆盖不足':'部分交易日缺少已披露财报、股本或复权数据']:[]),
         ...(missingInputs.length?[`${missingInputs.length} 项财报或分红基础数据尚未入库`]:[]),
-        ...(valuationError?[valuationError]:[]),
-        ...(n.market==='HK'?['港股历史估值仍缺少可核验的公告与分红快照，不生成历史分位']:[])];
+        ...(valuationError?[valuationError]:[])];
       const record={symbol,years:5,requestedFrom:fiveYearStart(),from:prices.candles[0].date,to:prices.candles.at(-1)!.date,count:prices.candles.length,
-        status:rangeCovered&&!valuationMissing&&!missingInputs.length?'ready':'partial',priceSource:prices.source,valuationHistory:n.market==='HK'?'unavailable':valuationMissing?'partial':'available',
+        status:rangeCovered&&!valuationMissing&&!missingInputs.length?'ready':'partial',priceSource:prices.source,valuationHistory:valuationMissing?'partial':'available',
         collection:'website-apis',listingDate,missingInputs,validation:'structural-and-source-overlap',gaps,checkedAt:new Date().toISOString()};
       const key=coverageKey(symbol),old=await store.read(key);
       if(!await store.write(marketRecord(key,'market-coverage','internal',record,864e5),old?.digest??null))throw Error('覆盖记录保存失败');

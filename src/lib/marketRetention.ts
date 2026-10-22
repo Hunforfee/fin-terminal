@@ -11,6 +11,7 @@ export function retainMarketPayload<T>(kind: string, payload: T, now = Date.now(
   const today=new Date(now+8*3600e3).toISOString().slice(0,10);
   const p = payload as any, keep = (date: unknown) => retainedDate(date, now) && (date as string).slice(0,10)<=today;
   if (!p) return payload;
+  if (kind === 'source-hk-valuation') return { ...p, rows: p.rows.filter((r: any) => keep(r.date)) };
   if(kind==='company-announcements' || kind==='company-reports')return p.filter((r:any)=>keep(r.date));
   if(kind==='financial-report-links')return p.filter((r:any)=>typeof r.announcementTime==='number' && Number.isFinite(r.announcementTime)
     && Math.abs(r.announcementTime)<=8.64e15 && keep(new Date(r.announcementTime+8*3600e3).toISOString().slice(0,10)));

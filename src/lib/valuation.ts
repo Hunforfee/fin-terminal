@@ -271,7 +271,7 @@ function quantile(sortedAsc: number[], p: number): number | null {
   return sortedAsc[lo] * (1 - w) + sortedAsc[hi] * w;
 }
 
-function seriesStats(values: (number | null)[], current: number | null): SeriesStats {
+export function seriesStats(values: (number | null)[], current: number | null): SeriesStats {
   const arr = values.filter((v): v is number => v !== null && Number.isFinite(v));
   const s = [...arr].sort((a, b) => a - b);
   const r = (v: number | null) => (v === null ? null : round2(v));

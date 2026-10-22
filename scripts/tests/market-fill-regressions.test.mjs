@@ -10,6 +10,7 @@ const statements = await load('marketHkStatements'), events = await load('dataso
 const gaps = await load('marketFillGaps'), codes = await load('datasource/codes');
 const { MarketUpdateQueue } = await load('marketUpdateQueue');
 const { mergeHkDividendEvents } = await load('hkDividendEvents');
+const hkHistory = await load('datasource/hkValuationHistory');
 const now = Date.parse('2026-10-22T08:00:00Z');
 function memory() {
   const data = new Map();
@@ -80,13 +81,17 @@ function coverageCollector(s) {
   let collection;
   collection = compile('src/lib/marketHistoryCollection.ts', name => {
     if (name === './marketStore') return { getMarketStore: () => s, marketRecord: market.marketRecord };
-    if (name === './datasource') return { getKLine: async () => ({ candles: [{ date: collection.fiveYearStart(), close: 10 }, { date: '2026-10-21', close: 10 }], source: 'test' }), getValuation: async () => ({ history: [] }) };
+    if (name === './datasource') return { getKLine: async () => ({ candles: [{ date: collection.fiveYearStart(), close: 10 }, { date: '2026-10-21', close: 10 }], source: 'test' }), getValuation: async () => {
+      const rows=Array.from({length:12},(_,i)=>({date:i?`2026-10-${String(i+10).padStart(2,'0')}`:collection.fiveYearStart(),pe:10,pb:1}));
+      return {history:rows,historyByMetric:{pe:rows,pb:rows}};
+    } };
     if (name === './datasource/codes') return codes;
     if (name === './marketImportedBars') return { importedBarsKey: symbol => 'bars:' + symbol };
     if (name === './marketSecurityBasics') return { securityBasicsKey: symbol => 'basics:' + symbol };
     if (name === './marketUpdateContext') return { withUpstreamBudget: (_b, read) => read() };
     if (name === './upstreamBudget') return { UpstreamBudget: class {} };
     if (name === './datasource/hkFinance') return { fetchHkIndicatorPoints: async () => [{ date: '2026-06-30', kind: 'semi' }] };
+    if (name === './datasource/hkValuationHistory') return hkHistory;
     if (name === './marketFillGaps') return gaps;
     if (name === './marketHkStatements') return statements;
     return {};
@@ -106,6 +111,7 @@ test('partial or all-null imported statements never satisfy the reader or readin
   });
   await assert.rejects(reader.fetchHkStatement('00016.HK','balance',[date]), /missing/);
   for (const key of ['source-hk-indicators:v1:00016.HK','watchlist-financial-inputs:v1:hk00016','hk-main-currency-v4:hk00016','hk-dividend-events-v4:hk00016']) s.seed(key, 'test', {});
+  for (const metric of ['pe','pb']) s.seed(hkHistory.hkRatioHistoryKey('hk00016',metric,5),'test',{});
   const collection = coverageCollector(s);
   await assert.rejects(collection.collectHistoryPhase('hk00016',12,new AbortController().signal), /已保存可用数据/);
   const checked = (await s.read(collection.coverageKey('hk00016'))).payload;
@@ -117,6 +123,9 @@ test('partial or all-null imported statements never satisfy the reader or readin
   await collection.collectHistoryPhase('hk00016',12,new AbortController().signal);
   assert.equal((await s.read(collection.coverageKey('hk00016'))).payload.status, 'ready');
   assert.equal(await gaps.readFillGap(s, 'hk00016'), null);
+  s.data.delete(hkHistory.hkRatioHistoryKey('hk00016','pb',5));
+  await assert.rejects(collection.collectHistoryPhase('hk00016',12,new AbortController().signal),/已保存可用数据/);
+  assert.equal((await s.read(collection.coverageKey('hk00016'))).payload.status,'partial','missing historical ratios cannot be declared ready');
 });
 
 test('a complete-report declaration requires the entire declared inventory and actual amounts', async () => {

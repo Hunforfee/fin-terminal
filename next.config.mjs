@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Local previews may run while a production build replaces .next.
+  distDir: process.env.FIN_NEXT_DIST_DIR || '.next',
   outputFileTracingIncludes: {
     '/api/analysis': ['./src/data/analyses/[0-9]*.json'],
     '/api/company-learning': ['./src/data/analyses/[0-9]*.json'],
@@ -8,6 +10,7 @@ const nextConfig = {
   // 行情/K线抓取发生在服务端 Route Handler，无需外网图片资源
   images: { unoptimized: true },
   experimental: {
+    ...(process.env.FIN_LOCAL_BUILD === '1' ? { cpus: 1, webpackMemoryOptimizations: true, webpackBuildWorker: false } : {}),
     // 上游数据源单次可能较慢，放宽 Server Action / 路由体大小限制
     serverActions: { bodySizeLimit: '2mb' },
   },

@@ -8,7 +8,7 @@ import { normalizeStockCode } from './datasource/codes';
  * `market-fill-gaps:v1:<symbol>` 记录，把缺口分成两类：
  *   - mcp：存在导入写入器，WorkBuddy 可经 MCP 取数后写回（见 marketHkImportRecords / marketImportRecords）
  *   - manual：没有稳定的 MCP 字段映射（如 sina 指标页、公告日期、东财选股页），只能靠网站重试或人工
- * 设计性缺口（如「港股历史估值不生成分位」）不登记——那不是数据缺失。
+ * 历史版本的设计性提示不登记；新历史估值输入失败需要登记并重试。
  *
  * 该 kind 不在 retention 的清理名单内，TTL 只影响刷新时间；每次复核都会重写。
  */
@@ -52,12 +52,13 @@ export function classifyMissingKey(key: string): { domain: string; mcp: boolean 
   const hkStmt = key.match(/^source-hk-statement:v1:[\d.]+HK:(profit|balance|cashflow):(\d{4}-\d{2}-\d{2})$/);
   if (hkStmt) return { domain: `hk-statements:${hkStmt[1]}:${hkStmt[2]}`, mcp: true };
   if (key.startsWith('hk-dividend-events-v4:')) return { domain: 'hk-dividend-events', mcp: true };
+  if (key.startsWith('source-hk-valuation:v1:')) return { domain: key, mcp: false };
   return { domain: key, mcp: false };
 }
 
 /** coverage.gaps 文案 → 数据域。设计性缺口返回 null（不登记）。 */
 export function classifyGapText(text: string): { domains: string[]; mcp: boolean; note?: string } | null {
-  if (text.includes('港股历史估值')) return null; // 设计性：港股不生成历史分位
+  if (text.includes('港股历史估值仍缺少可核验的公告与分红快照，不生成历史分位')) return null; // Legacy message only.
   if (text.includes('历史起点覆盖不足')) return { domains: ['kline'], mcp: true, note: 'K 线历史起点不足五年或缺少已核实上市日期，可经 MCP 回补不复权日线' };
   if (text.includes('部分交易日缺少已披露财报')) return { domains: ['statements-v3', 'shares-v3'], mcp: true, note: '部分交易日缺少财报/股本/复权数据，可经 MCP 全量导入财务史与股本史' };
   return { domains: [text], mcp: false };
@@ -81,8 +82,8 @@ export function classifyPhaseFailure(phase: number, market: 'A' | 'HK', now = Da
       mcp.push(`finance:profit:${year}`, `finance:balance:${year}`, `finance:cashflow:${year}`);
       manual.push(`source-sina-indicators:v1:${year}`);
     }
-  } else if (phase === 10) mcp.push('financial-history');
-  else if (phase === 11) manual.push('disclosures-v3');
+  } else if (phase === 10) { if(market==='HK')manual.push('source-hk-valuation:pe');else mcp.push('financial-history'); }
+  else if (phase === 11) manual.push(market==='HK'?'source-hk-valuation:pb':'disclosures-v3');
   else if (phase === 13) manual.push('公司资料/研报/公告等可选内容');
   else manual.push(`阶段 ${phase}`);
   return { mcp, manual, notes };

@@ -27,6 +27,7 @@ import type { StatementCatalog, CustomFinancials } from './sinaStatements';
 import type { Candle, Valuation, ValuationPoint, ValuationStats, SeriesStats } from './types';
 import { hkStatementValue, statementFieldUnit } from '../financeFieldSemantics';
 import { computeHkValuation, fetchHkFundamental, fetchHkDividends, parseHkFundamental, type HkValuation } from './hkFundamental';
+import { attachHkValuationHistory, fetchHkRatioHistory } from './hkValuationHistory';
 
 export const PROVIDER_NAME = 'eastmoney-hkf10';
 
@@ -463,7 +464,7 @@ export function filterHkPeriods<T extends {periods:string[];periodLabels:string[
   return {...f,periods:keep.map(k=>k.p),periodLabels:keep.map(k=>f.periodLabels[k.i]),series:Object.fromEntries(Object.entries(f.series).map(([k,v])=>[k,keep.map(x=>v[x.i])]))};
 }
 
-/** Current metrics share the list calculation; no unverified historical curves. */
+/** Shared current metrics; historical inputs are attached separately. */
 export function summarizeHkSnapshot(
   points: IndicatorPoint[], code: string,
   quote: { price: number | null; pe: number | null; marketPe?: number | null; pb?: number | null; ts?: string | null },
@@ -491,7 +492,7 @@ export function summarizeHkSnapshot(
     history: [], basis: 'real', years,
     stats: { pe: empty(pe), pb: empty(pb), dy: empty(dy), from: date, to: date },
     method: 'disclosure', source: PROVIDER_NAME, stale: false,
-    historyUnavailableReason: '港股财报接口未提供可核验的历史公告日及历史分红快照，暂不计算历史估值曲线和分位。',
+    historyUnavailableReason: '历史估值输入尚未取得；当前估值仍可查看。',
     marketComparison: { pe: quote.marketPe === undefined ? quote.pe : quote.marketPe, pb: quote.pb ?? null, ts: quote.ts ?? null },
     warnings: [
       '港股当前 PB 使用同一快照的港元市值、普通股数与 PB 恢复港元每股净资产，再按当前价计算。PE 保留上游 TTM 口径并按当前价更新，不将人民币 EPS_TTM 直接除以港元股价。',
@@ -513,12 +514,20 @@ export async function buildHkValuation(
   const date = quote.ts?.slice(0, 10) ?? candles.at(-1)?.date ??
     new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
   let shared = current;
+  let historicalDividends = null;
   if (!shared) {
     const [fundamental, dividends] = await Promise.all([
       fetchHkFundamental(code).catch(() => null),
       fetchHkDividends(code, date).catch(() => null),
     ]);
+    historicalDividends = dividends;
     shared = computeHkValuation(fundamental, dividends, quote.price, date);
   }
-  return summarizeHkSnapshot(points, code, quote, date, years, shared);
+  const span = years > 5 ? 10 : 5;
+  const [pe, pb] = await Promise.all([
+    fetchHkRatioHistory(`hk${code}`, 'pe', span).catch(() => null),
+    fetchHkRatioHistory(`hk${code}`, 'pb', span).catch(() => null),
+  ]);
+  return attachHkValuationHistory(summarizeHkSnapshot(points, code, quote, date, years, shared),
+    { pe, pb, prices: candles, dividends: historicalDividends });
 }

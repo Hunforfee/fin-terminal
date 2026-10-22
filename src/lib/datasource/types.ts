@@ -158,7 +158,12 @@ export interface Valuation {
   history: ValuationPoint[];
   /** 历史序列口径：real = 由真实定期报告还原；estimate = 兜底估算 */
   basis?: 'real' | 'estimate';
-  priceAdjust?: 'qfq';
+  priceAdjust?: 'qfq' | 'none';
+  /** Provider observations use their own sample dates and valuation basis. */
+  historyBasis?: 'provider';
+  historyByMetric?: Partial<Record<'pe' | 'pb' | 'dy', ValuationPoint[]>>;
+  historyMetricAsOf?: Partial<Record<'pe' | 'pb' | 'dy', string>>;
+  historyUnavailableReasons?: Partial<Record<'pe' | 'pb' | 'dy', string>>;
   warnings?: string[];
   historyUnavailableReason?: string;
   marketComparison?: { pe: number | null; pb: number | null; ts: string | null };

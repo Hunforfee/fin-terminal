@@ -38,7 +38,8 @@ function activeFor(store: MarketStore) {
   return active;
 }
 
-async function databaseKLine(request: KLineRequest, store: MarketStore, now: number): Promise<KLineSeries> {
+/** Read existing validated bars only; never starts an upstream download. */
+export async function readDatabaseKLine(request: KLineRequest, store: MarketStore, now = Date.now()): Promise<KLineSeries> {
   if (request.period === 'minute') throw marketDataMissing('分钟行情');
   const normalize = (row: MarketRecord<StoredSeries> | null) => {
     if (!row?.payload.candles.length) return null;
@@ -89,7 +90,7 @@ export async function storedKLine(request: KLineRequest, fetcher: KLineFetcher,
     if (!store) throw marketDataMissing('行情数据库');
     const active = activeFor(store), identity = `database:${JSON.stringify(request)}`;
     const pending = active.get(identity); if (pending) return pending;
-    const work = databaseKLine(request, store, now); active.set(identity, work);
+    const work = readDatabaseKLine(request, store, now); active.set(identity, work);
     try { return await work; } finally { if (active.get(identity) === work) active.delete(identity); }
   }
   if (!store) {

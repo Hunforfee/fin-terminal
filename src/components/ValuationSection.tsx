@@ -74,18 +74,20 @@ function StatPanel({
   title,
   unit,
   stats,
+  historicalSample = false,
 }: {
   title: string;
   unit: string;
   stats: Stats;
+  historicalSample?: boolean;
 }) {
   const items: { label: string; value: string; cls?: string }[] = [
     {
-      label: '当前值',
+      label: historicalSample ? '样本末值' : '当前值',
       value: stats.cur === null ? '--' : stats.cur.toFixed(2),
     },
     {
-      label: '当前分位点',
+      label: historicalSample ? '末值分位点' : '当前分位点',
       value: stats.pct === null ? '--' : `${stats.pct.toFixed(2)}%`,
       cls: pctColor(stats.pct),
     },
@@ -135,6 +137,8 @@ function MetricChart({
   onPick,
   overlay,
   dividendLabel = '预期股息率',
+  priceLabel = '前复权收盘价(右轴)',
+  currentLabel = '当前',
 }: {
   history: ValuationPoint[];
   metric: Metric;
@@ -145,6 +149,8 @@ function MetricChart({
   /** 对照口径序列（用于「叠加对比」） */
   overlay?: { values: (number | null)[]; label: string } | null;
   dividendLabel?: string;
+  priceLabel?: string;
+  currentLabel?: string;
 }) {
   const conf = METRICS.find((m) => m.key === metric)!;
   const option = useMemo(() => {
@@ -239,7 +245,7 @@ function MetricChart({
                       opacity: 0.35,
                     },
                     label: {
-                      formatter: `当前 ${stats.cur.toFixed(2)}`,
+                      formatter: `${currentLabel} ${stats.cur.toFixed(2)}`,
                       fontSize: 10,
                       color: '#2563eb',
                       position: 'insideEndBottom' as const,
@@ -266,7 +272,7 @@ function MetricChart({
     }
 
     series.push({
-      name: '前复权收盘价(右轴)',
+      name: priceLabel,
       type: 'line',
       data: closes,
       yAxisIndex: 1,
@@ -292,7 +298,7 @@ function MetricChart({
         itemWidth: 14,
         itemHeight: 8,
         textStyle: { fontSize: 11, color: '#64748b' },
-        data: [name, ...(overlay ? [overlay.label] : []), '前复权收盘价(右轴)'],
+        data: [name, ...(overlay ? [overlay.label] : []), priceLabel],
       },
       grid: {
         left: 8,
@@ -346,7 +352,7 @@ function MetricChart({
       ],
       series,
     };
-  }, [history, metric, stats, conf.label, picked, overlay, dividendLabel]);
+  }, [history, metric, stats, conf.label, picked, overlay, dividendLabel, priceLabel, currentLabel]);
 
   return (
     <div>
@@ -413,7 +419,7 @@ export default function ValuationSection({ code }: { code: string }) {
   const panels = useMemo(() => {
     if (!data) return [];
     return METRICS.map((m) => {
-      const vals = data.history.map((h) =>
+      const vals = (data.historyByMetric?.[m.key] ?? data.history).map((h) =>
         m.key === 'pe' ? h.pe : m.key === 'pb' ? h.pb : h.dy,
       );
       const cur =
@@ -426,7 +432,7 @@ export default function ValuationSection({ code }: { code: string }) {
       const srv = data.stats?.[m.key];
       if (srv && srv.count >= 10 && srv.p50 !== null) {
         const stats: Stats = {
-          cur: srv.current ?? cur,
+          cur: data.historyBasis === 'provider' && m.key !== 'dy' ? srv.current : srv.current ?? cur,
           pct: srv.percentile,
           p80: srv.p80 ?? 0,
           p50: srv.p50,
@@ -442,6 +448,8 @@ export default function ValuationSection({ code }: { code: string }) {
   }, [data]);
 
   const current = panels.find((p) => p.key === selected);
+  const selectedHistory = data?.historyByMetric?.[selected] ?? data?.history ?? [];
+  const providerSamples = data?.historyBasis === 'provider' && selected !== 'dy';
   const availableOverlay = useMemo(() => {
     if (!data?.alt?.history.length) return null;
     const byDate = new Map(
@@ -556,9 +564,10 @@ export default function ValuationSection({ code }: { code: string }) {
                 <div className="mt-2 text-[11px] text-slate-500 sm:text-xs">
                   {p.key === 'dy' && data.dividendYieldMethod === 'hk-static'
                     ? <span title={dividendTitle}>{data.dividendFiscalYear ? `${data.dividendFiscalYear}财年` : '暂无完整财年'}{(data.dividendPerShare?.special ?? 0) > 0 ? ' · 含特别现金息' : ''}</span>
-                    : <>历史分位{' '}<span className="font-medium tabular-nums text-brand-600">
+                    : <span title={data.historyBasis === 'provider' ? `历史样本末值 ${data.stats?.[p.key].current ?? '--'}，截至 ${data.historyMetricAsOf?.[p.key] ?? '--'}；与上方当前估值可能采用不同口径。` : undefined}>
+                      {data.historyBasis === 'provider' ? '历史末值分位' : '历史分位'}{' '}<span className="font-medium tabular-nums text-brand-600">
                       {p.stats?.pct == null ? '--' : p.stats.pct.toFixed(1) + '%'}
-                    </span></>}
+                    </span></span>}
                 </div>
               </button>
             ))}
@@ -573,7 +582,7 @@ export default function ValuationSection({ code }: { code: string }) {
                   历史走势
                 </h3>
                 <span className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-500">
-                  {data.priceAdjust === 'qfq' ? '价格前复权' : '当前估值'}
+                  {providerSamples ? '源端历史估值' : data.priceAdjust === 'qfq' ? '价格前复权' : data.priceAdjust === 'none' ? '价格不复权' : '当前估值'}
                 </span>
               </div>
               {availableOverlay && current?.stats && (
@@ -594,20 +603,23 @@ export default function ValuationSection({ code }: { code: string }) {
                     title="区间统计"
                     unit={current.unit}
                     stats={current.stats}
+                    historicalSample={providerSamples}
                   />
                 </div>
                 <div className="min-w-0 flex-1">
                   <MetricChart
-                    history={data.history}
+                    history={selectedHistory}
                     metric={current.key}
                     dividendLabel={
                       dividendLabel
                     }
                     stats={current.stats}
+                    priceLabel={data.priceAdjust === 'none' ? '不复权收盘价(右轴)' : '前复权收盘价(右轴)'}
+                    currentLabel={providerSamples ? '样本末值' : '当前'}
                     picked={(() => {
                       const date = pins[current.key];
                       if (!date) return null;
-                      const row = data.history.find((h) => h.date === date);
+                      const row = selectedHistory.find((h) => h.date === date);
                       return {
                         date,
                         value: row
@@ -646,15 +658,15 @@ export default function ValuationSection({ code }: { code: string }) {
               </div>
             ) : (
               <div className="flex min-h-80 items-center justify-center px-6 text-sm text-slate-500">
-                {data.historyUnavailableReason ??
+                {data.historyUnavailableReasons?.[selected] ?? data.historyUnavailableReason ??
                   '该区间有效数据不足，暂无法展示统计结果。'}
               </div>
             )}
             <div className="flex flex-wrap justify-between gap-2 border-t border-slate-100 bg-slate-50/50 px-3 py-2 text-xs text-slate-500 sm:px-4">
               <span>
-                统计区间 {data.stats?.from ?? '--'} 至 {data.stats?.to ?? '--'}
+                统计区间 {selectedHistory[0]?.date ?? data.stats?.from ?? '--'} 至 {selectedHistory.at(-1)?.date ?? data.stats?.to ?? '--'}
               </span>
-              <span>估值由已披露财报复算 · 截至 {data.stats?.to ?? '--'}</span>
+              <span>{providerSamples ? '历史估值：百度股市通 · 按源端样本统计' : data.historyBasis === 'provider' ? '已实施完整财年现金分红 ÷ 不复权价格' : '估值由已披露财报复算'} · 截至 {data.historyMetricAsOf?.[selected] ?? data.stats?.to ?? '--'}</span>
             </div>
           </div>
 

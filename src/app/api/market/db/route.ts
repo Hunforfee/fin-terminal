@@ -8,7 +8,7 @@ const families=['kline:v2:','source-sina-page:v1:','source-sina-indicators:v1:',
  'shares-v3:','disclosures-v3:','implemented-dividends-v4:','dividend-plans-v2:',
  'deducted-periods:v1:','source-debt-ratios:v1:','source-interest-expenses:v1:',
  'screen-company-input:v1:','watchlist-financial-inputs:v1:','market-coverage:v1:',
- 'security-basics:v1:','source-hk-indicators:v1:','source-hk-statement:v1:',
+ 'security-basics:v1:','source-hk-indicators:v1:','source-hk-statement:v1:','source-hk-valuation:v1:',
  'hk-main-currency-v4:','hk-dividend-events-v4:','market-fill-gaps:v1:'];
 const allowed=(key:string,prefix=false)=>key.length<=300 && /^[a-zA-Z0-9:._-]+$/.test(key)
  && families.some(f=>key.startsWith(f) && (prefix || key.length>f.length));

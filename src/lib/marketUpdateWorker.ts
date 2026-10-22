@@ -99,6 +99,8 @@ export async function runMarketUpdateTick() {
     // 中途阶段成功不清除——其他阶段的数据域可能仍缺失，留待 phase 12 或下次复核判定。
     abort.abort(Error('本次任务已结束')); clearInterval(heartbeat); clearTimeout(deadline);
   }
-  const accepted = await queue.finish(task.symbol, task.lease, error, budget.limited,nextPhase);
+  // Pause unresolved collection after a limiter, while a successful alternate
+  // source advances normally. One site's rejection is not a global outage.
+  const accepted = await queue.finish(task.symbol, task.lease, error, budget.limited || !!error && budget.rateLimited,nextPhase);
   return { processed: true, accepted, symbol: task.symbol, ok: !error };
 }

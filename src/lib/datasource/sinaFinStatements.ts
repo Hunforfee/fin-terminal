@@ -17,8 +17,11 @@ import { fetchShareHistory, sharesAt, type ShareChange } from './sinaFinance';
 
 import { fetchStatementSourcePage } from './sinaStatements';
 import { cachedMarketInput, validateDatedRows } from '../marketInputs';
+import { financialPageSource } from './eastmoneyStatements';
 
 export interface FinStatementPoint {
+  /** Actual page contributors; underlying normalized pages retain cell-level evidence. */
+  sources?: string[];
   /** 报告期 YYYY-MM-DD */
   date: string;
   /** 归母净利润（元，累计） */
@@ -149,6 +152,7 @@ export async function fetchYearStatement(code: string, year: number, shareHistor
 
     out.push({
       date: d,
+      sources:[...new Set([plPage,bsPage].filter(p=>p?.dates.includes(d)).map(p=>financialPageSource(p!)))],
       npParent: wanToYuan(npWan),
       npTotal: wanToYuan(npTotalWan),
       sharesYi,
@@ -182,6 +186,7 @@ export async function fetchStatementHistory(code: string, years = 12): Promise<F
       // 同一报告期可能被两页覆盖（年末页/次年页），取字段更完整的
       byDate.set(pt.date, {
         date: pt.date,
+        sources:[...new Set([...(prev.sources??[]),...(pt.sources??[])])],
         npParent: pt.npParent ?? prev.npParent,
         npTotal: pt.npTotal ?? prev.npTotal,
         sharesYi: pt.sharesYi ?? prev.sharesYi,

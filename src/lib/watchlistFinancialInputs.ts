@@ -7,7 +7,7 @@ export const WATCHLIST_FINANCIAL_FIELDS = ['roe', 'netMargin', 'ocfPerShare', 'd
 export function getWatchlistFinancialInputs(input: string): Promise<CustomFinancials> {
   const n = normalizeStockCode(input); if (!n) throw Error('无效股票代码');
   return storedMarketInput(`watchlist-financial-inputs:v1:${n.symbol}`, 'watchlist-financial-inputs',
-    n.market === 'HK' ? 'hkf10:reported-indicators' : 'sina:reported-indicators', 1800e3,
+    n.market === 'HK' ? 'hkf10:reported-indicators' : 'public-financials:reported-indicators', 1800e3,
     () => n.market === 'HK' ? fetchHkCustomFinancials(`${n.code}.HK`, n.code, WATCHLIST_FINANCIAL_FIELDS, 2)
       : fetchCustomFinancials(n.code, WATCHLIST_FINANCIAL_FIELDS, 2),
     value => {

@@ -13,6 +13,7 @@
 import { fetchText } from './http';
 import { cachedMarketInput } from '../marketInputs';
 import { fetchDebtRatios } from './debtRatios';
+import { fetchEastmoneyIndicators, financialPageSource, type IndicatorSourcePage } from './eastmoneyStatements';
 
 const URL_TEMPLATE =
   'https://money.finance.sina.com.cn/corp/go.php/vFD_FinancialGuideLine/stockid/{code}/ctrl/{year}/displaytype/4.phtml';
@@ -153,7 +154,7 @@ export async function fetchSinaFinancial(
     periods,
     periodLabels: periods.map(periodLabel),
     series,
-    source: PROVIDER_NAME,
+    source: [...new Set(pages.filter((p):p is IndicatorSourcePage=>!!p).map(p=>financialPageSource(p,'sina:reported-indicators')))].join(' + '),
   };
 }
 
@@ -161,9 +162,16 @@ export async function fetchSinaFinancial(
 export function fetchIndicatorSourceYear(code:string,year:number){
   const url=URL_TEMPLATE.replace('{code}',code).replace('{year}',String(year));
   const age=new Date().getUTCFullYear()-year;
-  return cachedMarketInput(`source-sina-indicators:v1:${code}:${year}`,'source-sina-indicators','sina:reported-indicators',age<=1?1800e3:7*864e5,
-    async()=>parsePage(await fetchText(url,{encoding:'gbk',timeoutMs:10000})),
-    value=>{if(!value.dates.length || !value.rows.size)throw Error('财务指标来源为空');});
+  const validate=(value:IndicatorSourcePage)=>{if(!value.dates.length || !value.rows.size
+    || ![...value.rows.values()].some(values=>values.some(v=>toNum(v)!==null)))throw Error('财务指标来源为空');};
+  return cachedMarketInput<IndicatorSourcePage>(`source-sina-indicators:v1:${code}:${year}`,'source-sina-indicators','sina:reported-indicators',age<=1?1800e3:7*864e5,
+    async()=>{
+      try{const value=parsePage(await fetchText(url,{encoding:'gbk',timeoutMs:10000,retries:0}));validate(value);return value;}
+      catch(primary){
+        try{return await fetchEastmoneyIndicators(code,year);}
+        catch(backup){throw Error(`公网财务指标均不可用（新浪：${primary instanceof Error?primary.message:'不可用'}；东方财富：${backup instanceof Error?backup.message:'不可用'}）`);}
+      }
+    },validate,value=>financialPageSource(value,'sina:reported-indicators'));
 }
 
 /**

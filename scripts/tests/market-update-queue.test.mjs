@@ -54,16 +54,20 @@ test('queue state survives a fresh adapter and per-user result is private',async
   const f=fixture();await new MarketUpdateQueue(f.store,f.clock).submit('one',['600519']);
   const resumed=new MarketUpdateQueue(f.store,f.clock);assert.equal((await resumed.status('one')).waiting,1);assert.equal(await resumed.status('two'),null);
 });
-test('HTTP budget serializes actual upstream requests and stops at first limiter response',async()=>{
+test('HTTP budget serializes requests and isolates a limited provider from alternate sources',async()=>{
   const original=globalThis.fetch;let active=0,maxActive=0,calls=0;
   globalThis.fetch=async()=>{calls++;active++;maxActive=Math.max(maxActive,active);await new Promise(r=>setTimeout(r,5));active--;return new Response('ok');};
   try {
     await withUpstreamBudget(new UpstreamBudget(new AbortController().signal,1),()=>Promise.all([fetchText('https://one.test'),fetchText('https://two.test')]));
     assert.equal(maxActive,1);assert.equal(calls,2);
-    globalThis.fetch=async()=>{calls++;return new Response('limited',{status:429});};
+    globalThis.fetch=async url=>{calls++;return new Response('ok',{status:String(url).includes('one.test')?429:200});};
     const budget=new UpstreamBudget(new AbortController().signal,1);
-    await withUpstreamBudget(budget,async()=>{await assert.rejects(fetchText('https://one.test',{retries:0}));await assert.rejects(fetchText('https://two.test',{retries:0}),/限流/);});
-    assert.equal(calls,3);assert.equal(budget.limited,true);
+    await withUpstreamBudget(budget,async()=>{
+      await assert.rejects(fetchText('https://one.test',{retries:0}));
+      await assert.rejects(fetchText('https://one.test/other',{retries:0}),/限流/);
+      assert.equal(await fetchText('https://two.test',{retries:0}),'ok');
+    });
+    assert.equal(calls,4);assert.equal(budget.limited,false);assert.equal(budget.rateLimited,true);
   }finally{globalThis.fetch=original;}
 });
 test('foreground browsing does not inherit a background limiter',async()=>{

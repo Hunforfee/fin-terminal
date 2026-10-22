@@ -19,6 +19,7 @@ import { marketCutoff } from '../marketRetention';
 import { fetchInterestExpenses, INTEREST_FIELDS, withInterestFields } from './interestExpenses';
 import { fetchDebtRatios } from './debtRatios';
 import { statementFieldUnit, type StatementFieldUnit } from '../financeFieldSemantics';
+import { fetchEastmoneyStatement, financialPageSource, type StatementSourcePage } from './eastmoneyStatements';
 
 export const PROVIDER_NAME = 'sina-statements';
 
@@ -111,9 +112,20 @@ function parseStatementPage(html: string): { dates: string[]; rows: ParsedRow[];
 export function fetchStatementSourcePage(code: string, id: StatementId, year: number) {
   if (!/^\d{6}$/.test(code) || !STATEMENT_META[id] || !Number.isInteger(year) || year < Number(marketCutoff().slice(0,4)))
     throw Error('财报范围超出十年保留期限');
-  return cachedMarketInput(`source-sina-page:v1:${code}:${id}:${year}`,'source-sina-page','sina:reported:wan',new Date().getUTCFullYear()-year<=1?1800e3:7*864e5,
-    async()=>parseStatementPage(await fetchText(STATEMENT_META[id].url.replace('{code}',code).replace('{year}',String(year)),{encoding:'gbk',timeoutMs:12000})),
-    value=>{if(!value.dates.length || !value.rows.some(r=>r.kind==='field') || value.dates.some(d=>!/^\d{4}-\d{2}-\d{2}$/.test(d)))throw Error('财报来源页缺少有效数据');});
+  const validate=(value:StatementSourcePage)=>{
+    if(!value.dates.length || !value.rows.some(r=>r.kind==='field' && r.vals.some(v=>v!=null && v.trim()!=='' && Number.isFinite(Number(v.replaceAll(',','')))))
+      || value.dates.some(d=>!/^\d{4}-\d{2}-\d{2}$/.test(d)))throw Error('财报来源页缺少有效数据');
+  };
+  return cachedMarketInput<StatementSourcePage>(`source-sina-page:v1:${code}:${id}:${year}`,'source-sina-page','sina:reported:wan',new Date().getUTCFullYear()-year<=1?1800e3:7*864e5,
+    async()=>{
+      try {
+        const value=parseStatementPage(await fetchText(STATEMENT_META[id].url.replace('{code}',code).replace('{year}',String(year)),{encoding:'gbk',timeoutMs:10000,retries:0}));
+        validate(value);return value;
+      }catch(primary){
+        try{return await fetchEastmoneyStatement(code,id,year);}
+        catch(backup){throw Error(`公网财报均未取得有效数据（新浪：${primary instanceof Error?primary.message:'不可用'}；东方财富：${backup instanceof Error?backup.message:'不可用'}）`);}
+      }
+    },validate,financialPageSource);
 }
 
 function stripTags(s: string): string {

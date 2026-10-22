@@ -7,12 +7,12 @@ import { databaseOnly, marketDataMissing } from './marketReadPolicy';
 import { dividendIdentity, mergeHkDividendEvents } from './hkDividendEvents';
 
 export function cachedMarketInput<T>(key: string, kind: string, source: string, ttl: number,
-  producer: () => Promise<T>, validate: (value: T) => void): Promise<T> {
+  producer: () => Promise<T>, validate: (value: T) => void, sourceOf?: (value: T) => string): Promise<T> {
   const store = getMarketStore();
   // The persistent record owns freshness. A second full TTL on a nearly expired
   // record would hide later writes and extend its effective lifetime.
-  if (store || databaseOnly()) return storedMarketInput(key, kind, source, ttl, producer, validate, store);
-  return cached(`market-input:${key}`, ttl, () => storedMarketInput(key, kind, source, ttl, producer, validate, null));
+  if (store || databaseOnly()) return storedMarketInput(key, kind, source, ttl, producer, validate, store, Date.now(), sourceOf);
+  return cached(`market-input:${key}`, ttl, () => storedMarketInput(key, kind, source, ttl, producer, validate, null, Date.now(), sourceOf));
 }
 
 const withoutStore = {};
@@ -44,7 +44,7 @@ async function availableInput(store: MarketStore, key: string, kind: string, now
 
 // Source pages are a date x field matrix. A shorter reply must not erase fields
 // supplied by an import, and a missing cell is not evidence that its value is zero.
-function mergeSourcePage(prior: any, next: any): any {
+function mergeSourcePage(prior: any, next: any, priorSource: string, nextSource: string): any {
   const unit = (v: unknown) => ['wan', '万元', '人民币万元'].includes(String(v)) ? 'wan' : v;
   if (prior.unit && next.unit && unit(prior.unit) !== unit(next.unit)) throw Error('财报来源单位发生变化，未混合历史金额');
   const dates = [...new Set<string>([...prior.dates, ...next.dates])].sort().reverse();
@@ -55,12 +55,18 @@ function mergeSourcePage(prior: any, next: any): any {
   for (const row of next.rows) if (!template.some(r => r.kind === row.kind && r.name === row.name)) template.push(row);
   const populated = (v: unknown) => v !== null && v !== undefined && String(v).trim() !== ''
     && Number.isFinite(Number(String(v).replaceAll(',', '')));
-  const rows = template.map(row => row.kind !== 'field' ? row : { ...row, vals: dates.map(d => {
+  const fieldSources: Record<string,string[]> = {};
+  const rows = template.map(row => row.kind !== 'field' ? row : { ...row, vals: dates.map((d,i) => {
     const oi = oldIndex.get(d), ni = newIndex.get(d);
     const value = ni === undefined ? null : incoming.get(row.name)?.vals[ni];
-    return populated(value) ? value : oi === undefined ? '--' : row.vals[oi] ?? '--';
+    const fresh=populated(value), previous=oi===undefined?'--':row.vals[oi]??'--';
+    (fieldSources[row.name]??=Array(dates.length).fill(''))[i]=fresh
+      ? next.fieldSources?.[row.name]?.[ni!] || nextSource
+      : populated(previous) ? prior.fieldSources?.[row.name]?.[oi!] || priorSource : '';
+    return fresh ? value : previous;
   }) });
-  return { ...prior, ...next, dates, rows, ...(prior.announceDates || next.announceDates ? {
+  return { ...prior, ...next, dates, rows, fieldSources,
+    sourceEvidence:{...prior.sourceEvidence,...next.sourceEvidence}, ...(prior.announceDates || next.announceDates ? {
     announceDates: dates.map(d => {
       const oi = oldIndex.get(d), ni = newIndex.get(d);
       return (ni === undefined ? null : next.announceDates?.[ni]) ?? (oi === undefined ? null : prior.announceDates?.[oi]) ?? null;
@@ -69,7 +75,7 @@ function mergeSourcePage(prior: any, next: any): any {
 }
 export async function storedMarketInput<T>(key: string, kind: string, source: string, ttl: number,
   producer: () => Promise<T>, validate: (value: T) => void,
-  store: MarketStore | null = getMarketStore(), now = Date.now()): Promise<T> {
+  store: MarketStore | null = getMarketStore(), now = Date.now(), sourceOf?: (value: T) => string): Promise<T> {
   const owner = store ?? withoutStore;
   let pending = pendingInputs.get(owner);
   if (!pending) { pending = new Map(); pendingInputs.set(owner, pending); }
@@ -88,7 +94,7 @@ export async function storedMarketInput<T>(key: string, kind: string, source: st
       }
     }
     if (databaseOnly()) throw marketDataMissing('财务或分红输入');
-    return withMarketRefresh(store, key, () => readOrFetchInput(key, kind, source, ttl, producer, validate, store, now));
+    return withMarketRefresh(store, key, () => readOrFetchInput(key, kind, source, ttl, producer, validate, store, now, sourceOf));
   })()
     .finally(() => pending!.delete(identity));
   pending.set(identity, work);
@@ -96,7 +102,7 @@ export async function storedMarketInput<T>(key: string, kind: string, source: st
 }
 async function readOrFetchInput<T>(key: string, kind: string, source: string, ttl: number,
   producer: () => Promise<T>, validate: (value: T) => void,
-  store: MarketStore | null, now: number): Promise<T> {
+  store: MarketStore | null, now: number, sourceOf?: (value: T) => string): Promise<T> {
   let old;
   if (store) {
     try {
@@ -137,7 +143,12 @@ async function readOrFetchInput<T>(key: string, kind: string, source: string, tt
       }
       // Same rule for disclosure maps: a thinner upstream reply must not erase
       // publication dates that are already verified and stored.
-      if (kind === 'source-sina-page') value = mergeSourcePage(prior, next);
+      if (kind === 'source-sina-page') value = mergeSourcePage(prior, next, old.source, sourceOf?.(value)??source);
+      if (kind === 'source-sina-indicators' && prior.rows instanceof Map && next.rows instanceof Map) {
+        const matrix=(p:any)=>({...p,rows:[...p.rows].map(([name,vals])=>({kind:'field',name,vals}))});
+        const merged=mergeSourcePage(matrix(prior),matrix(next),old.source,sourceOf?.(value)??source);
+        value={...merged,rows:new Map(merged.rows.map((r:any)=>[r.name,r.vals.map((v:unknown)=>v==='--'?null:v)]))};
+      }
       if (prior instanceof Map && next instanceof Map) {
         const missing = [...prior.keys()].filter(k => !next.has(k));
         for (const k of missing) next.set(k, prior.get(k));
@@ -162,7 +173,7 @@ async function readOrFetchInput<T>(key: string, kind: string, source: string, tt
     throw e;
   }
   if (store) {
-    try { await store.write(marketRecord(key, kind, source, wire(value), ttl, now), old?.digest ?? null); }
+    try { await store.write(marketRecord(key, kind, sourceOf?.(value)??source, wire(value), ttl, now), old?.digest ?? null); }
     catch { /* Valid current source values remain usable if writing fails. */ }
   }
   return value;

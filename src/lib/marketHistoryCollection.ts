@@ -73,7 +73,7 @@ export async function collectHistoryPhase(symbol:string,phase:number,signal:Abor
     }
   }else if(phase===10 && n.market!=='HK'){
     for(const span of [HISTORY_YEARS,5]) {
-      await cachedMarketInput(`statements-v3:${n.code}:${span+1}`,'financial-history','sina-statements:CNY:yuan:current-revisions',1800e3,
+      await cachedMarketInput(`statements-v3:${n.code}:${span+1}`,'financial-history','public-statements:CNY:yuan:current-revisions',1800e3,
         ()=>withUpstreamBudget(new UpstreamBudget(signal,1500,40,true),()=>fetchStatementHistory(n.code,span+1)),rows=>validateDatedRows(rows as unknown as Record<string,unknown>[],'date',['npParent','equityParent']));
       // A broader input may be reused without copying it to the narrower key.
       await persistCheck(store,`statements-v3:${n.code}:${HISTORY_YEARS+1}`);

@@ -485,7 +485,7 @@ async function calculateValuation(input: string, years = 5, method: ValuationMet
     // qfq 仅用于价格曲线；缺失时留空，不能缩短用 raw 计算的估值历史。
     const [q, points, shares, dates, dividends, plans] = await Promise.all([
       getQuote(n.symbol),
-      storedMarketInput(`statements-v3:${n.code}:${span + 1}`, 'financial-history', 'sina-statements:CNY:yuan:current-revisions', 1800e3, () => sinaFinStmt.fetchStatementHistory(n.code, span + 1), rows => validateDatedRows(rows as unknown as Record<string, unknown>[], 'date', ['npParent', 'equityParent'])),
+      storedMarketInput(`statements-v3:${n.code}:${span + 1}`, 'financial-history', 'public-statements:CNY:yuan:current-revisions', 1800e3, () => sinaFinStmt.fetchStatementHistory(n.code, span + 1), rows => validateDatedRows(rows as unknown as Record<string, unknown>[], 'date', ['npParent', 'equityParent'])),
       storedMarketInput(`shares-v3:${n.code}`, 'share-events', 'sina-shares:10000shares', 1800e3, () => sinaFinance.fetchShareHistory(n.code), rows => { validateDatedRows(rows as unknown as Record<string, unknown>[], 'date', ['sharesWan']); if (rows.some(r => !(r.sharesWan > 0))) throw Error('股本数值无效'); }),
       storedMarketInput(`disclosures-v3:${n.code}:${span + 2}`, 'disclosure-dates', 'sina+eastmoney:first-original-publication', 1800e3, () => fetchDisclosureDates(n.code, new Date().getUTCFullYear() - span - 2), dates => { if (!dates.size) throw Error('缺少原始公告日期'); const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10); for (const [report, published] of dates) if (!/^\d{4}-\d{2}-\d{2}$/.test(published) || published <= report || published > today) throw Error('公告日期无效'); }),
       getValuationDividends(n.code).catch(() => null),
@@ -555,7 +555,7 @@ async function calculateValuation(input: string, years = 5, method: ValuationMet
         realDates: true, adjustGaps: 0 },
       ...(alt && alt.stats ? { alt: { method: method === 'cutoff' ? 'disclosure' as const : 'cutoff' as const,
         history: alt.history, stats: alt.stats, current: { pe: alt.pe, pb: alt.pb, dy: alt.dividendYield } } } : {}),
-      source: `sina-statements + sina-disclosures + eastmoney-dividend-plans + ${raw.source}-raw + ${adjusted?.source ?? 'missing'}-qfq`,
+      source: `${[...new Set(points.flatMap(p=>p.sources??['public-statements']))].join(' + ')} + sina/eastmoney-disclosures + eastmoney-dividend-plans + ${raw.source}-raw + ${adjusted?.source ?? 'missing'}-qfq`,
       stale: q.stale || raw.stale || adjusted?.stale || false,
     };
   }, { staleOnError: !databaseOnly() });

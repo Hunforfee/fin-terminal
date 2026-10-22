@@ -47,6 +47,7 @@ export function retainMarketPayload<T>(kind: string, payload: T, now = Date.now(
   if (kind === 'source-sina-page') {
     const indices = p.dates.flatMap((date: string,i: number) => keep(date) ? [i] : []);
     return { ...p, dates: indices.map((i: number) => p.dates[i]),
+      ...(p.fieldSources ? {fieldSources:Object.fromEntries(Object.entries(p.fieldSources).map(([name,values])=>[name,indices.map((i:number)=>(values as string[])[i]??'')]))} : {}),
       ...(Array.isArray(p.announceDates) ? { announceDates: indices.map((i: number) => p.announceDates[i] ?? null) } : {}),
       rows: p.rows.map((r: any) => r.kind === 'group' ? r : { ...r, vals: indices.map((i: number) => r.vals[i] ?? null) }) };
   }
@@ -54,7 +55,8 @@ export function retainMarketPayload<T>(kind: string, payload: T, now = Date.now(
     const indices = p.dates.flatMap((date: string,i: number) => keep(date) ? [i] : []);
     const rows = p.rows instanceof Map ? [...p.rows] : p.rows?.$marketMap ?? [];
     const entries = rows.map(([key,values]: [string,unknown[]]) => [key,indices.map((i: number) => values[i] ?? null)]);
-    return { ...p, dates: indices.map((i: number) => p.dates[i]), rows: p.rows instanceof Map ? new Map(entries) : { $marketMap: entries } };
+    return { ...p, dates: indices.map((i: number) => p.dates[i]), rows: p.rows instanceof Map ? new Map(entries) : { $marketMap: entries },
+      ...(p.fieldSources ? {fieldSources:Object.fromEntries(Object.entries(p.fieldSources).map(([name,values])=>[name,indices.map((i:number)=>(values as string[])[i]??'')]))} : {}) };
   }
   if (kind === 'watchlist-financial-inputs' && Array.isArray(p.periods)) {
     const indices = p.periods.flatMap((date: string,i: number) => keep(date) ? [i] : []);

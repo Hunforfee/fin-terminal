@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
   const p = sp(request);
   const code = p.get('code');
   if (!code) return fail('缺少 code 参数', 400);
-  const years = Math.min(Math.max(Number(p.get('years') ?? 5) || 5, 1), 10);
+  const years = Math.min(Math.max(Number(p.get('years') ?? 10) || 10, 1), 10);
   const method = p.get('method') === 'cutoff' ? 'cutoff' : 'disclosure';
   try {
     return ok(await getValuation(code, years, method, {schedule:work=>after(work)}));

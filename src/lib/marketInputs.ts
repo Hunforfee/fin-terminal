@@ -140,6 +140,25 @@ async function readOrFetchInput<T>(key: string, kind: string, source: string, tt
           }
           if (repaired) try { await store?.incident(key, 'source_amounts_partial', { key, keptFrom: 'local' }); } catch {}
         }
+        if(kind==='share-events')for(const row of prior){
+          const target=byDate.get(row.date);
+          if(!target || row.baseline || target.baseline || typeof row.sharesWan!=='number' || typeof target.sharesWan!=='number')continue;
+          const tolerance=Math.max(row.precisionShares??1,target.precisionShares??1)/2+.00001;
+          if(Math.abs(row.sharesWan-target.sharesWan)*1e4>tolerance)throw Error('实际股本来源冲突，未覆盖已有历史');
+        }
+      }
+      if(kind==='implemented-dividends' && Array.isArray(prior) && Array.isArray(next)){
+        const events=new Map(next.map(r=>[r.exDate,r]));
+        for(const row of prior){
+          const target=events.get(row.exDate);
+          if(!target){events.set(row.exDate,row);continue;}
+          const tolerance=Math.max(row.precisionPerShare??0,target.precisionPerShare??0)/2+1e-10;
+          if(Math.abs(row.perShare-target.perShare)>tolerance
+            || row.perShareStock!=null && target.perShareStock!=null && Math.abs(row.perShareStock-target.perShareStock)>1e-10)
+            throw Error('已实施分红来源冲突，未覆盖已有现金或送转记录');
+          if((row.precisionPerShare??0)<(target.precisionPerShare??0))events.set(row.exDate,row);
+        }
+        value=[...events.values()].sort((a,b)=>a.exDate.localeCompare(b.exDate)) as T;
       }
       // Same rule for disclosure maps: a thinner upstream reply must not erase
       // publication dates that are already verified and stored.

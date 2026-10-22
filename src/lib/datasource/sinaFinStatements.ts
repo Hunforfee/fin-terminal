@@ -1,4 +1,4 @@
-import { fetchShareHistory, sharesAt, type ShareChange } from './sinaFinance';
+import { fetchShareHistory, sharesAt, shareHistorySource, type ShareChange } from './sinaFinance';
 /**
  * 新浪三大报表「全历史」解析（估值分母专用，单位：万元）。
  *
@@ -170,8 +170,8 @@ export async function fetchStatementHistory(code: string, years = 12): Promise<F
   const yearList: number[] = [];
   for (let y = thisYear; yearList.length < Math.min(11,Math.max(1,years)) + 1 && y >= 1998; y--) yearList.push(y);
 
-  const shareHistory = await cachedMarketInput(`shares-v3:${code}`,'share-events','sina-shares:10000shares',1800e3,
-    ()=>fetchShareHistory(code),rows=>validateDatedRows(rows as unknown as Record<string,unknown>[],'date',['sharesWan']));
+  const shareHistory = await cachedMarketInput(`shares-v3:${code}`,'share-events','public-shares:10000shares',1800e3,
+    ()=>fetchShareHistory(code),rows=>validateDatedRows(rows as unknown as Record<string,unknown>[],'date',['sharesWan']),shareHistorySource);
   const pages = await Promise.all(yearList.map((y) => fetchYearStatement(code, y, shareHistory).catch(() => [] as FinStatementPoint[])));
 
   const byDate = new Map<string, FinStatementPoint>();

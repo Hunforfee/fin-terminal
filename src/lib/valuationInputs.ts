@@ -12,6 +12,9 @@ export function reconcileCashDividends(events: DividendEvent[], plans: DividendP
   for (const p of latest.values()) if (p.implemented && !p.cancelled && p.exDate && p.exDate <= today && p.perShare != null)
     implemented.set(p.exDate, (implemented.get(p.exDate) ?? 0) + p.perShare);
   return events.filter(e => e.exDate <= today).map(e => {
+    // The backup already comes from these same implementation records; comparing
+    // it to a proposal projection is not an independent source reconciliation.
+    if(e.cashSource==='eastmoney-implemented')return e;
     const amount = implemented.get(e.exDate);
     if (amount == null || Math.abs(amount - e.perShare) <= 1e-10) return e;
     const tolerance = (e.precisionPerShare ?? 0) / 2 + 1e-10;
@@ -39,5 +42,5 @@ export function getValuationDividends(code: string): Promise<DividendEvent[]> {
     }, rows => {
       validateDatedRows(rows as unknown as Record<string, unknown>[], 'exDate', ['perShare']);
       if (rows.some(r => !Number.isFinite(r.perShare) || r.perShare < 0 || r.perShareStock != null && (!Number.isFinite(r.perShareStock) || r.perShareStock < 0))) throw Error('分红金额或送转比例无效');
-    });
+    },rows=>[...new Set(rows.map(r=>r.cashSource??'existing-dividend-evidence'))].sort().join('+')+':CNY:tax-before:per-share:ex-date');
 }

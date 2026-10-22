@@ -15,6 +15,7 @@
  */
 
 import { fetchText } from './http';
+import { fetchEastmoneyShareHistory } from './eastmoneyCapital';
 
 export interface PeriodFinancial {
   /** 报告期 YYYY-MM-DD */
@@ -105,6 +106,10 @@ export function parseFinancialGuideLine(html: string): PeriodFinancial[] {
 }
 
 export interface ShareChange {
+  source?: 'sina-shares' | 'eastmoney-equity';
+  noticeDate?: string;
+  precisionShares?: number;
+  reference?: string;
   /** 变动日期 */
   date: string;
   /** 总股本（万股） */
@@ -116,19 +121,23 @@ export interface ShareChange {
  * 用于还原「每个报告期当时」的股本，从而由 EPS × 股本 得到当期净利润。
  */
 export async function fetchShareHistory(code: string): Promise<ShareChange[]> {
+  if(!/^\d{6}$/.test(code))throw Error('实际股本股票代码无效');
   const url = `https://money.finance.sina.com.cn/corp/go.php/vCI_StockStructureHistory/stockid/${code}/stocktype/TotalStock.phtml`;
-  let html: string;
   try {
-    html = await fetchText(url, {
-      timeoutMs: 15000,
+    const html = await fetchText(url, {
+      timeoutMs: 10000,retries:0,
       encoding: 'gbk',
       headers: { Referer: 'https://finance.sina.com.cn' },
     });
-  } catch {
-    return [];
+    const rows=parseShareHistory(html),today=new Date(Date.now()+8*3600e3).toISOString().slice(0,10);
+    if(!rows.length || rows.some(r=>r.date>today || !Number.isFinite(Date.parse(r.date+'T00:00:00Z'))))throw Error('新浪实际股本历史为空或日期无效');
+    return rows.map(r=>({...r,source:'sina-shares' as const}));
+  } catch(primary) {
+    try{return await fetchEastmoneyShareHistory(code);}
+    catch(backup){throw Error(`公网实际股本均不可用（新浪：${primary instanceof Error?primary.message:'不可用'}；东方财富：${backup instanceof Error?backup.message:'不可用'}）`);}
   }
-  return parseShareHistory(html);
 }
+export const shareHistorySource=(rows:ShareChange[])=>[...new Set(rows.map(r=>r.source??'existing-share-evidence'))].sort().join('+')+':10000shares';
 
 export function parseShareHistory(html: string): ShareChange[] {
   const out: ShareChange[] = [];

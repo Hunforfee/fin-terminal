@@ -433,7 +433,7 @@ export async function getMinute(input: string): Promise<MinutePoint[]> {
  * 历史序列用**已披露定期报告**还原当期 TTM EPS 与 BPS（见 `lib/valuation.ts`），
  * 价格为不复权收盘价 —— 与前复权价倒推的旧口径相比，不会因除权而低估历史 PE。
  */
-export async function getValuation(input: string, years = 5, method: ValuationMethod = 'disclosure', options: ValuationCacheOptions = {}): Promise<Valuation> {
+export async function getValuation(input: string, years = 10, method: ValuationMethod = 'disclosure', options: ValuationCacheOptions = {}): Promise<Valuation> {
   if (remoteMarketDataEnabled()) return readRemoteMarketData<Valuation>('valuation', { code: input, years, method });
   const n=normalizeStockCode(input);
   if(!n || n.kind!=='stock')throw Error('真实财报估值仅支持 A 股 / 港股股票');
@@ -453,7 +453,7 @@ export async function getValuation(input: string, years = 5, method: ValuationMe
       stale:!quote || quote.stale};
   } catch {return {...value,stale:true,warnings:[...(value.warnings??[]),'当前港股估值刷新失败，保留已保存数据，请留意日期。']};}
 }
-async function calculateValuation(input: string, years = 5, method: ValuationMethod = 'disclosure'): Promise<Valuation> {
+async function calculateValuation(input: string, years = 10, method: ValuationMethod = 'disclosure'): Promise<Valuation> {
   const n = normalizeStockCode(input);
   if (!n || n.kind !== 'stock') throw new Error('真实财报估值仅支持 A 股 / 港股股票');
   if (n.market === 'HK') {
@@ -486,7 +486,7 @@ async function calculateValuation(input: string, years = 5, method: ValuationMet
     const [q, points, shares, dates, dividends, plans] = await Promise.all([
       getQuote(n.symbol),
       storedMarketInput(`statements-v3:${n.code}:${span + 1}`, 'financial-history', 'public-statements:CNY:yuan:current-revisions', 1800e3, () => sinaFinStmt.fetchStatementHistory(n.code, span + 1), rows => validateDatedRows(rows as unknown as Record<string, unknown>[], 'date', ['npParent', 'equityParent'])),
-      storedMarketInput(`shares-v3:${n.code}`, 'share-events', 'sina-shares:10000shares', 1800e3, () => sinaFinance.fetchShareHistory(n.code), rows => { validateDatedRows(rows as unknown as Record<string, unknown>[], 'date', ['sharesWan']); if (rows.some(r => !(r.sharesWan > 0))) throw Error('股本数值无效'); }),
+      storedMarketInput(`shares-v3:${n.code}`, 'share-events', 'public-shares:10000shares', 1800e3, () => sinaFinance.fetchShareHistory(n.code), rows => { validateDatedRows(rows as unknown as Record<string, unknown>[], 'date', ['sharesWan']); if (rows.some(r => !(r.sharesWan > 0))) throw Error('股本数值无效'); },sinaFinance.shareHistorySource),
       storedMarketInput(`disclosures-v3:${n.code}:${span + 2}`, 'disclosure-dates', 'sina+eastmoney:first-original-publication', 1800e3, () => fetchDisclosureDates(n.code, new Date().getUTCFullYear() - span - 2), dates => { if (!dates.size) throw Error('缺少原始公告日期'); const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10); for (const [report, published] of dates) if (!/^\d{4}-\d{2}-\d{2}$/.test(published) || published <= report || published > today) throw Error('公告日期无效'); }),
       getValuationDividends(n.code).catch(() => null),
       getValuationPlans(n.code).catch(() => null),
@@ -647,7 +647,7 @@ import * as sinaFinancial from './sinaFinancial';
  */
 export async function getFinancialCompare(
   codes: string[],
-  years = 5,
+  years = 10,
   granularity: sinaFinancial.Granularity = 'semi',
 ) {
   if (remoteMarketDataEnabled()) return readRemoteMarketData<{
@@ -757,7 +757,7 @@ function hkDefaultFields(catalog: { id: string; groups: { fields: { key: string 
 export async function getCustomFinancialCompare(
   codes: string[],
   fields: string[],
-  years = 5,
+  years = 10,
   granularity: sinaFinancial.Granularity = 'semi',
 ) {
   if (remoteMarketDataEnabled()) return readRemoteMarketData<{ companies: sinaStatements.CustomFinancials[] }>('finance-compare', {}, { codes, fields, years, granularity });

@@ -1,6 +1,7 @@
 import { crossCheckMainlandRaw, MarketDataConflict } from '../klineCrossCheck';
 import { databaseOnly } from '../marketReadPolicy';
 import { getMarketStore } from '../marketStore';
+import { readRemoteMarketData, remoteMarketDataEnabled } from '../marketDataClient';
 import { cachedValuationResult, valuationInputVersion, type ValuationCacheOptions } from '../valuationResultCache';
 import { sharedQuotes } from '../quoteInputs';
 import { getValuationPlans, getValuationDividends } from '../valuationInputs';
@@ -85,6 +86,7 @@ function ymdYearsAgo(years: number): string {
 
 /** 代码 / 名称 / 拼音搜索：东财联想 → 腾讯联想 → 本地池兜底 */
 export async function search(keyword: string): Promise<SearchHit[]> {
+  if (remoteMarketDataEnabled()) return readRemoteMarketData<SearchHit[]>('search', { q: keyword });
   const kw = keyword.trim();
   if (!kw) return [];
   return cached(`search-markets-v2:${kw}`, 5 * 60 * 1000, async () => {
@@ -142,6 +144,7 @@ function localSearch(kw: string): SearchHit[] {
 
 /** 单标的实时行情 */
 export async function getQuote(input: string): Promise<Quote | null> {
+  if (remoteMarketDataEnabled()) return readRemoteMarketData<Quote>('quote', { code: input });
   const n = normalizeCode(input);
   if (!n) return null;
   const ttl = defaultTtl(n.market === 'HK' ? 'HK' : 'A');
@@ -168,6 +171,12 @@ export async function getQuote(input: string): Promise<Quote | null> {
 
 /** 批量行情：分块并发 + 逐块降级 */
 export async function getQuotes(inputs: string[]): Promise<Quote[]> {
+  if (remoteMarketDataEnabled()) {
+    const rows: Quote[] = [];
+    for (let at = 0; at < inputs.length; at += 200)
+      rows.push(...await readRemoteMarketData<Quote[]>('quote', { codes: inputs.slice(at, at + 200).join(',') }));
+    return rows;
+  }
   const symbols: string[] = [];
   const map = new Map<string, string>();
   for (const i of inputs) {
@@ -193,6 +202,7 @@ export async function getQuotes(inputs: string[]): Promise<Quote[]> {
 
 /** Industry tables need quotes and HKD PB, without per-security dividend work. */
 export async function getIndustryQuotes(inputs: string[]): Promise<Quote[]> {
+  if (remoteMarketDataEnabled()) return getQuotes(inputs);
   const normalized = [...new Map(
     inputs.flatMap((input) => {
       const n = normalizeStockCode(input);
@@ -282,6 +292,7 @@ async function fetchQuotesChunk(symbols: string[]): Promise<Quote[]> {
  * 列表、单只行情、股息接口与详情页共用此入口，避免价格或股息口径不一致。
  */
 export async function getHkCurrentValuation(symbol: string, price: number | null, asOf?: string): Promise<HkValuation> {
+  if (remoteMarketDataEnabled()) return readRemoteMarketData<HkValuation>('hk-valuation', { code: symbol, price: price ?? undefined, asOf });
   const n = normalizeStockCode(symbol);
   if (!n || n.market !== 'HK') throw new Error('港股代码无效');
   const [fundamental, dividends] = await Promise.all([
@@ -358,6 +369,7 @@ export async function getKLine(
   startDate?: string,
   recentOnly = false,
 ): Promise<KLineSeries> {
+  if (remoteMarketDataEnabled()) return readRemoteMarketData<KLineSeries>('kline', { code: input, period, adjust, count, start: startDate });
   const n = normalizeCode(input);
   if (!n) throw new Error(`无法解析代码 ${input}`);
   const key = `kline:${n.symbol}:${period}:${adjust}:${count}:${startDate ?? ''}${recentOnly ? ':recent-only' : ''}`;
@@ -401,6 +413,7 @@ export async function getKLine(
 }
 
 export async function getMinute(input: string): Promise<MinutePoint[]> {
+  if (remoteMarketDataEnabled()) return readRemoteMarketData<MinutePoint[]>('minute', { code: input });
   const n = normalizeCode(input);
   if (!n) return [];
   return cached(`minute:${n.symbol}`, 60 * 1000, async () => {
@@ -421,6 +434,7 @@ export async function getMinute(input: string): Promise<MinutePoint[]> {
  * 价格为不复权收盘价 —— 与前复权价倒推的旧口径相比，不会因除权而低估历史 PE。
  */
 export async function getValuation(input: string, years = 5, method: ValuationMethod = 'disclosure', options: ValuationCacheOptions = {}): Promise<Valuation> {
+  if (remoteMarketDataEnabled()) return readRemoteMarketData<Valuation>('valuation', { code: input, years, method });
   const n=normalizeStockCode(input);
   if(!n || n.kind!=='stock')throw Error('真实财报估值仅支持 A 股 / 港股股票');
   const span=Math.min(Math.max(years,1),10);
@@ -548,6 +562,7 @@ async function calculateValuation(input: string, years = 5, method: ValuationMet
 }
 
 export async function getFinancial(input: string): Promise<FinancialSummary> {
+  if (remoteMarketDataEnabled()) return readRemoteMarketData<FinancialSummary>('financial', { code: input });
   const n = normalizeStockCode(input);
   if (!n) throw new Error(`无法解析代码 ${input}`);
   return cached(`fin:${n.code}`, 30 * 60 * 1000, async () => {
@@ -567,6 +582,7 @@ export async function getFinancial(input: string): Promise<FinancialSummary> {
 
 /** 行业对比：同行业标的的实时行情 + 派生 ROE */
 export async function getPeers(input: string): Promise<{ industry: string | null; rows: PeerRow[] }> {
+  if (remoteMarketDataEnabled()) return readRemoteMarketData<{ industry: string | null; rows: PeerRow[] }>('peers', { code: input });
   const n = normalizeStockCode(input);
   if (!n) return { industry: null, rows: [] };
   const industry = industryOf(n.code);
@@ -596,6 +612,7 @@ export async function getPeers(input: string): Promise<{ industry: string | null
 /* ------------------------------------------------------------ 条件选股 */
 
 export async function screen(criteria: ScreenCriteria) {
+  if (remoteMarketDataEnabled()) return readRemoteMarketData<import('../valueScreen').ValueScreenResult>('screen', {}, criteria);
   return runValueScreen(criteria, getQuotes);
 }
 
@@ -606,6 +623,7 @@ export function getScreenMeta() {
 /* ---------------------------------------------------------------- 大盘 */
 
 export async function getMarketOverview(): Promise<MarketOverview> {
+  if (remoteMarketDataEnabled()) return readRemoteMarketData<MarketOverview>('market');
   return cached('market:overview', defaultTtl(), async () => {
     const symbols = INDICES.map((i) => i.symbol);
     const indices = await getQuotes(symbols);
@@ -632,6 +650,9 @@ export async function getFinancialCompare(
   years = 5,
   granularity: sinaFinancial.Granularity = 'semi',
 ) {
+  if (remoteMarketDataEnabled()) return readRemoteMarketData<{
+    companies: sinaFinancial.CompanyFinancials[]; indicators: typeof sinaFinancial.INDICATORS; groups: typeof sinaFinancial.GROUP_META;
+  }>('finance-compare', { codes: codes.join(','), years, granularity });
   const list = codes.slice(0, 4);
   return (async () => {
     const results = await Promise.all(
@@ -685,6 +706,10 @@ import * as sinaStatements from './sinaStatements';
 
 /** 三大报表字段目录（含全部披露科目），缓存 24h。 */
 export async function getFinanceFieldsCatalog(code: string) {
+  if (remoteMarketDataEnabled()) return readRemoteMarketData<{
+    code: string; name: string; statements: sinaStatements.StatementCatalog[]; indicators: typeof sinaFinancial.INDICATORS;
+    indicatorGroups: typeof sinaFinancial.GROUP_META; defaultFields?: string[];
+  }>('finance-fields', { code });
   const n = normalizeStockCode(code);
   if (!n) throw new Error(`无法解析代码 ${code}`);
   const q = await getQuote(n.symbol).catch(() => null);
@@ -735,6 +760,7 @@ export async function getCustomFinancialCompare(
   years = 5,
   granularity: sinaFinancial.Granularity = 'semi',
 ) {
+  if (remoteMarketDataEnabled()) return readRemoteMarketData<{ companies: sinaStatements.CustomFinancials[] }>('finance-compare', {}, { codes, fields, years, granularity });
   const list = codes.slice(0, 4);
   if (years === 2 && granularity === 'quarter' && fields.length === WATCHLIST_FINANCIAL_FIELDS.length && WATCHLIST_FINANCIAL_FIELDS.every(f => fields.includes(f))) {
     return { companies: await Promise.all(list.map(async code => {
@@ -789,6 +815,7 @@ function filterCustom(
 /* ---------------------------------------------------------- 数据源体检 */
 
 export async function health(): Promise<{ providers: ProviderStatus[]; snapshot: unknown }> {
+  if (remoteMarketDataEnabled()) return readRemoteMarketData<{ providers: ProviderStatus[]; snapshot: unknown }>('health');
   const providers: ProviderStatus[] = [];
 
   const probe = async (
@@ -901,6 +928,7 @@ function crossPercentile(v: number | null, arr: (number | null)[]): number | nul
  * 与理杏仁的「行业历史分位」不同——后者需要逐股历史序列，暂不提供。
  */
 export async function getIndustryBoard() {
+  if (remoteMarketDataEnabled()) return readRemoteMarketData<{ updatedAt: string; industries: number; rows: IndustryRow[] }>('industry');
   return cached('industry:board', defaultTtl() * 2, async () => {
     const SKIP = new Set(['宽基指数', '行业指数', '商品']);
     const pool = STOCKS.filter((s) => !SKIP.has(s.industry));
@@ -955,6 +983,7 @@ export async function getIndustryBoard() {
 
 /** 公司资料：控股股东 / 实控人 / 所属行业（A 股申万三级，港股东财行业） */
 export async function getCompanyProfile(input: string) {
+  if (remoteMarketDataEnabled()) return readRemoteMarketData<profile.CompanyProfile>('company-profile', { code: input });
   const n = normalizeCode(input);
   if (!n || n.kind === 'unknown') throw new Error(`无法解析代码 ${input}`);
   return cached(`profile:${n.symbol}`, 24 * 60 * 60 * 1000, () =>

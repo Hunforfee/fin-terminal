@@ -6,6 +6,7 @@ const nextConfig = {
   outputFileTracingIncludes: {
     '/api/analysis': ['./src/data/analyses/[0-9]*.json'],
     '/api/company-learning': ['./src/data/analyses/[0-9]*.json'],
+    '/api/market/data': ['./src/data/analyses/[0-9]*.json'],
   },
   // 行情/K线抓取发生在服务端 Route Handler，无需外网图片资源
   images: { unoptimized: true },

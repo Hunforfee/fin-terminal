@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { retainMarketPayload } from './marketRetention';
 import { normalizeStockCode } from './datasource/codes';
+import { remoteMarketDataEnabled, remoteMarketReadStore } from './marketDataClient';
 
 export interface MarketRecord<T = unknown> {
   schema: 1; key: string; kind: string; source: string; payload: T;
@@ -368,6 +369,7 @@ export function postgresMarketStore(connectionString: string, poolFactory?: () =
 
 let configured: MarketStore | undefined;
 export function getMarketStore(): MarketStore | null {
+  if (remoteMarketDataEnabled()) throw Error('远程数据模式禁止使用本地市场存储；请通过数据 API 查询，由原服务器统一更新');
   if (process.env.MARKET_DATA_STORE === 'off') return null;
   if (process.env.NODE_TEST_CONTEXT && !process.env.MARKET_DATA_DIR && !process.env.MARKET_DATABASE_URL) return null;
   if (configured) return configured;
@@ -381,6 +383,7 @@ export function getMarketStore(): MarketStore | null {
 let readConfigured:MarketStore|undefined;
 /** Dedicated diagnostic reader: no schema initialization, cache refresh, cleanup or write methods. */
 export function getMarketReadStore():Pick<MarketStore,'read'|'scanPrefix'|'readVersions'>|null{
+  if(remoteMarketDataEnabled())return remoteMarketReadStore();
   if(process.env.MARKET_DATA_STORE==='off')return null;
   if(readConfigured)return readConfigured;
   const url=process.env.MARKET_DATABASE_READONLY_URL || process.env.MARKET_DATABASE_URL || process.env.DATABASE_URL;

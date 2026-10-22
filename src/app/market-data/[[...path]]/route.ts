@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { remoteMarketDataEnabled } from '@/lib/marketDataClient';
 
 // 行情数据查看器反代：/market-data/* → 本地只读查看器（127.0.0.1:3112）
 // 查看器自身会剥离 /market-data 前缀，因此这里原样转发路径与查询串。
@@ -11,6 +12,10 @@ const VIEWER_ORIGIN = process.env.MARKET_VIEWER_ORIGIN || 'http://127.0.0.1:3112
 const MAX_BODY = 32 * 1024 * 1024; // 32MB，足够最大的 JSON 记录页
 
 async function proxy(request: NextRequest, method: 'GET' | 'HEAD') {
+  if (remoteMarketDataEnabled()) return NextResponse.json(
+    { error: '数据查看器暂不支持远程模式，请通过网站行情、财务页面或统一数据接口查询' },
+    { status: 503, headers: { 'Cache-Control': 'private, no-store' } },
+  );
   const target = new URL(request.nextUrl.pathname + request.nextUrl.search, VIEWER_ORIGIN);
   let upstream: Response;
   try {

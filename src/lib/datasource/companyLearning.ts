@@ -9,6 +9,7 @@ import { fetchReports, type ResearchReport } from './research';
 import { fetchAnnouncements, type CompanyAnnouncement } from './announcements';
 import { fetchHkIndicatorPoints } from './hkFinance';
 import { getQuote } from './index';
+import { readRemoteMarketData, remoteMarketDataEnabled } from '../marketDataClient';
 import { todayResearchDate } from '../researchNotes';
 import { parseLearningAnnual,parseLearningLatest,learningDate,type LearningAnnual,type LearningCandidate } from '../companyLearning';
 import { getPreAnalysis } from '../../data/analyses';
@@ -61,6 +62,7 @@ async function hkBusiness(code:string):Promise<BusinessInfo|null> {
   return {summary:text(row.ORG_PROFILE),scope:text(row.MAIN_BUSINESS)??text(row.BUSINESS_SCOPE),industry:null,review:null,reviewDate:null,groups:[],segments:[],reportDate:null,source:'eastmoney-hkf10'};
 }
 export async function getLearningBrief(input:string):Promise<LearningBrief> {
+  if(remoteMarketDataEnabled())return readRemoteMarketData<LearningBrief>('company-learning',{code:input,view:'brief'});
   const stock=normalizeStockCode(input);if(!stock||stock.kind!=='stock')throw Error('请选择股票');
   return cached(`company-learning-brief-v3:${stock.symbol}:${todayResearchDate()}`,86400e3,async()=>{
     const hk=stock.market==='HK';
@@ -87,6 +89,7 @@ async function financialData(code:string,hk:boolean,today:string):Promise<{annua
   return {annual:parseLearningAnnual(j.result.data,code,today),latest:parseLearningLatest(j.result.data,code,today)};
 }
 export async function getLearningDigest(input:string):Promise<LearningDigest> {
+  if(remoteMarketDataEnabled())return readRemoteMarketData<LearningDigest>('company-learning',{code:input,view:'digest'});
   const stock=normalizeStockCode(input);if(!stock||stock.kind!=='stock')throw Error('请选择股票');
   const today=todayResearchDate(),hk=stock.market==='HK';
   return cached(`company-learning-digest-v3:${stock.symbol}:${today}`,86400e3,async()=>{

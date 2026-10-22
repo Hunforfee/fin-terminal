@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { StockLink } from '@/components/StockLink';
 import AiAnalysisPanel from '@/components/AiAnalysisPanel';
 import StockFillButton from '@/components/StockFillButton';
 import WatchlistButton from '@/components/WatchlistButton';
@@ -121,12 +122,12 @@ export default function QuoteHeader({ quote }: { quote: Quote }) {
                 code={quote.code}
                 market={quote.market === 'HK' ? 'HK' : 'A'}
               />
-              <Link
+              <StockLink
                 href={`/stock/${quote.market === 'HK' ? quote.symbol : quote.code}/finance`}
                 className="chip min-h-10 border border-brand-300 bg-white text-brand-700 hover:bg-brand-50 sm:min-h-8"
               >
                 财务体检
-              </Link>
+              </StockLink>
               <WatchlistButton code={quote.symbol} name={quote.name} />
             </>
           )}

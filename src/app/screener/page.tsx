@@ -1,8 +1,8 @@
 'use client';
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { StockLink } from '@/components/StockLink';
 import { useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import Modal from '@/components/Modal';
 import WatchlistButton from '@/components/WatchlistButton';
 import StockScopeFilter from '@/components/StockScopeFilter';
@@ -235,13 +235,13 @@ function ScreenerContent() {
         </tr></thead>
         <tbody>{visibleRows.map(row => <tr key={row.symbol} data-code={row.code} aria-selected={selected.includes(row.symbol)} className="border-b border-slate-100 bg-white">
           <td className="sticky left-0 z-10 bg-inherit px-2 py-1"><input type="checkbox" aria-label={`选择${row.name}`} checked={selected.includes(row.symbol)} disabled={loading} onChange={event => setSelected(previous => event.target.checked ? [...previous, row.symbol] : previous.filter(symbol => symbol !== row.symbol))} className="h-3.5 w-3.5 accent-blue-600" /></td>
-          <td className="sticky left-8 z-10 max-w-[160px] bg-inherit px-2 py-1" title={`${row.name} · ${row.code}\n${row.industry}\n${row.noticeDate ? `公告 ${row.noticeDate}` : '该期财报未取得'}`}><Link href={`/stock/${row.symbol}`} prefetch={false} className="block truncate font-medium text-[#0b6192] hover:underline">{row.name}</Link></td>
+          <td className="sticky left-8 z-10 max-w-[160px] bg-inherit px-2 py-1" title={`${row.name} · ${row.code}\n${row.industry}\n${row.noticeDate ? `公告 ${row.noticeDate}` : '该期财报未取得'}`}><StockLink href={`/stock/${row.symbol}`} prefetch={false} className="block truncate font-medium text-[#0b6192] hover:underline">{row.name}</StockLink></td>
           <td className="whitespace-nowrap px-2 py-1 text-xs text-slate-500">{row.industry}</td>
           {columns.map(column => {
             const value = row[column.id], missing = value == null || typeof value === 'number' && !Number.isFinite(value), numeric = typeof value === 'number' ? value : null;
             return <td key={column.id} className={`whitespace-nowrap px-2 py-1 text-right tabular-nums ${missing ? 'text-slate-300' : numeric != null && numeric < 0 ? 'text-amber-700' : column.id === 'roe' ? 'font-semibold text-teal-800' : column.tone === 'growth' && numeric != null && numeric > 0 ? 'text-teal-700' : 'text-slate-700'}`} title={column.id === 'period' && row.noticeDate ? `公告日期：${row.noticeDate}` : undefined}>{missing ? '—' : column.kind === 'date' ? String(value).slice(0, 10) : column.kind === 'percent' ? `${number(value)}%` : number(value)}</td>;
           })}
-          <td className="whitespace-nowrap px-3 py-1"><div className="flex items-center justify-end gap-3 text-xs"><Link href={`/stock/${row.symbol}`} prefetch={false} className="text-brand-700 hover:underline">估值</Link><Link href={`/stock/${row.symbol}/finance`} prefetch={false} className="text-brand-700 hover:underline">财报</Link><WatchlistButton compact code={row.symbol} name={row.name} /></div></td>
+          <td className="whitespace-nowrap px-3 py-1"><div className="flex items-center justify-end gap-3 text-xs"><StockLink href={`/stock/${row.symbol}`} prefetch={false} className="text-brand-700 hover:underline">估值</StockLink><StockLink href={`/stock/${row.symbol}/finance`} prefetch={false} className="text-brand-700 hover:underline">财报</StockLink><WatchlistButton compact code={row.symbol} name={row.name} /></div></td>
         </tr>)}
         {!visibleRows.length && <tr><td colSpan={columns.length + 4} className="px-3 py-16 text-center text-xs text-slate-500">{loading ? '读取最新财报与行情…' : error ? '数据暂未取得' : !result ? '设置条件后，点击筛选' : result.universeCount === 0 ? '当前范围没有 A 股公司' : '没有符合条件的公司'}</td></tr>}
         </tbody>

@@ -40,29 +40,52 @@ for (const symbol of targets) {
   const pages = readdirSync(symDir).filter(f => /^page_.*\.json$/.test(f)).sort().map(f => join(symDir, f));
   if (!pages.length) { skipped++; console.log(`  跳过 ${symbol}: 无 page 文件`); continue; }
   const candles = [];
+  let sawQfq = false;
   try {
     for (const pf of pages) {
       const d = JSON.parse(readFileSync(pf, 'utf8'));
       const data = d?.payload?.data ?? d?.data ?? {};
       const node = data[symbol] ?? Object.values(data)[0];
       if (!node) continue;
-      const rows = node.day ?? node.qfqday ?? [];
-      for (const r of rows) { const c = parseRow(r); if (c.ok) candles.push({ date: c.date, open: c.open, high: c.high, low: c.low, close: c.close }); }
+      // 只接受不复权日线（day）。qfqday 是前复权口径，标成 adjust:'none' 会污染 canonical 键，
+      // 宁可跳过也不误标。
+      if (Array.isArray(node.day) && node.day.length) {
+        for (const r of node.day) { const c = parseRow(r); if (c.ok) candles.push({ date: c.date, open: c.open, high: c.high, low: c.low, close: c.close }); }
+      } else if (Array.isArray(node.qfqday) && node.qfqday.length) {
+        sawQfq = true;
+      }
     }
   } catch (e) { failed++; failList.push(`${symbol}: 解析出错 ${e.message}`); console.log(`  失败 ${symbol}: ${e.message}`); continue; }
+  if (!candles.length && sawQfq) { skipped++; console.log(`  跳过 ${symbol}: 仅捕获到前复权(qfqday)数据，与不复权口径不符，保留原库`); continue; }
   if (candles.length < 2) { skipped++; console.log(`  跳过 ${symbol}: 有效K线仅 ${candles.length}`); continue; }
   candles.sort((a, b) => a.date.localeCompare(b.date));
   const uniq = []; let prev = '';
   for (const c of candles) { if (c.date > prev) { uniq.push(c); prev = c.date; } }
   const code = symbol.slice(2);
+  const key = importedBars.importedBarsKey(symbol);
+  const old = await store.read(key);
+  let finalCandles = uniq;
+  if (old?.payload?.candles?.length) {
+    // 保护已入库数据：重叠日期价格必须一致（按 float32 等价判定），冲突则保留原记录；
+    // 并集合并，避免覆盖比本包更长的历史。
+    const prior = new Map(old.payload.candles.map(c => [c.date, c]));
+    const conflicts = [];
+    for (const c of uniq) {
+      const p = prior.get(c.date);
+      if (p && ['open', 'high', 'low', 'close'].some(f => !importedBars.equivalentRawPrice(p[f], c[f]))) conflicts.push(c.date);
+    }
+    if (conflicts.length) { skipped++; console.log(`  跳过 ${symbol}: 与已入库不复权价格冲突 ${conflicts.length} 天（如 ${conflicts[0]}），保留原记录`); continue; }
+    const union = new Map(prior);
+    for (const c of uniq) union.set(c.date, c);
+    finalCandles = [...union.values()].sort((a, b) => a.date.localeCompare(b.date));
+  }
   const payload = {
-    symbol, code, period: 'day', adjust: 'none', candles: uniq,
-    source: 'canonical', stale: false, complete: true, listingDate: uniq[0].date,
-    origins: [{ source: 'upload:hk-quotes-raw:tencent-page', from: uniq[0].date, to: uniq.at(-1).date, acquiredAt: new Date(now).toISOString() }],
+    symbol, code, period: 'day', adjust: 'none', candles: finalCandles,
+    source: 'canonical', stale: false, complete: true,
+    listingDate: old?.payload?.listingDate && old.payload.listingDate < finalCandles[0].date ? old.payload.listingDate : finalCandles[0].date,
+    origins: [...(old?.payload?.origins ?? []), { source: 'upload:hk-quotes-raw:tencent-page', from: uniq[0].date, to: uniq.at(-1).date, acquiredAt: new Date(now).toISOString() }],
   };
   try {
-    const key = importedBars.importedBarsKey(symbol);
-    const old = await store.read(key);
     const record = marketStore.marketRecord(key, 'kline', 'upload:hk-quotes-raw', payload, 60e3, now);
     const written = await store.write(record, old?.digest ?? null);
     if (!written) { failed++; failList.push(`${symbol}: 版本冲突`); console.log(`  冲突 ${symbol}`); continue; }

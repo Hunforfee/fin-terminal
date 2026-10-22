@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
+import { StockLink } from '@/components/StockLink';
 import { personalStorage } from '@/lib/personalStorage';
 import {
   RESEARCH_NOTE_DRAFT_KEY,
@@ -891,7 +891,7 @@ export default function ResearchNotesDrawer({
                             {entryDateLabel(note.entryDate)}
                           </time>
                         ) : (
-                          <Link
+                          <StockLink
                             href={`/stock/${researchNoteSymbol(note) || note.code}`}
                             prefetch={false}
                             onClick={onClose}
@@ -901,7 +901,7 @@ export default function ResearchNotesDrawer({
                             <span className="ml-2 text-xs font-normal text-slate-400">
                               {note.code}
                             </span>
-                          </Link>
+                          </StockLink>
                         )}
                         <div className="flex items-center gap-3 text-xs">
                           <button

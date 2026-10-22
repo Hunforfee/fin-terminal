@@ -108,3 +108,26 @@ test('cancel only touches the requesting user and ignores idle owners',async()=>
   assert.equal((await q.cancel('two')),null,'他人无法停止别人的任务');
   assert.equal((await q.status('one')).waiting,1);
 });
+test('intermediate phase failure is not cleared when the final gate passes',async()=>{
+  const f=fixture(),q=new MarketUpdateQueue(f.store,f.clock);
+  await q.submit('one',['600519']);
+  const t1=await q.claim();
+  // 中途阶段（如当日抓取）失败但推进到末段
+  await q.finish(t1.symbol,t1.lease,'近期价格未确认完整入库',false,t1.phase+1);
+  f.advance(2000);
+  const t2=await q.claim();
+  assert.equal(t2.phaseErrors?.[String(t1.phase)],'近期价格未确认完整入库');
+  // 末段校验通过（旧数据在库）也不得清成 done
+  await q.finish(t2.symbol,t2.lease);
+  const r=await q.status('one');
+  assert.equal(r.done,0);assert.equal(r.failed,1);assert.equal(r.finished,true);
+  assert.deepEqual(r.errors,[{symbol:'sh600519',message:'近期价格未确认完整入库'}]);
+});
+test('clean final gate pass with no earlier phase errors still marks done',async()=>{
+  const f=fixture(),q=new MarketUpdateQueue(f.store,f.clock);
+  await q.submit('one',['600519']);
+  const t=await q.claim();
+  await q.finish(t.symbol,t.lease);
+  const r=await q.status('one');
+  assert.equal(r.done,1);assert.equal(r.failed,0);assert.equal(r.errors.length,0);
+});

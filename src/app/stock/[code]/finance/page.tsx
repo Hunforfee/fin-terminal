@@ -1,5 +1,5 @@
-import Link from 'next/link';
 import { nameOf } from '@/lib/universe';
+import { StockLink } from '@/components/StockLink';
 import { getQuote } from '@/lib/datasource';
 import { normalizeStockCode } from '@/lib/datasource/codes';
 import FinanceTabs from '@/components/FinanceTabs';
@@ -18,13 +18,13 @@ export default async function FinancePage({ params, searchParams }: { params: Pr
       initialView={query.view === 'table' ? 'table' : 'chart'}
       heading={
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-          <Link
+          <StockLink
             href={`/stock/${symbol}`}
             aria-label="返回估值分析"
             className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100"
           >
             ←
-          </Link>
+          </StockLink>
           <h1 className="text-xl font-semibold tracking-tight text-slate-900">
             {quote?.name ?? nameOf(code) ?? code}
           </h1>

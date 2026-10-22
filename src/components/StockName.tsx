@@ -1,7 +1,7 @@
 'use client';
 import { memo, useEffect, useId, useState } from 'react';
 import { createPortal } from 'react-dom';
-import Link from 'next/link';
+import { StockLink } from './StockLink';
 import { industryOf } from '@/lib/universe';
 import type { Quote } from '@/lib/datasource/types';
 import DeepDiveIcon from './DeepDiveIcon';
@@ -86,7 +86,7 @@ function StockName({
           market={quote.market === 'HK' ? 'HK' : 'A'}
         />
       )}
-      <Link
+      <StockLink
         prefetch={false}
         href={href}
         aria-describedby={position ? id : undefined}
@@ -100,7 +100,7 @@ function StockName({
         className="w-[5.5em] min-w-0 flex-none truncate font-medium text-[#0b7ec4] hover:underline focus-visible:underline"
       >
         {quote.name}
-      </Link>
+      </StockLink>
       {position &&
         createPortal(
           <div

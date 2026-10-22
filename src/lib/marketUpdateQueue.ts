@@ -128,7 +128,13 @@ export class MarketUpdateQueue {
         if(error){i.phaseErrors??={};i.phaseErrors[String(i.phase??0)]=error.slice(0,180);}
         i.state='queued';i.phase=nextPhase;i.attempts=0;i.nextAt=now+1000;
       }
-      else if (!error) { i.state = 'done'; i.doneAt = now;delete i.phaseErrors; }
+      else if (!error) {
+        // 中途阶段失败（如当日抓取）不能在末段校验通过后被无声清成“更新完成”：
+        // 末段只证明库内历史可用，不代表本次抓取成功。保留失败痕迹并如实标记。
+        const pending = [...new Set(Object.values(i.phaseErrors ?? {}))];
+        if (pending.length) { i.state = 'failed'; i.doneAt = now; i.error = pending.join('；').slice(0, 180); delete i.phaseErrors; }
+        else { i.state = 'done'; i.doneAt = now; delete i.phaseErrors; }
+      }
       else if (i.attempts < 3) { i.state = 'queued'; i.nextAt = now + Math.min(15 * 60e3, 60e3 * 3 ** (i.attempts - 1)); }
       else { i.state = 'failed'; i.doneAt = now; }
       if (limited) q.pauseUntil = Math.max(q.pauseUntil, now + 5 * 60e3);

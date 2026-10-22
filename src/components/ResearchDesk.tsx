@@ -976,6 +976,8 @@ export default function ResearchDesk({
                       </span>
                       <a
                         href={`/stock/${q.symbol}#valuation`}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         aria-label={`查看${q.name}估值分析`}
                         title="估值分析"
                         className="inline-flex h-7 shrink-0 items-center rounded-md bg-slate-100 px-2 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700"
@@ -984,6 +986,8 @@ export default function ResearchDesk({
                       </a>
                       <a
                         href={`/stock/${q.symbol}/finance`}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         aria-label={`查看${q.name}财务体检`}
                         title="财务体检"
                         className="inline-flex h-7 shrink-0 items-center rounded-md bg-slate-100 px-2 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700"

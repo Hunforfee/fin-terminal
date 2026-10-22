@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import type { SearchHit } from '@/lib/datasource/types';
 import { searchResultPath as pathOf } from '@/lib/searchRouting';
 import { normalizeCode } from '@/lib/datasource/codes';
@@ -32,7 +31,6 @@ export default function SearchBox({
 }: {
   placeholder?: string;
 }) {
-  const router = useRouter();
   const [kw, setKw] = useState('');
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -134,7 +132,7 @@ export default function SearchBox({
     setOpen(false);
     inputRef.current?.blur();
     setKw('');
-    router.push(pathOf(hit));
+    window.open(pathOf(hit), '_blank', 'noopener,noreferrer');
   };
 
   const onFocus = () => {
@@ -212,7 +210,7 @@ export default function SearchBox({
           if (json.ok && json.data?.length) go(json.data[0]);
           else {
             const n = normalizeCode(query);
-            if (n) router.push(pathOf(n));
+            if (n) window.open(pathOf(n), '_blank', 'noopener,noreferrer');
           }
         } catch {
           const n = normalizeCode(query);
@@ -221,7 +219,7 @@ export default function SearchBox({
             inputRef.current?.value.trim() === query &&
             n
           )
-            router.push(pathOf(n));
+            window.open(pathOf(n), '_blank', 'noopener,noreferrer');
         } finally {
           submittingRef.current = false;
           if (request === seqRef.current) setLoading(false);

@@ -237,6 +237,8 @@ export default function CompanyWindow({
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                         <a
                           href={`/stock/${e.symbol}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="text-sm font-medium text-slate-800 hover:text-brand-700"
                         >
                           {e.name}

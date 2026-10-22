@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
+import { StockLink } from '@/components/StockLink';
 import Modal from './Modal';
 import DailyCompanyLearning from './DailyCompanyLearning';
 import { useWatchlist } from './WatchlistProvider';
@@ -275,7 +276,7 @@ export default function ResearchHome() {
             : shown.length === 0 ? <p className="px-3 py-10 text-center text-xs text-slate-400">{importantOnly ? '本批暂无可用重点动态' : '本批暂无可用动态'}</p>
             : <ol className="divide-y divide-slate-100">{shown.map((entry) => <li key={`${entry.symbol}:${entry.artCode}`} className="px-3 py-2.5 transition-colors hover:bg-slate-50/70">
               <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-                <Link prefetch={false} href={`/stock/${entry.symbol}`} className="max-w-[180px] truncate font-medium text-slate-700 hover:text-brand-700 hover:underline">{entry.name}</Link>
+                <StockLink prefetch={false} href={`/stock/${entry.symbol}`} className="max-w-[180px] truncate font-medium text-slate-700 hover:text-brand-700 hover:underline">{entry.name}</StockLink>
                 <time dateTime={entry.date} className="text-[11px] tabular-nums text-slate-400">{entry.date}</time>
                 {entry.important && <span className="rounded bg-amber-50 px-1 text-[10px] text-amber-800">重点</span>}
               </div>

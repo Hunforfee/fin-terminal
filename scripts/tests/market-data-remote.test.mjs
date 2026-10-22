@@ -1,10 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
 import { load } from './load-modules.mjs';
 const client = await load('marketDataClient');
 const market = await load('marketStore');
 const datasource = await load('datasource/index');
-const learning = await load('datasource/companyLearning');
+// The library-only loader does not package the research JSON registry. Stub that
+// unrelated boundary; remote learning must return before accessing its providers.
+const learning = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/datasource/companyLearning.ts', 'utf8'), {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+}).outputText, { exports: learning, require(name) {
+  if (name === '../marketDataClient') return client;
+  if (name === '../universe') return { STOCKS: [] };
+  if (name === '../sw2021') return { SW2021: { industries: [] } };
+  return new Proxy({}, { get() { throw Error('Remote learning must not read local research or providers'); } });
+} });
 const TOKEN = 'isolated-data-client-secret-over-32-characters';
 const ENV_KEYS = ['MARKET_DATA_MODE', 'MARKET_DATA_API_URL', 'MARKET_DATA_API_ACCESS_TOKEN'];
 async function fixture(run) {

@@ -504,7 +504,7 @@ export async function getValuation(input: string, years = 5, method: ValuationMe
       source: `sina-statements + sina-disclosures + eastmoney-dividend-plans + ${raw.source}-raw + ${adjusted?.source ?? 'missing'}-qfq`,
       stale: q.stale || raw.stale || adjusted?.stale || false,
     };
-  });
+  }, { staleOnError: !databaseOnly() });
 }
 
 export async function getFinancial(input: string): Promise<FinancialSummary> {

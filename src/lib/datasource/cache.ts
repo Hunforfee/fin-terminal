@@ -13,6 +13,12 @@ interface Entry<T> {
 
 const store = new Map<string, Entry<unknown>>();
 const inflight = new Map<string, Promise<unknown>>();
+const MAX_ENTRIES = 1024;
+function remember<T>(key: string, value: T, ttlMs: number): void {
+  store.delete(key);
+  store.set(key, { value, expireAt: Date.now() + ttlMs });
+  while (store.size > MAX_ENTRIES) store.delete(store.keys().next().value!);
+}
 
 /** 默认 TTL：交易时段 15s，非交易时段 10 分钟（收盘后数据不再变化） */
 export function defaultTtl(market: 'A' | 'HK' = 'A', date?: Date): number {
@@ -22,24 +28,29 @@ export function defaultTtl(market: 'A' | 'HK' = 'A', date?: Date): number {
   return trading ? 15_000 : 600_000;
 }
 
-export async function cached<T>(key: string, ttlMs: number, producer: () => Promise<T>): Promise<T> {
+export async function cached<T>(key: string, ttlMs: number, producer: () => Promise<T>, options: { staleOnError?: boolean } = {}): Promise<T> {
   if(databaseOnly())key=`database:${key}`;
+  if(options.staleOnError===false)key=`fresh:${key}`;
   const now = Date.now();
   const hit = store.get(key);
-  if (hit && hit.expireAt > now) return hit.value as T;
+  if (hit && hit.expireAt > now) {
+    store.delete(key); store.set(key, hit);
+    return hit.value as T;
+  }
 
   // 防止并发击穿：同一 key 的并发请求共享一个 Promise
   const pending = inflight.get(key);
   if (pending) return pending as Promise<T>;
 
-  const p = (async () => {
+  let p: Promise<T>;
+  p = Promise.resolve().then(async () => {
     try {
       const value = await producer();
-      store.set(key, { value, expireAt: Date.now() + ttlMs });
+      if (inflight.get(key) === p && (ttlMs > 0 || options.staleOnError !== false)) remember(key, value, ttlMs);
       return value;
     } catch (e) {
       // 上游失败时，若有过期旧值则降级使用，避免整页报错
-      const stale = store.get(key);
+      const stale = options.staleOnError === false ? undefined : store.get(key);
       if (stale) {
         const mark = (value: unknown): unknown => {
           if (!value || typeof value !== 'object' || !('stale' in value)) throw e;
@@ -51,9 +62,9 @@ export async function cached<T>(key: string, ttlMs: number, producer: () => Prom
       }
       throw e;
     } finally {
-      inflight.delete(key);
+      if (inflight.get(key) === p) inflight.delete(key);
     }
-  })();
+  });
 
   inflight.set(key, p);
   return p;
@@ -61,7 +72,7 @@ export async function cached<T>(key: string, ttlMs: number, producer: () => Prom
 
 /** 写入（用于预热 / 手动覆盖） */
 export function putCache<T>(key: string, value: T, ttlMs: number): void {
-  store.set(key, { value, expireAt: Date.now() + ttlMs });
+  remember(key, value, ttlMs);
 }
 
 /** 清空（测试或强制刷新） */

@@ -5,8 +5,9 @@ import { getMarketStore } from './marketStore';
 
 export function reconcileCashDividends(events: DividendEvent[], plans: DividendPlan[], today: string): DividendEvent[] {
   const latest = new Map<string, DividendPlan>();
-  for (const p of [...plans].sort((a,b) => a.announceDate.localeCompare(b.announceDate)))
-    if (p.announceDate <= today) latest.set(p.reportDate, p);
+  for (const p of plans.filter(p => typeof p.announceDate === 'string' && p.announceDate <= today)
+    .sort((a,b) => a.announceDate.localeCompare(b.announceDate)))
+    latest.set(`${p.reportDate}:${p.special ? 'special' : 'ordinary'}`, p);
   const implemented = new Map<string, number>();
   for (const p of latest.values()) if (p.implemented && !p.cancelled && p.exDate && p.exDate <= today && p.perShare != null)
     implemented.set(p.exDate, (implemented.get(p.exDate) ?? 0) + p.perShare);

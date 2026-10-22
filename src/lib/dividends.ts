@@ -21,10 +21,13 @@ export function buildExpectedDividendYieldByDate(
   for (const candle of rawCandles) {
     if (!(candle.close > 0)) continue;
     // 接口只有日期，没有盘中/盘后时间；保守地从公告次日起纳入。
-    const known = plans.filter(p => p.announceDate < candle.date);
+    const known = plans.filter(p => typeof p.announceDate === 'string' && p.announceDate < candle.date);
     // 同一报告期发生修订/取消时取最新公告。金额未知的新公告也不能沿用旧版金额。
     const byReport = new Map<string, DividendPlan>();
-    for (const p of [...known].sort((a, b) => a.announceDate.localeCompare(b.announceDate))) byReport.set(p.reportDate, p);
+    // A special distribution is a separate component, not a revision that
+    // replaces the ordinary dividend for the same reporting period.
+    for (const p of [...known].sort((a, b) => a.announceDate.localeCompare(b.announceDate)))
+      byReport.set(`${p.reportDate}:${p.special ? 'special' : 'ordinary'}`, p);
     const eligible = [...byReport.values()].filter(p => p.perShare !== null);
     if (!eligible.length) { result.set(candle.date, null); continue; }
     const latestReport = eligible.map(p => p.reportDate).sort().at(-1)!;

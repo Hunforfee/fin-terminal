@@ -31,7 +31,55 @@ function take(series: KLineSeries, request: KLineRequest): KLineSeries {
   return { ...result, candles: series.candles.filter(c => !request.start || c.date >= request.start).slice(-request.count) };
 }
 function ttl(request: KLineRequest) { return request.adjust === 'none' ? 60_000 : 60_000; }
-const active = new Map<string, Promise<KLineSeries>>();
+const activeByStore = new WeakMap<MarketStore, Map<string, Promise<KLineSeries>>>();
+function activeFor(store: MarketStore) {
+  let active = activeByStore.get(store);
+  if (!active) { active = new Map(); activeByStore.set(store, active); }
+  return active;
+}
+
+async function databaseKLine(request: KLineRequest, store: MarketStore, now: number): Promise<KLineSeries> {
+  if (request.period === 'minute') throw marketDataMissing('分钟行情');
+  const normalize = (row: MarketRecord<StoredSeries> | null) => {
+    if (!row?.payload.candles.length) return null;
+    const series = retainMarketPayload('kline', row.payload, now);
+    series.candles = series.candles.filter(c => c.date <= completedDate(now));
+    return series.candles.length ? { ...row, payload: series } : null;
+  };
+  const canonical = normalize(await store.read<StoredSeries>(keyOf({ ...request, period: 'day' }, 'canonical')));
+  let listingDate = canonical?.payload.listingDate;
+  // Most page reads need only the canonical record. Listing metadata is needed
+  // only when a shorter history may actually be a complete IPO history.
+  if (request.start && (!canonical || Date.parse(canonical.payload.candles[0].date) - Date.parse(request.start) > 14 * 864e5) && !listingDate)
+    listingDate = (await store.read<{ listingDate: string }>(`security-basics:v1:${request.symbol}`))?.payload.listingDate;
+  const covers = (row: MarketRecord<StoredSeries>) => {
+    const listed = row.payload.listingDate ?? listingDate;
+    const expected = request.start && listed && listed > request.start ? listed : request.start;
+    return expected ? Date.parse(row.payload.candles[0].date) - Date.parse(expected) <= 14 * 864e5
+      : (request.period === 'week' || request.period === 'month' ? aggregateDaily(row.payload.candles, request.period) : row.payload.candles).length >= request.count;
+  };
+  const select = (row: MarketRecord<StoredSeries>) => {
+    const series = request.period === 'day' ? row.payload : { ...row.payload, period: request.period,
+      candles: aggregateDaily(row.payload.candles, request.period as 'week' | 'month') };
+    const result = take(series, request);
+    if (!result.candles.length) return null;
+    validateKLine(result, request, now);
+    return { ...result, complete: result.complete !== false && covers(row),
+      storage: { backend: 'persistent' as const, acquiredAt: row.acquiredAt, validation: 'structural' as const },
+      warnings: [...(result.warnings ?? []), `数据库行情截至 ${result.candles.at(-1)!.date}`] };
+  };
+  // A newer mirror tail must not displace a complete, imported canonical series.
+  if (canonical && canonical.payload.complete !== false && !canonical.payload.stale && covers(canonical)) {
+    const result = select(canonical); if (result) return result;
+  }
+  const mirrors = await Promise.all(['tencent', 'sina', 'eastmoney'].map(source => store.read<StoredSeries>(keyOf({ ...request, period: 'day' }, source))));
+  const candidates = [canonical, ...mirrors.map(normalize)].filter((r): r is MarketRecord<StoredSeries> => r !== null);
+  candidates.sort((a, b) => Number(covers(b)) - Number(covers(a))
+    || b.payload.candles.at(-1)!.date.localeCompare(a.payload.candles.at(-1)!.date)
+    || a.payload.candles[0].date.localeCompare(b.payload.candles[0].date));
+  for (const row of candidates) { const result = select(row); if (result) return result; }
+  throw marketDataMissing('所选复权方式的日线');
+}
 
 /** Canonical source-specific series, independent of page count/range and user identity. */
 export async function storedKLine(request: KLineRequest, fetcher: KLineFetcher,
@@ -39,37 +87,16 @@ export async function storedKLine(request: KLineRequest, fetcher: KLineFetcher,
   if (request.start && request.start < marketCutoff(now)) request = { ...request,start:marketCutoff(now) };
   if (databaseOnly()) {
     if (!store) throw marketDataMissing('行情数据库');
-    if(request.period==='minute')throw marketDataMissing('分钟行情');
-    const candidates:MarketRecord<StoredSeries>[]=[];
-    const basics=await store.read<{listingDate:string}>(`security-basics:v1:${request.symbol}`);
-    for (const source of ['canonical','tencent','sina','eastmoney']) {
-      const row=await store.read<StoredSeries>(keyOf({...request,period:'day'},source));
-      if(row?.payload.candles.length)candidates.push(row);
-    }
-    const covers=(r:MarketRecord<StoredSeries>)=>{
-      // An IPO's verified listing date is the earliest possible history. A newer
-      // short source tail must not outrank the complete imported IPO history.
-      const listingDate=r.payload.listingDate??basics?.payload.listingDate;
-      const expected=request.start && listingDate && listingDate>request.start ? listingDate : request.start;
-      return expected ? Date.parse(r.payload.candles[0].date)-Date.parse(expected)<=14*864e5
-        : (request.period==='week' || request.period==='month'?aggregateDaily(r.payload.candles,request.period):r.payload.candles).length>=request.count;
-    };
-    candidates.sort((a,b)=>Number(covers(b))-Number(covers(a)) || b.payload.candles.at(-1)!.date.localeCompare(a.payload.candles.at(-1)!.date) || a.payload.candles[0].date.localeCompare(b.payload.candles[0].date));
-    for (const row of candidates) {
-      const series=retainMarketPayload('kline',row.payload,now);
-      series.candles=series.candles.filter(c=>c.date<=completedDate(now));
-      if(!series.candles.length)continue;
-      const selected=request.period==='day'?series:{...series,period:request.period,candles:aggregateDaily(series.candles,request.period)};
-      const result=take(selected,request);if(!result.candles.length)continue;
-      validateKLine(result,request,now);
-      return {...result,complete:result.complete!==false && covers(row),storage:{backend:'persistent',acquiredAt:row.acquiredAt,validation:'structural'},warnings:[...(result.warnings??[]),`数据库行情截至 ${result.candles.at(-1)!.date}`]};
-    }
-    throw marketDataMissing('所选复权方式的日线');
+    const active = activeFor(store), identity = `database:${JSON.stringify(request)}`;
+    const pending = active.get(identity); if (pending) return pending;
+    const work = databaseKLine(request, store, now); active.set(identity, work);
+    try { return await work; } finally { if (active.get(identity) === work) active.delete(identity); }
   }
   if (!store) {
     const value = retainMarketPayload('kline',await fetcher(request),now); validateKLine(value, request, now); return value;
   }
   const lock = `${request.symbol}:${request.period}:${request.adjust}:${request.start}:${request.count}:${!!request.recentOnly}`;
+  const active = activeFor(store);
   const pending = active.get(lock); if (pending) return pending;
   const work: Promise<KLineSeries> = withMarketRefresh(store,`kline:${request.symbol}:${request.period}:${request.adjust}`,async (): Promise<KLineSeries> => {
     if(request.period==='day' && request.adjust==='none'){

@@ -46,17 +46,32 @@ for (const file of files) {
     if (mapped.length < 2) { skipped++; console.log(`  跳过 ${symbol}: 有效K线仅 ${mapped.length} 根`); continue; }
     // 升序、去重、严格递增
     mapped.sort((a, b) => a.date.localeCompare(b.date));
-    const candles = []; let prev = '';
-    for (const c of mapped) { if (c.date > prev) { candles.push(c); prev = c.date; } }
+    const candlesNew = []; let prev = '';
+    for (const c of mapped) { if (c.date > prev) { candlesNew.push(c); prev = c.date; } }
     const code = symbol.slice(2);
+    const key = importedBars.importedBarsKey(symbol);
+    const old = await store.read(key);
+    let candles = candlesNew;
+    if (old?.payload?.candles?.length) {
+      // 保护已入库数据：重叠日期价格必须一致（按 float32 等价判定），冲突则保留原记录；
+      // 并集合并，避免覆盖比本包更长的历史。
+      const prior = new Map(old.payload.candles.map(c => [c.date, c]));
+      const conflicts = [];
+      for (const c of candles) {
+        const p = prior.get(c.date);
+        if (p && ['open', 'high', 'low', 'close'].some(f => !importedBars.equivalentRawPrice(p[f], c[f]))) conflicts.push(c.date);
+      }
+      if (conflicts.length) { skipped++; console.log(`  跳过 ${symbol}: 与已入库不复权价格冲突 ${conflicts.length} 天（如 ${conflicts[0]}），保留原记录`); continue; }
+      const union = new Map(prior);
+      for (const c of candles) union.set(c.date, c);
+      candles = [...union.values()].sort((a, b) => a.date.localeCompare(b.date));
+    }
     const payload = {
       symbol, code, period: 'day', adjust: 'none',
       candles, source: 'canonical', stale: false, complete: true,
-      listingDate: candles[0].date,
-      origins: [{ source: 'upload:hk-quotes-raw:decoded-sina', from: candles[0].date, to: candles.at(-1).date, acquiredAt: new Date(now).toISOString() }],
+      listingDate: old?.payload?.listingDate && old.payload.listingDate < candles[0].date ? old.payload.listingDate : candles[0].date,
+      origins: [...(old?.payload?.origins ?? []), { source: 'upload:hk-quotes-raw:decoded-sina', from: candlesNew[0].date, to: candlesNew.at(-1).date, acquiredAt: new Date(now).toISOString() }],
     };
-    const key = importedBars.importedBarsKey(symbol);
-    const old = await store.read(key);
     const record = marketStore.marketRecord(key, 'kline', 'upload:hk-quotes-raw', payload, 60e3, now);
     const written = await store.write(record, old?.digest ?? null);
     if (!written) { failed++; failList.push(`${symbol}: 版本冲突未写入`); console.log(`  冲突 ${symbol}`); continue; }

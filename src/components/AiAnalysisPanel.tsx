@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
+import { StockLink } from '@/components/StockLink';
 import Modal from './Modal';
 import type { PreAnalysis, ViewPoint } from '@/data/analyses';
 
@@ -38,14 +38,14 @@ function CodeBadges({ code }: { code: string }) {
         .map((p, i) => {
           const href = stockHref(p);
           return href ? (
-            <Link
+            <StockLink
               key={i}
               href={href}
               title={`查看 ${p} 行情页`}
               className="rounded bg-brand-50 px-1 py-px text-[10px] tabular-nums text-brand-700 hover:bg-brand-100 hover:underline"
             >
               {p}
-            </Link>
+            </StockLink>
           ) : (
             <span
               key={i}

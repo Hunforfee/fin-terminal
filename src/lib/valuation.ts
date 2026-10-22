@@ -77,17 +77,18 @@ export function buildTimelineFromStatements(
       const known = dates.filter((x) => x <= d && shByDate.has(x));
       sharesYi = known.length ? (shByDate.get(known[known.length - 1]) as number) : null;
     }
-    if (sharesYi === null || sharesYi <= 0) continue;
+    if (sharesYi !== null && !(sharesYi > 0)) sharesYi = null;
 
     const equity = eqByDate.get(d) ?? null;
     out.push({
       eff: effectiveDate(d, opts.calendar),
       report: d,
-      eps: np !== null ? np / (sharesYi * 1e8) : null,
-      epsTTM: npTTM !== null ? npTTM / (sharesYi * 1e8) : null,
-      bps: equity !== null ? equity / (sharesYi * 1e8) : null,
+      eps: np !== null && sharesYi !== null ? np / (sharesYi * 1e8) : null,
+      epsTTM: npTTM !== null && sharesYi !== null ? npTTM / (sharesYi * 1e8) : null,
+      bps: equity !== null && sharesYi !== null ? equity / (sharesYi * 1e8) : null,
       shares: sharesYi,
       npTTM: npTTM !== null ? npTTM / 1e8 : null,
+      equityYi: equity !== null ? equity / 1e8 : null,
     });
   }
   // 注意：不能用「生效日去重」——年报与次年一季报的生效日都是 5/1，
@@ -110,6 +111,8 @@ export interface FinPoint {
   shares: number | null;
   /** TTM 净利润（亿元） */
   npTTM: number | null;
+  /** Ordinary equity in CNY 100 million; independent of report-date share availability. */
+  equityYi?: number | null;
 }
 
 /** 报告期净利润（元） */
@@ -230,15 +233,25 @@ export function buildRealValuationSeries(
     const shareRatio = dailyShares !== null && f.shares ? f.shares / (dailyShares / 1e4) : 1;
     // Price and denominators use the same raw share basis. Qfq factors cancel
     // from PE/PB and must never determine which dates enter their percentiles.
-    const eps = f.epsTTM !== null ? f.epsTTM * shareRatio : null;
-    const bps = f.bps !== null ? f.bps * shareRatio : null;
+    // A boundary baseline is valid on these trading dates, not on an older
+    // reporting date. Divide saved amounts by today's known shares directly.
+    const dailyYi = dailyShares !== null && dailyShares > 0 ? dailyShares / 1e4 : null;
+    const eps = dailyYi !== null && f.npTTM !== null ? f.npTTM / dailyYi
+      : f.epsTTM !== null ? f.epsTTM * shareRatio : null;
+    const bps = dailyYi !== null && f.equityYi != null ? f.equityYi / dailyYi
+      : f.bps !== null ? f.bps * shareRatio : null;
+    const missingInputs: NonNullable<ValuationPoint['missingInputs']> = [];
+    if (dailyYi === null && !(f.shares !== null && f.shares > 0)) missingInputs.push('shares');
+    if (eps === null) missingInputs.push('profit-ttm');
+    if (bps === null) missingInputs.push('equity');
     const pe = eps !== null && eps > 0 ? c.close / eps : null;
     const pb = bps !== null && bps > 0 ? c.close / bps : null;
     out.push({ date: c.date, close, rawClose: c.close, adjustmentFactor: factor,
       pe: pe !== null && Number.isFinite(pe) ? round2(pe) : null,
       pb: pb !== null && Number.isFinite(pb) ? round2(pb) : null,
       dy: opts?.dyByDate?.get(c.date) ?? null,
-      dyStatic: opts?.staticDyByDate?.get(c.date) ?? null });
+      dyStatic: opts?.staticDyByDate?.get(c.date) ?? null,
+      ...(missingInputs.length ? { missingInputs } : {}) });
   }
   return out;
 }
@@ -373,7 +386,7 @@ export function buildDisclosureTimeline(
     const date = opts.reportDates?.get(p.report);
     // An unknown announcement must not keep an older report alive indefinitely.
     // At the statutory cutoff, introduce an explicit missing-data interval.
-    if (!date) return [{ ...p, eff: effectiveDate(p.report), eps: null, epsTTM: null, bps: null, npTTM: null }];
+    if (!date) return [{ ...p, eff: effectiveDate(p.report), eps: null, epsTTM: null, bps: null, npTTM: null, equityYi: null }];
     const eff = new Date(Date.parse(date + 'T00:00:00Z') + 864e5).toISOString().slice(0, 10);
     return [{ ...p, eff }];
   }).sort((a,b) => a.report.localeCompare(b.report));

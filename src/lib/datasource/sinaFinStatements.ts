@@ -17,9 +17,11 @@ import { fetchShareHistory, sharesAt, shareHistorySource, type ShareChange } fro
 
 import { fetchStatementSourcePage } from './sinaStatements';
 import { cachedMarketInput, validateDatedRows } from '../marketInputs';
-import { financialPageSource } from './eastmoneyStatements';
+import { financialPageSource, type StatementSourcePage } from './eastmoneyStatements';
 
 export interface FinStatementPoint {
+  /** Source revisions used by the derived row; not a new acquisition of facts. */
+  inputDigests?: { profit?: string; balance?: string; shares?: string };
   /** Actual page contributors; underlying normalized pages retain cell-level evidence. */
   sources?: string[];
   /** 报告期 YYYY-MM-DD */
@@ -111,6 +113,12 @@ export async function fetchYearStatement(code: string, year: number, shareHistor
     fetchStatementSourcePage(code,'profit',year).catch(() => null),
     fetchStatementSourcePage(code,'balance',year).catch(() => null),
   ]);
+  return statementPointsFromPages(plPage, bsPage, shareHistory);
+}
+
+/** Rebuild valuation amounts from the same saved full-field pages used by finance views. */
+export function statementPointsFromPages(plPage: StatementSourcePage | null, bsPage: StatementSourcePage | null,
+  shareHistory: ShareChange[] = []): FinStatementPoint[] {
   const convert = (page: typeof plPage) => ({dates:page?.dates ?? [],rows:new Map((page?.rows ?? []).filter(r=>r.kind==='field').map(r=>[r.name,r.vals]))});
   const pl = convert(plPage), bs = convert(bsPage);
   if (pl.dates.length === 0 && bs.dates.length === 0) return [];

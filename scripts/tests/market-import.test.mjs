@@ -118,6 +118,45 @@ test('batch imports reject inconsistent overlaps and duplicates and survive ten-
   await assert.rejects(bars.importDailyPrices(s,{symbol:'sh600415',source:'qmt',mergeBatch:true,candles:[candle('2025-01-03'),candle('2025-01-03')]},now));
   assert.equal((await s.read(key)).digest,old);assert.equal((await s.read(key)).payload.candles.length,2);
 });
+test('Hong Kong statement imports refuse amount conflicts unless an admin snapshot overwrite is requested',async()=>{
+  const s=store(),key='source-hk-statement:v1:00639.HK:balance:2025-12-31';
+  const rows=[{date:'2025-12-31',itemCode:'004001001',itemName:'固定资产',amount:100}];
+  s.seed(key,'source-hk-statement',[{date:'2025-12-31',itemCode:'004001001',itemName:'固定资产',amount:86}]);
+  await assert.rejects(hkRecords.writeHkStatements(s,{symbol:'hk00639',statement:'balance',rows:[{...rows[0],amount:115}]},now),/金额冲突/);
+  assert.equal((await s.read(key)).payload[0].amount,86);
+  const r=await hkRecords.writeHkStatements(s,{symbol:'hk00639',statement:'balance',rows:[{...rows[0],amount:115}]},now,{overwrite:true});
+  assert.equal((await s.read(key)).payload[0].amount,115);
+  assert.equal(r.skipped,undefined);
+  assert.equal((await hkRecords.writeHkStatements(s,{symbol:'hk00639',statement:'balance',rows:[{...rows[0],amount:115}]},now)).skipped,true);
+  // 覆盖同样保留 null 不擦除语义
+  await hkRecords.writeHkStatements(s,{symbol:'hk00639',statement:'balance',rows:[{...rows[0],amount:null}]},now,{overwrite:true});
+  assert.equal((await s.read(key)).payload[0].amount,115);
+  assert.equal(s.data.size,1);
+});
+test('Hong Kong indicator imports land on the site key, merge fields, and prune by retention',async()=>{
+  const s=store(),key='source-hk-indicators:v1:00639.HK';
+  const points=[
+    {date:'2026-06-30',raw:{ROE_AVG:12.5,BASIC_EPS:0.8},currency:'港元',kind:'semi',label:'中报'},
+  ];
+  const r=await hkRecords.writeHkIndicators(s,{symbol:'hk00639',points},now);
+  assert.equal(r.dates,1);assert.equal(r.skipped,undefined);
+  const p=(await s.read(key)).payload;
+  assert.equal(p.length,1);assert.equal(p[0].raw.BASIC_EPS,0.8);
+  assert.equal((await s.read(key)).source,'import:hkf10:main:reported');
+  assert.equal((await hkRecords.writeHkIndicators(s,{symbol:'hk00639',points},now)).skipped,true);
+  // 字段级合并：旧有新字段不擦除，导入值覆盖同名字段
+  await hkRecords.writeHkIndicators(s,{symbol:'hk00639',points:[{date:'2026-06-30',raw:{ROE_AVG:13},currency:'港元',kind:'semi',label:'中报'}]},now);
+  const q=(await s.read(key)).payload[0].raw;
+  assert.equal(q.BASIC_EPS,0.8);assert.equal(q.ROE_AVG,13);
+  await assert.rejects(hkRecords.writeHkIndicators(s,{symbol:'hk00639',points:[{date:'2015-06-30',raw:{ROE_AVG:1},currency:'港元',kind:'semi',label:'中报'}]},now),/超出保留期/);
+  await assert.rejects(hkRecords.writeHkIndicators(s,{symbol:'hk00639',points:[{date:'2027-06-30',raw:{ROE_AVG:1},currency:'港元',kind:'semi',label:'中报'}]},now));
+  await assert.rejects(hkRecords.writeHkIndicators(s,{symbol:'hk00639',points:[]},now));
+  await assert.rejects(hkRecords.writeHkIndicators(s,{symbol:'600415',points:[{date:'2026-06-30',raw:{},currency:'CNY',kind:'semi',label:'中报'}]},now));
+  // 更早报告期保留在库（导入快照不含也不删除）
+  s.seed(key,'source-hk-indicators',[{date:'2018-06-30',raw:{ROE_AVG:2},currency:'港元',kind:'semi',label:'中报'}]);
+  await hkRecords.writeHkIndicators(s,{symbol:'hk00639',points:[{date:'2026-06-30',raw:{ROE_AVG:14},currency:'港元',kind:'semi',label:'中报'}]},now);
+  assert.equal((await s.read(key)).payload.length,2);
+});
 test('a correctly signed non-admin cookie cannot access import records or write data',async()=>{
   const prior={...process.env};
   try{

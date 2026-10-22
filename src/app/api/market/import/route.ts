@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getMarketStore, marketRecord } from '@/lib/marketStore';
 import { importDailyPrices } from '@/lib/marketImportedBars';
 import { denyReason, importAdminIds, readImportIdentity } from '@/lib/marketImportAuth';
-import { writeHkDividendEvents, writeHkStatements } from '@/lib/marketHkImportRecords';
+import { writeHkDividendEvents, writeHkIndicators, writeHkStatements } from '@/lib/marketHkImportRecords';
 import { klineCrossConflicts, writeDividendImplemented, writeDividendPlans, writeFinancialHistory, writeFinanceStatements, writeShareHistory } from '@/lib/marketImportRecords';
 
 export const runtime = 'nodejs';
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
   });
 }
 
-/** POST /api/market/import —— 分类型导入：kline / finance / financial-history / share-history / dividend-plans / dividend-impl / hk-statements / hk-dividend-events */
+/** POST /api/market/import —— 分类型导入：kline / finance / financial-history / share-history / dividend-plans / dividend-impl / hk-statements / hk-indicators / hk-dividend-events */
 export async function POST(request: NextRequest) {
   const denied = denyReason(request, true);
   if (denied) return json({ ok: false, error: denied }, denied.includes('登录') ? 401 : 403);
@@ -95,8 +95,11 @@ export async function POST(request: NextRequest) {
     } else if (body.type === 'dividend-impl') {
       result = await writeDividendImplemented(store, String(rec.symbol ?? ''), rec.rows as never) as unknown as Record<string, unknown>;
     } else if (body.type === 'hk-statements') {
+      // overwrite 仅管理员导入路由可传：全量快照修正历史口径缺陷（如人民币折算值 → 原币值）。
       result = await writeHkStatements(store, { symbol: String(rec.symbol ?? ''), statement: String(rec.statement ?? ''), rows: (rec.rows ?? []) as never,
-        completeReports: rec.completeReports as never }) as unknown as Record<string, unknown>;
+        completeReports: rec.completeReports as never }, Date.now(), { overwrite: rec.overwrite === true }) as unknown as Record<string, unknown>;
+    } else if (body.type === 'hk-indicators') {
+      result = await writeHkIndicators(store, { symbol: String(rec.symbol ?? ''), points: (rec.points ?? []) as never }) as unknown as Record<string, unknown>;
     } else if (body.type === 'hk-dividend-events') {
       result = await writeHkDividendEvents(store, { symbol: String(rec.symbol ?? ''), rows: (rec.rows ?? []) as never }) as unknown as Record<string, unknown>;
     } else {

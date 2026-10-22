@@ -71,7 +71,7 @@ test('HK EPS is not divided by ten thousand; statement amounts still normalize t
               BASIC_EPS: 1.25,
             },
           ]
-        : report === 'RPT_HKF10_FN_INCOME_PC'
+        : report === 'RPT_HKF10_FN_INCOME'
           ? [
               row('revenue', '营业收入', 200000000),
               row('eps', '每股基本盈利（港元）', 1.25),

@@ -3,13 +3,14 @@
  *
  * 已实测可用端点（沙箱 2026-10，均免鉴权）：
  *   主要指标   RPT_HKF10_FN_MAININDICATOR            （宽表，每期一行）
- *   资产负债表 RPT_HKF10_FN_BALANCE_PC               （长表，科目逐行）
- *   利润表     RPT_HKF10_FN_INCOME_PC                （长表）
- *   现金流量表 RPT_HKF10_FN_CASHFLOW_PC              （长表）
+ *   资产负债表 RPT_HKF10_FN_BALANCE                  （长表，科目逐行，账本币种）
+ *   利润表     RPT_HKF10_FN_INCOME                   （长表，账本币种）
+ *   现金流量表 RPT_CUSTOM_HKSK_APPFN_CASHFLOW        （按报告期分组，VALUE_LIST 逐证券行，账本币种）
  *
  * 口径说明：
+ *   - 三大长表一律采用原币报表（CURRENCY=港元等账本币种）；_PC 后缀报表为人民币折算口径，
+ *     与 reported-currency 键位声明不符且下游不做币种换算，禁止混用。
  *   - 主要指标金额/每股值已标准化为 CNY；CURRENCY 为行情柜台币种，不能套用于 BPS/EPS。
- *   - 三大长表保留既有取值与单位；不把主要指标的币种推定泛化到不同接口。
  *   - 指标（ROE / 增长率 / 每股等）直接取东财披露值或由披露值恒等式派生。
  *   - 报告类型取 REPORT_TYPE，原始报表期取 STD_REPORT_DATE，不按自然年猜测财年。
  */
@@ -225,10 +226,26 @@ export function periodLabel(date: string): string {
 /* ------------------------------------------------- 三大报表（长表） */
 
 const STATEMENT_REPORTS: Record<'balance' | 'profit' | 'cashflow', string> = {
-  balance: 'RPT_HKF10_FN_BALANCE_PC',
-  profit: 'RPT_HKF10_FN_INCOME_PC',
-  cashflow: 'RPT_HKF10_FN_CASHFLOW_PC',
+  // 原币报表（CURRENCY=账本币种，如港元）。_PC 后缀报表为人民币折算口径，
+  // 与键位声明的 reported-currency 不符，且下游不做币种换算，故不采用。
+  balance: 'RPT_HKF10_FN_BALANCE',
+  profit: 'RPT_HKF10_FN_INCOME',
+  cashflow: 'RPT_CUSTOM_HKSK_APPFN_CASHFLOW',
 };
+
+/** 现金流量表原币报表按报告期分组、VALUE_LIST 逐证券行；展平为逐行长表（只保留本证券行）。 */
+function flattenCashflowGroups(rows: DcRow[], secucode: string): DcRow[] {
+  const flat: DcRow[] = [];
+  for (const group of rows) {
+    const list = group?.VALUE_LIST;
+    if (!Array.isArray(list)) { flat.push(group); continue; }
+    for (const row of list) {
+      if (String(row.SECUCODE ?? '') !== secucode) continue;
+      flat.push({ ...row, REPORT_DATE: row.REPORT_DATE ?? group.REPORT_DATE });
+    }
+  }
+  return flat;
+}
 
 export type StatementId = 'balance' | 'profit' | 'cashflow';
 
@@ -242,8 +259,12 @@ export async function fetchHkStatement(
 ): Promise<HkStatementRow[]> {
   const selected = [...new Set(dates)].filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d) && retainedDate(d)).sort();
   if (!selected.length) return [];
-  const fetchRows = async (missing: string[]) => parseHkStatementRows(await dcQuery(STATEMENT_REPORTS[id],
-    `(SECUCODE="${secucode}")(REPORT_DATE in (${missing.map(d=>`'${d}'`).join(',')}))`));
+  const fetchRows = async (missing: string[]) => {
+    const query = `(SECUCODE="${secucode}")(REPORT_DATE in (${missing.map(d=>`'${d}'`).join(',')}))`;
+    return parseHkStatementRows(id === 'cashflow'
+      ? flattenCashflowGroups(await dcQuery(STATEMENT_REPORTS[id], query), secucode)
+      : await dcQuery(STATEMENT_REPORTS[id], query));
+  };
   const store = getMarketStore(); if (!store) {if(databaseOnly())throw marketDataMissing('港股原始报表');return fetchRows(selected);}
   const read=async()=>{
     const values = new Map<string,HkStatementRow[]>(), prior = new Map<string,string>(), priorRows = new Map<string,HkStatementRow[]>();
@@ -272,13 +293,34 @@ export async function fetchHkStatement(
 
 export function parseHkStatementRows(rows: DcRow[]): HkStatementRow[] {
   // 数据源有时把上一期原始报表挂在新报告期上；必须按真实报表期归位。
-  const byItem = new Map<string,HkStatementRow>();
-  const sorted = [...rows].sort((a,b) => Number(a.STD_REPORT_DATE === a.REPORT_DATE) - Number(b.STD_REPORT_DATE === b.REPORT_DATE));
-  for (const r of sorted) {
-    const date = reportDate({...r,REPORT_DATE:r.STD_REPORT_DATE ?? r.REPORT_DATE});
-    const itemCode = String(r.STD_ITEM_CODE ?? '');
-    const itemName = String(r.STD_ITEM_NAME ?? r.ITEM_NAME ?? '').trim();
-    if (date && itemCode && itemName) byItem.set(`${date}:${itemCode}`,{date,itemCode,itemName,amount:num(r.AMOUNT)});
+  // 但少数证券（实测 00016.HK 等 11 只）STD_REPORT_DATE 系统性滞后一期：无任何
+  // STD==REPORT 行，且 REPORT_DATE 集合含 STD 集合没有的报告期（如最新中报）。
+  // 这类证券按 STD 归位会整条链错位一期并丢掉最新报告期，应以 REPORT_DATE 为准；
+  // 同证券主要指标宽表（按 REPORT_DATE）同期数字可交叉印证二者一致。
+  const stdDate = (r: DcRow) => {
+    const m = r.STD_REPORT_DATE ? String(r.STD_REPORT_DATE).match(/^(\d{4}-\d{2}-\d{2})/) : null;
+    return m ? m[1] : null;
+  };
+  const bySecurity = new Map<string, DcRow[]>();
+  for (const r of rows) {
+    const sc = String(r.SECUCODE ?? '');
+    if (!bySecurity.has(sc)) bySecurity.set(sc, []);
+    bySecurity.get(sc)!.push(r);
+  }
+  const byItem = new Map<string, HkStatementRow>();
+  for (const group of bySecurity.values()) {
+    const anyExact = group.some(r => stdDate(r) !== null && stdDate(r) === reportDate(r));
+    const stdDates = new Set(group.map(stdDate).filter((d): d is string => d !== null));
+    const reportDates = new Set(group.map(reportDate).filter((d): d is string => d !== null));
+    const stdLagsWholeSecurity = !anyExact && [...reportDates].some(d => !stdDates.has(d));
+    const sorted = [...group].sort((a, b) => stdLagsWholeSecurity ? 0
+      : Number(a.STD_REPORT_DATE === a.REPORT_DATE) - Number(b.STD_REPORT_DATE === b.REPORT_DATE));
+    for (const r of sorted) {
+      const date = reportDate(stdLagsWholeSecurity ? r : { ...r, REPORT_DATE: r.STD_REPORT_DATE ?? r.REPORT_DATE });
+      const itemCode = String(r.STD_ITEM_CODE ?? '');
+      const itemName = String(r.STD_ITEM_NAME ?? r.ITEM_NAME ?? '').trim();
+      if (date && itemCode && itemName) byItem.set(`${r.SECUCODE ?? ''}:${date}:${itemCode}`, { date, itemCode, itemName, amount: num(r.AMOUNT) });
+    }
   }
   return [...byItem.values()];
 }

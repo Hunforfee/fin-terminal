@@ -31,8 +31,10 @@ function hkSecurity(symbol: string) {
 export type { HkStatementRow } from './marketHkStatements';
 export interface CompleteHkReport { date: string; itemCodes: string[] }
 
-/** 按报告期逐日写入三大报表；同报告期按 itemCode 合并，null 金额不擦除旧值。 */
-export async function writeHkStatements(store: MarketStore, input: { symbol: string; statement: string; rows: HkStatementRow[]; completeReports?: CompleteHkReport[] }, now = Date.now()) {
+/** 按报告期逐日写入三大报表；同报告期按 itemCode 合并，null 金额不擦除旧值。
+ *  options.overwrite：受控的全量快照覆盖（仅管理员导入路由可传）。用于修正历史口径缺陷
+ *  （如旧抓取链路落入的人民币折算值 → 原币值），开启后冲突金额以上传快照为准并留 incident。 */
+export async function writeHkStatements(store: MarketStore, input: { symbol: string; statement: string; rows: HkStatementRow[]; completeReports?: CompleteHkReport[] }, now = Date.now(), options: { overwrite?: boolean } = {}) {
   const { symbol, secucode } = hkSecurity(input.symbol);
   if (!STATEMENTS.includes(input.statement as HkStatementId)) throw Error('港股报表 statement 必须是 profit/balance/cashflow');
   if (!Array.isArray(input.rows) || !input.rows.length) throw Error('港股报表行为空');
@@ -67,7 +69,13 @@ export async function writeHkStatements(store: MarketStore, input: { symbol: str
   for (const [date, incoming] of [...byDate.entries()].sort()) {
     const key = `source-hk-statement:v1:${secucode}:${input.statement}:${date}`;
     const old = await store.read<HkStatementRow[]>(key), prior = old?.payload ?? [];
-    const payload = mergeHkStatementRows(prior, incoming, date);
+    const overwritten: { itemCode: string; from: number; to: number }[] = [];
+    const payload = mergeHkStatementRows(prior, incoming, date, {
+      overwrite: options.overwrite === true,
+      onOverwrite: row => overwritten.push({ itemCode: row.itemCode, from: row.prevAmount, to: row.amount as number }),
+    });
+    for (const o of overwritten)
+      try { await store.incident(key, 'import_overwrite', { itemCode: o.itemCode, from: o.from, to: o.to, statement: input.statement }); } catch {}
     const complete = declared.has(date) || completeHkStatement(old, date);
     const source = `import:hk-statement:${complete ? 'complete' : 'partial'}:reported-currency`;
     if (old && old.digest === marketDigest(payload) && (completeHkStatement(old,date) === complete)) { identical++; written.push({ key, items: payload.length, complete }); continue; }
@@ -76,6 +84,48 @@ export async function writeHkStatements(store: MarketStore, input: { symbol: str
     written.push({ key, items: payload.length, complete });
   }
   return { symbol, secucode, statement: input.statement, written, totalDates: byDate.size, ...(identical === byDate.size ? { skipped: true } : {}) };
+}
+
+/* --------------------------------------------------------------- 主要指标 */
+
+export interface HkIndicatorPoint {
+  date: string;
+  raw: Record<string, number | null>;
+  currency: string;
+  kind: string;
+  label: string;
+}
+
+/**
+ * 按报告期合并写入主要指标（与站点 source-hk-indicators:v1:<secucode> 同键位同构）。
+ * raw 字段级合并：导入值覆盖同名字段，旧有新字段不擦除；报告期只增不减。
+ */
+export async function writeHkIndicators(store: MarketStore, input: { symbol: string; points: HkIndicatorPoint[] }, now = Date.now()) {
+  const { symbol, secucode } = hkSecurity(input.symbol);
+  if (!Array.isArray(input.points) || !input.points.length) throw Error('港股指标数据为空');
+  const cutoff = marketCutoff(now), today = chinaDate(now);
+  const incoming = new Map<string, HkIndicatorPoint>();
+  for (const p of input.points) {
+    if (!isoDate(p.date) || p.date > today || p.date < cutoff) throw Error(`港股指标报告期无效或超出保留期: ${p.date}`);
+    if (!p.raw || typeof p.raw !== 'object' || Array.isArray(p.raw)) throw Error('港股指标数值无效');
+    for (const [k, v] of Object.entries(p.raw))
+      if (v !== null && (typeof v !== 'number' || !Number.isFinite(v))) throw Error(`港股指标数值无效: ${k}`);
+    incoming.set(p.date, { date: p.date, raw: p.raw, currency: String(p.currency ?? ''), kind: String(p.kind ?? ''), label: String(p.label ?? '') });
+  }
+  const key = `source-hk-indicators:v1:${secucode}`;
+  const old = await store.read<HkIndicatorPoint[]>(key);
+  const merged = new Map<string, HkIndicatorPoint>((old?.payload ?? []).map(p => [p.date, p]));
+  for (const [date, p] of incoming) {
+    const prev = merged.get(date);
+    const raw: Record<string, number | null> = { ...(prev?.raw ?? {}) };
+    for (const [k, v] of Object.entries(p.raw)) raw[k] = v;
+    merged.set(date, { date, raw, currency: p.currency || prev?.currency || '', kind: p.kind || prev?.kind || '', label: p.label || prev?.label || '' });
+  }
+  const payload = [...merged.values()].sort((a, b) => a.date.localeCompare(b.date));
+  const record = marketRecord(key, 'source-hk-indicators', 'import:hkf10:main:reported', payload, 1800e3, now);
+  if (old && old.digest === record.digest) return { symbol, secucode, dates: payload.length, skipped: true };
+  if (!await store.write(record, old?.digest ?? null)) throw Error('港股指标写入版本冲突，请重试');
+  return { symbol, secucode, dates: payload.length };
 }
 
 /* --------------------------------------------------------------- 分红事件 */

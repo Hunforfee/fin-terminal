@@ -12,8 +12,11 @@ export function readWatchlistDisplay(raw:string|null,codes:string[],now=Date.now
     if(saved?.version!==1 || !Number.isFinite(saved.at) || saved.at>now || now-saved.at>7*864e5)return null;
     if(!['quotes','otherAssets','financials','dividendYields','deductedPes'].every(key=>Array.isArray(saved[key])))return null;
     const wanted=new Set(codes),financialCodes=new Set(codes.map(code=>code.slice(2)));
-    return {...saved,quotes:saved.quotes.filter((q:Quote)=>wanted.has(q.symbol)),otherAssets:saved.otherAssets.filter((q:Quote)=>wanted.has(q.symbol)),
-      financials:saved.financials.filter((f:DisplayFinancial)=>financialCodes.has(f.code)),
+    const quote=(q:Quote)=>q && wanted.has(q.symbol) && typeof q.name==='string' && typeof q.code==='string';
+    const financial=(f:DisplayFinancial)=>f && financialCodes.has(f.code) && Array.isArray(f.periods) && f.periods.every(d=>typeof d==='string')
+      && f.series && ['roe','netMargin','ocfPerShare','debtRatio'].every(key=>Array.isArray(f.series[key]) && f.series[key].length===f.periods.length && f.series[key].every(v=>v===null || typeof v==='number' && Number.isFinite(v)));
+    return {...saved,quotes:saved.quotes.filter(quote),otherAssets:saved.otherAssets.filter(quote),
+      financials:saved.financials.filter(financial),
       dividendYields:saved.dividendYields.filter(([s]:[string,unknown])=>wanted.has(s)),deductedPes:saved.deductedPes.filter(([s]:[string,unknown])=>wanted.has(s)),
       metricDates:Array.isArray(saved.metricDates)?saved.metricDates.filter(([s]:[string,unknown])=>wanted.has(s.split(':')[0])):[]};
   }catch{return null;}

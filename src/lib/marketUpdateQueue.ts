@@ -61,7 +61,11 @@ export class MarketUpdateQueue {
       (await this.store.read<{status:string}>(coverageKey(symbol)))?.payload.status!=='ready'] as const)));
     return this.change((q, now) => {
       const previous = q.jobs.filter(j => j.owner === owner).at(-1);
-      if (previous && !this.progress(q, previous, now).finished) return this.progress(q, previous, now);
+      if (previous && !this.progress(q, previous, now).finished) {
+        if(mode==='ten-year' && previous.mode!=='ten-year')throw new UpdateQueueError('当前任务进行中，请停止或完成后再补齐十年数据',409);
+        if(mode==='ten-year' && symbols.some(symbol=>!previous.symbols.includes(symbol)))throw new UpdateQueueError('已有其他范围的补齐任务进行中，请停止或完成后再提交',409);
+        return this.progress(q, previous, now);
+      }
       if (previous && now - previous.createdAt < 60e3) throw new UpdateQueueError('刚刚已提交，请稍后再试', 429);
       if (retry && (!previous || symbols.some(s => !this.progress(q, previous, now).errors.some(e => e.symbol === s)))) throw new UpdateQueueError('只能重试当前任务失败的公司', 400);
       // Retain recent results without allowing finished jobs to block new users.

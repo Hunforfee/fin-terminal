@@ -33,6 +33,10 @@ test('manual ten-year fills cannot join a weaker automatic update',async()=>{
  const s=memory(),q=new MarketUpdateQueue(s,()=>now);
  await q.submit('auto',['600519'],false,'daily');
  await assert.rejects(q.submit('user',['600519'],false,'ten-year'),/完成后再补齐十年/);
+ await assert.rejects(q.submit('auto',['600519'],false,'ten-year'),/停止或完成后再补齐十年/);
+ const other=new MarketUpdateQueue(memory(),()=>now);
+ await other.submit('user',['600519'],false,'ten-year');
+ await assert.rejects(other.submit('user',['hk00700'],false,'ten-year'),/其他范围/);
 });
 test('ten-year valuation inputs retain the pre-window financial evidence but display prices do not',()=>{
  const points=[{date:'2010-12-31'},{date:'2015-12-31'},{date:'2016-06-30'},{date:'2026-06-30'}];
@@ -46,9 +50,10 @@ test('page changes prioritize new visible stocks without restarting or duplicati
  assert.deepEqual(takePrioritized(pending,[],2),['b']);
 });
 test('display snapshots are bounded by age, filtered to the current watchlist and preserve unknowns',()=>{
- const raw=JSON.stringify({version:1,at:now,quotes:[{symbol:'hk00700'},{symbol:'sh600519'}],otherAssets:[],financials:[],dividendYields:[['hk00700',null],['sh600519',0]],deductedPes:[]});
+ const quote={symbol:'hk00700',code:'00700',name:'腾讯控股'};
+ const raw=JSON.stringify({version:1,at:now,quotes:[quote,{symbol:'sh600519',code:'600519',name:'贵州茅台'}],otherAssets:[],financials:[{code:'00700'}],dividendYields:[['hk00700',null],['sh600519',0]],deductedPes:[]});
  const saved=readWatchlistDisplay(raw,['hk00700'],now+1000);
- assert.deepEqual(saved.quotes,[{symbol:'hk00700'}]);assert.deepEqual(saved.dividendYields,[['hk00700',null]]);
+ assert.deepEqual(saved.quotes,[quote]);assert.deepEqual(saved.dividendYields,[['hk00700',null]]);assert.deepEqual(saved.financials,[]);
  assert.equal(readWatchlistDisplay(raw,['hk00700'],now+8*864e5),null);
  assert.equal(readWatchlistDisplay('broken',[],now),null);
 });

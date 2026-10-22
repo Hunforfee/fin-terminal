@@ -264,7 +264,7 @@ export default function ResearchDesk({
     setQuotes(saved?.quotes??[]);setOtherAssets(saved?.otherAssets??[]);setFinancials(saved?.financials??[]);
     setDividendYields(new Map(saved?.dividendYields??[]));setDeductedPes(new Map(saved?.deductedPes??[]));
     setMetricDates(new Map(saved?.metricDates??[]));
-    setSnapshotAt(saved?.at??null);hasSnapshot.current=!!saved;hydratedFor.current=owner;
+    setSnapshotAt(saved?.at??null);hasSnapshot.current=!!(saved?.quotes.length || saved?.otherAssets.length);hydratedFor.current=owner;
   },[owner,ready]);
   useEffect(()=>{
     if(!ready || hydratedFor.current!==owner || !quotes.length && !otherAssets.length)return;
@@ -311,6 +311,12 @@ export default function ResearchDesk({
         return;
       }
       try {
+        const rows=codes.flatMap(symbol=>{
+          const normalized=normalizeCode(symbol);
+          return normalized?.kind==='stock'?[{symbol:normalized.symbol,name:quotes.find(q=>q.symbol===symbol)?.name??symbol}]:[];
+        });
+        setFinLoading(rows.length>0);
+        async function loadQuotes() {
         const all: Quote[] = [];
         // Imports can exceed the quote API's 200-symbol request limit.
         const waitingQuotes=new Set(codes);
@@ -327,9 +333,8 @@ export default function ResearchDesk({
           setQuotes(prev=>merged(prev,true));setOtherAssets(prev=>merged(prev,false));
           setLoading(false);
         }
-        const rows = all.filter((x) => x.kind === 'stock');
         setLoading(false);
-        setFinLoading(rows.length > 0);
+        }
         async function loadFinancials() {
           try {
             // Sequential batches keep first paint fast without flooding the financial source.
@@ -407,7 +412,7 @@ export default function ResearchDesk({
             }
           }
         }
-        await Promise.all([loadFinancials(), loadDividendYields(), loadDeductedPe()]);
+        await Promise.all([loadQuotes(),loadFinancials(), loadDividendYields(), loadDeductedPe()]);
       } catch (e) {
         if (alive) setError(e instanceof Error ? e.message : '数据获取失败');
       } finally {

@@ -15,7 +15,7 @@
 
 import { fetchText } from './http';
 import { cachedMarketInput } from '../marketInputs';
-import { marketCutoff } from '../marketRetention';
+import { financialEarliestYear } from '../marketHistoryPlan';
 import { fetchInterestExpenses, INTEREST_FIELDS, withInterestFields } from './interestExpenses';
 import { fetchDebtRatios } from './debtRatios';
 import { statementFieldUnit, type StatementFieldUnit } from '../financeFieldSemantics';
@@ -110,7 +110,7 @@ function parseStatementPage(html: string): { dates: string[]; rows: ParsedRow[];
 
 /** Shared source page: field catalogs, custom reports and valuation read the same rows. */
 export function fetchStatementSourcePage(code: string, id: StatementId, year: number) {
-  if (!/^\d{6}$/.test(code) || !STATEMENT_META[id] || !Number.isInteger(year) || year < Number(marketCutoff().slice(0,4)))
+  if (!/^\d{6}$/.test(code) || !STATEMENT_META[id] || !Number.isInteger(year) || year < financialEarliestYear())
     throw Error('财报范围超出十年保留期限');
   const validate=(value:StatementSourcePage)=>{
     if(!value.dates.length || !value.rows.some(r=>r.kind==='field' && r.vals.some(v=>v!=null && v.trim()!=='' && Number.isFinite(Number(v.replaceAll(',','')))))

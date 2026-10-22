@@ -1,5 +1,5 @@
 import { marketDigest, marketRecord, type MarketStore } from './marketStore';
-import { marketCutoff } from './marketRetention';
+import { reportCutoff } from './marketHistoryPlan';
 import { normalizeStockCode } from './datasource/codes';
 import { completeHkStatement, mergeHkStatementRows, type HkStatementRow } from './marketHkStatements';
 import { dividendIdentity, mergeHkDividendEvents } from './hkDividendEvents';
@@ -38,7 +38,7 @@ export async function writeHkStatements(store: MarketStore, input: { symbol: str
   const { symbol, secucode } = hkSecurity(input.symbol);
   if (!STATEMENTS.includes(input.statement as HkStatementId)) throw Error('港股报表 statement 必须是 profit/balance/cashflow');
   if (!Array.isArray(input.rows) || !input.rows.length) throw Error('港股报表行为空');
-  const cutoff = marketCutoff(now), today = chinaDate(now);
+  const cutoff = reportCutoff(now), today = chinaDate(now);
   const byDate = new Map<string, HkStatementRow[]>();
   for (const r of input.rows) {
     if (!isoDate(r.date) || r.date > today || r.date < cutoff) throw Error(`港股报表报告期无效或超出保留期: ${r.date}`);
@@ -103,7 +103,7 @@ export interface HkIndicatorPoint {
 export async function writeHkIndicators(store: MarketStore, input: { symbol: string; points: HkIndicatorPoint[] }, now = Date.now()) {
   const { symbol, secucode } = hkSecurity(input.symbol);
   if (!Array.isArray(input.points) || !input.points.length) throw Error('港股指标数据为空');
-  const cutoff = marketCutoff(now), today = chinaDate(now);
+  const cutoff = reportCutoff(now), today = chinaDate(now);
   const incoming = new Map<string, HkIndicatorPoint>();
   for (const p of input.points) {
     if (!isoDate(p.date) || p.date > today || p.date < cutoff) throw Error(`港股指标报告期无效或超出保留期: ${p.date}`);
@@ -149,7 +149,7 @@ const DIVIDEND_KINDS = new Set(['interim', 'final', 'q1', 'q2', 'q3', 'q4', 'spe
 export async function writeHkDividendEvents(store: MarketStore, input: { symbol: string; rows: HkDividendEventRow[] }, now = Date.now()) {
   const { symbol } = hkSecurity(input.symbol);
   if (!Array.isArray(input.rows) || !input.rows.length) throw Error('港股分红事件为空');
-  const cutoff = marketCutoff(now), today = chinaDate(now);
+  const cutoff = reportCutoff(now), today = chinaDate(now);
   const seen = new Set<string>();
   const incoming: HkDividendRecord[] = input.rows.map(r => {
     if (!isoDate(r.exDate) || r.exDate > today || r.exDate < cutoff) throw Error(`港股分红除息日无效或超出保留期: ${r.exDate}`);

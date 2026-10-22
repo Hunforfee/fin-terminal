@@ -1,5 +1,5 @@
 import { marketRecord, marketDigest, type MarketStore } from './marketStore';
-import { marketCutoff } from './marketRetention';
+import { reportCutoff } from './marketHistoryPlan';
 
 /**
  * 财务/分红的 QMT 导入写入器。记录写入与现有读取器完全相同的键位与 payload 结构：
@@ -48,7 +48,7 @@ export async function writeFinanceStatements(store: MarketStore, input: FinanceI
     if (d.slice(5) !== '03-31' && d.slice(5) !== '06-30' && d.slice(5) !== '09-30' && d.slice(5) !== '12-31')
       throw Error(`报告期必须是季末: ${d}`);
     if (d > chinaDate(now)) throw Error('报告期不能是未来日期');
-    if (d < marketCutoff(now)) throw Error('财报范围超出十年保留期限');
+    if (d < reportCutoff(now)) throw Error('财报范围超出十年保留期限');
   }
   const announce = input.announceDates;
   if (announce !== undefined) {
@@ -138,7 +138,7 @@ export async function writeFinancialHistory(store: MarketStore, input: Financial
     if (seen.has(d)) throw Error(`报告期重复: ${d}`);
     seen.add(d);
     if (d > chinaDate(now)) throw Error('报告期不能是未来日期');
-    if (d < marketCutoff(now)) throw Error('财报范围超出十年保留期限');
+    if (d < reportCutoff(now)) throw Error('财报范围超出十年保留期限');
   }
   const WAN_CODES = new Set(['npParent', 'npTotal', 'equityParent', 'equityTotal', 'equityCommon']);
   if(!Array.isArray(input.items) || !input.items.length)throw Error('财务史科目为空');
@@ -178,7 +178,7 @@ export async function writeFinancialHistory(store: MarketStore, input: Financial
   }
   // Remove the obsolete wrong field only where the new import explicitly supplies actual shares.
   for(const row of incoming)if(typeof row.sharesYi==='number')delete union.get(String(row.date))!.totalShares;
-  const rows=[...union.values()].filter(r=>String(r.date)>=marketCutoff(now)).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  const rows=[...union.values()].filter(r=>String(r.date)>=reportCutoff(now)).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
   let written=0;
   for(let i=0;i<snapshots.length;i++) {
     const key=`statements-v3:${code}:${i+2}`, old=snapshots[i];

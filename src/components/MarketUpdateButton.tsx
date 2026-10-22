@@ -75,6 +75,7 @@ export default function MarketUpdateButton({ codes, groupId, onComplete }: { cod
       </button>
       {(progress || error) && <button type="button" aria-expanded={details} aria-label="查看补齐进度" onClick={() => setDetails(v => !v)}
         className="min-h-8 text-slate-500 hover:text-brand-600">{details?'收起进度':'查看进度'}</button>}
+      <a href="/market-updates/log" className="min-h-8 text-slate-500 hover:text-brand-600">更新日志</a>
       {active && <button type="button" disabled={busy} onClick={() => void stop()}
         title="停止本次补齐，已入库的数据保留" className="min-h-8 text-slate-500 hover:text-red-600 disabled:opacity-60">停止补齐</button>}
     </div>

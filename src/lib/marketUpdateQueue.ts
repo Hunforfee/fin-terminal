@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { marketRecord, type MarketStore } from './marketStore';
 import { normalizeStockCode } from './datasource/codes';
 import { collectionPhases, coverageKey } from './marketHistoryPlan';
+import { appendRunLog } from './marketUpdateRunLog';
 
 const KEY = 'market-update-queue:v1';
 const COOLDOWN = 10 * 60e3;
@@ -27,6 +28,7 @@ export class MarketUpdateQueue {
       const row = await this.store.read<Queue>(KEY);
       const q = row?.payload ?? { jobs: [], items: {}, workerAt: 0, pauseUntil: 0 };
       const now = this.clock();
+      const justFinished: Job[] = [];
       // Restart unfinished legacy fills under the new plan; old leases cannot finish them.
       for (const item of Object.values(q.items)) if (item.mode === 'five-year' && ['queued','running'].includes(item.state)) {
         Object.assign(item, { mode:'ten-year', initialize:true, state:'queued', phase:0, attempts:0, nextAt:now });
@@ -35,12 +37,23 @@ export class MarketUpdateQueue {
       for (const job of q.jobs) if (job.mode === 'five-year' && !job.result) job.mode = 'ten-year';
       for (const job of q.jobs) if (!job.finishedAt && job.symbols.every(s => job.skipped.includes(s) || ['done', 'failed'].includes(q.items[s]?.state))) {
         const p = this.progress(q, job, now); job.finishedAt = now; job.result = { done: p.done, failed: p.failed, errors: p.errors };
+        justFinished.push(job);
       }
       q.jobs = q.jobs.filter(j => !j.finishedAt || now - j.finishedAt < 864e5);
       const used = new Set(q.jobs.filter(j => !j.result).flatMap(j => j.symbols.filter(s => !j.skipped.includes(s))));
       for (const [symbol, item] of Object.entries(q.items)) if (!used.has(symbol) && item.state !== 'running' && (item.doneAt ?? item.nextAt) < now - COOLDOWN) delete q.items[symbol];
       const result = fn(q, now);
-      if (await this.store.write(marketRecord(KEY, 'market-update-queue', 'internal', q, 864e5, now), row?.digest ?? null)) return result;
+      // 完成检测置于 fn 之后：finish/cancel 可能刚把最后一个 item 置为终态，
+      // 同一次 change 即汇总结果并落运行日志，无需等下一轮 claim。
+      for (const job of q.jobs) if (!job.finishedAt && job.symbols.every(s => job.skipped.includes(s) || ['done', 'failed'].includes(q.items[s]?.state))) {
+        const p = this.progress(q, job, now); job.finishedAt = now; job.result = { done: p.done, failed: p.failed, errors: p.errors };
+        justFinished.push(job);
+      }
+      if (await this.store.write(marketRecord(KEY, 'market-update-queue', 'internal', q, 864e5, now), row?.digest ?? null)) {
+        // 任务完成即落运行日志（供网站查看原因与结果），不影响队列主流程。
+        for (const job of justFinished) void this.recordRun(job, now).catch(() => null);
+        return result;
+      }
     }
     throw new UpdateQueueError('队列繁忙，请稍后再试', 503);
   }
@@ -91,6 +104,32 @@ export class MarketUpdateQueue {
       const job: Job = { id: randomUUID(), owner, symbols, skipped, createdAt: now,mode };
       q.jobs.push(job); return this.progress(q, job, now);
     });
+  }
+  /** Persist a finished run to the rolling run-log. Best-effort. */
+  private async recordRun(job: Job, now: number): Promise<void> {
+    if (!job.result) return;
+    const errors = (job.result.errors ?? []).slice(0, 500).map(e => ({ symbol: e.symbol, message: e.message }));
+    await appendRunLog(this.store, {
+      id: job.id, owner: job.owner, mode: job.mode ?? 'recent',
+      startedAt: job.createdAt, finishedAt: now,
+      total: job.symbols.length, done: job.result.done, failed: job.result.failed, errors,
+    });
+  }
+  /** Aggregate live progress of the scheduled (system-owned) close/recovery runs. */
+  async systemCloseProgress(): Promise<{ active: boolean; date?: string; mode?: UpdateMode; total: number; done: number; failed: number; running: number; waiting: number; finished: boolean } | null> {
+    const row = await this.store.read<Queue>(KEY); const q = row?.payload; if (!q) return null;
+    let total = 0, done = 0, failed = 0, running = 0, waiting = 0; let date: string | undefined; let mode: UpdateMode | undefined; let active = false;
+    for (const job of q.jobs) {
+      if (!job.owner.startsWith('system:close')) continue;
+      const p = this.progress(q, job, this.clock());
+      const tag = job.owner.slice('system:close:'.length).split(':')[0];
+      if (tag) date = tag;
+      if (job.mode) mode = job.mode;
+      total += p.total; done += p.done; failed += p.failed; running += p.running; waiting += p.waiting;
+      if (!p.finished) active = true;
+    }
+    if (total === 0) return null;
+    return { active, date, mode, total, done, failed, running, waiting, finished: !active };
   }
   async status(owner: string): Promise<UpdateProgress | null> {
     const row = await this.store.read<Queue>(KEY); const q = row?.payload;

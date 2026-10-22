@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {load} from './load-modules.mjs';
 const {MarketUpdateQueue,updateSymbols}=await load('marketUpdateQueue');
+const {appendRunLog,getRunLog}=await load('marketUpdateRunLog');
 const {UpstreamBudget}=await load('upstreamBudget');
 const {withUpstreamBudget}=await load('marketUpdateContext');
 const {fetchText}=await load('datasource/http');
-const memory=()=>{let saved=null;return {read:async()=>structuredClone(saved),write:async(r,expected)=>{if((saved?.digest??null)!==expected)return false;saved=structuredClone(r);return true;},incident:async()=>{}};};
+const memory=()=>{const rows=new Map();return {read:async(key)=>rows.has(key)?structuredClone(rows.get(key)):null,write:async(r,expected)=>{if((rows.get(r.key)?.digest??null)!==expected)return false;rows.set(r.key,structuredClone(r));return true;},incident:async()=>{}};};
 const fixture=()=>{let now=1800000000000;const store=memory();return {store,clock:()=>now,advance:n=>now+=n};};
 
 test('normalizes stock symbols, deduplicates and bounds submitted scope',()=>{
@@ -130,4 +131,34 @@ test('clean final gate pass with no earlier phase errors still marks done',async
   await q.finish(t.symbol,t.lease);
   const r=await q.status('one');
   assert.equal(r.done,1);assert.equal(r.failed,0);assert.equal(r.errors.length,0);
+});
+test('finishing a job appends a run-log entry with mode, owner and reasons',async()=>{
+  const f=fixture(),q=new MarketUpdateQueue(f.store,f.clock);
+  await q.submit('one',['600519']);
+  const t=await q.claim();
+  await q.finish(t.symbol,t.lease);
+  await new Promise(r=>setTimeout(r,10)); // recordRun 为即发即忘，等其落库
+  const row=await f.store.read('market-update-run-log:v1');
+  assert.equal(row?.payload?.runs?.length,1);
+  const run=row.payload.runs[0];
+  assert.equal(run.owner,'one');assert.equal(run.mode,'recent');
+  assert.equal(run.done,1);assert.equal(run.failed,0);assert.equal(run.total,1);assert.deepEqual(run.errors,[]);
+});
+test('run-log keeps a bounded rolling window',async()=>{
+  const f=fixture();
+  for(let i=0;i<65;i++)await appendRunLog(f.store,{id:'r'+i,owner:'o',mode:'daily',startedAt:0,finishedAt:i,total:1,done:1,failed:0,errors:[]});
+  const runs=await getRunLog(f.store);
+  assert.equal(runs.length,60);
+  assert.equal(runs[0].id,'r64');assert.equal(runs.at(-1).id,'r5');
+});
+test('systemCloseProgress aggregates only scheduled runs',async()=>{
+  const f=fixture(),q=new MarketUpdateQueue(f.store,f.clock);
+  assert.equal(await q.systemCloseProgress(),null);
+  await q.submit('one',['600519'],false,'recent');
+  assert.equal(await q.systemCloseProgress(),null,'普通用户任务不计入调度场进度');
+  await q.submit('system:close:2026-10-22:0',['600519','300498','hk00700'],false,'daily');
+  const live=await q.systemCloseProgress();
+  assert.ok(live);assert.equal(live.active,true);assert.equal(live.total,3);
+  assert.equal(live.mode,'daily');assert.equal(live.date,'2026-10-22');
+  assert.equal(live.done+live.failed+live.running+live.waiting,3);
 });

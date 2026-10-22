@@ -19,7 +19,7 @@ export function equivalentRawPrice(a:number,b:number):boolean {
 const different=(a:number,b:number)=>!equivalentRawPrice(a,b);
 export const completedDate=(now:number)=>{
   const d=new Date(now+8*3600e3);
-  if(d.getUTCHours()*60+d.getUTCMinutes()<1110)d.setUTCDate(d.getUTCDate()-1);
+  if(d.getUTCHours()*60+d.getUTCMinutes()<990)d.setUTCDate(d.getUTCDate()-1);
   return d.toISOString().slice(0,10);
 };
 /** Used by WorkBuddy's SERVER importer. Never accept broker credentials or browser writes. */

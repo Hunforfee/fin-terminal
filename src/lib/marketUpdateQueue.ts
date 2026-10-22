@@ -6,7 +6,7 @@ const KEY = 'market-update-queue:v1';
 const COOLDOWN = 10 * 60e3;
 const LEASE = 5 * 60e3;
 type State = 'queued' | 'running' | 'done' | 'failed';
-export type UpdateMode = 'recent' | 'five-year';
+export type UpdateMode = 'recent' | 'five-year' | 'daily';
 interface Item { symbol: string; state: State; attempts: number; nextAt: number; mode?:UpdateMode; initialize?:boolean; phase?:number; phaseErrors?:Record<string,string>; doneAt?: number; error?: string; lease?: string; leaseUntil?: number }
 interface Job { id: string; owner: string; symbols: string[]; skipped: string[]; createdAt: number; mode?:UpdateMode; finishedAt?: number; result?: { done: number; failed: number; errors: { symbol: string; message: string }[] } }
 interface Queue { jobs: Job[]; items: Record<string, Item>; workerAt: number; pauseUntil: number }

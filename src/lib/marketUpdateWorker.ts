@@ -25,15 +25,21 @@ export async function runMarketUpdateTick() {
   const budget = new UpstreamBudget(abort.signal);
   let error: string | undefined;
   let nextPhase:number|undefined;
-  let initializing=task.mode==='five-year';
-  let phases = initializing ? [0,1,2,3,4,5,6,7,8,9,10,11,13,12] : [2,0,1,3,4,10,11,13,12];
+  const daily = task.mode === 'daily';
+  let phases:number[] = [2,0,1,3,4,10,11,13,12];
   const startedAt = Date.now();
   try {
     const coverage=await store.read<{status:string}>(coverageKey(task.symbol));
     // New/partial stocks must initialize from website APIs even when added after
-    // deployment or submitted by the daily "recent" scheduler. No broker seed.
-    const initialize=initializing=task.initialize??(task.mode==='five-year' || coverage?.payload.status!=='ready');
-    phases=initialize ? [0,1,2,3,4,5,6,7,8,9,10,11,13,12] : [2,0,1,3,4,10,11,13,12];
+    // deployment or submitted by the daily scheduler. No broker seed.
+    const initialize=task.initialize??(task.mode==='five-year' || coverage?.payload.status!=='ready');
+    // 轻量模式：仅当日价格增量 + 最新财报/分红(phase 2) 与库内完整性校验(phase 12)；
+    // 完整历史复核由周日 recent 任务承担。未就绪标的仍走全量初始化。
+    phases = daily && !initialize
+      ? [2, 12]
+      : task.mode === 'five-year' || initialize
+        ? [0,1,2,3,4,5,6,7,8,9,10,11,13,12]
+        : [2,0,1,3,4,10,11,13,12];
     const phase=phases[task.phase];
     if(phase===undefined)throw Error('后台任务阶段无效');
     await withUpstreamBudget(budget, async () => {
@@ -82,7 +88,7 @@ export async function runMarketUpdateTick() {
     error = e instanceof Error ? e.message : '更新失败';
     // A failing price mirror must not prevent independent financial inputs from
     // being saved. The final DB-only readiness gate still rejects missing facts.
-    const last=initializing?13:8;
+    const last=phases.length-1;
     if(task.phase<last && !abort.signal.aborted)nextPhase=task.phase+1;
     // 登记缺口：网站抓不到的按 mcp/manual 分类登记，供 WorkBuddy 经 MCP 补齐（phase 12 已处理的跳过）。
     // 超时/租约失效属于基础设施中断，不是数据缺口，不登记。

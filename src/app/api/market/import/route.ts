@@ -95,7 +95,8 @@ export async function POST(request: NextRequest) {
     } else if (body.type === 'dividend-impl') {
       result = await writeDividendImplemented(store, String(rec.symbol ?? ''), rec.rows as never) as unknown as Record<string, unknown>;
     } else if (body.type === 'hk-statements') {
-      result = await writeHkStatements(store, { symbol: String(rec.symbol ?? ''), statement: String(rec.statement ?? ''), rows: (rec.rows ?? []) as never }) as unknown as Record<string, unknown>;
+      result = await writeHkStatements(store, { symbol: String(rec.symbol ?? ''), statement: String(rec.statement ?? ''), rows: (rec.rows ?? []) as never,
+        completeReports: rec.completeReports as never }) as unknown as Record<string, unknown>;
     } else if (body.type === 'hk-dividend-events') {
       result = await writeHkDividendEvents(store, { symbol: String(rec.symbol ?? ''), rows: (rec.rows ?? []) as never }) as unknown as Record<string, unknown>;
     } else {

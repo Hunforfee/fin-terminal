@@ -33,8 +33,15 @@ export default function StockFillButton({ code, name }: { code: string; name: st
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
   const observed = useRef<string | null>(null);
+  function complete(value: UpdateProgress) {
+    const failed = value.failed > 0 || value.errors.length > 0;
+    setDone(!failed);
+    setError(failed ? value.errors.map(e => e.message).join('；') || '部分数据补齐失败' : '');
+    router.refresh();
+  }
   useEffect(() => {
-    let alive = true; let timer: ReturnType<typeof setTimeout>;
+    if (busy) return;
+    let alive = true; let timer: ReturnType<typeof setTimeout>; let doneTimer: ReturnType<typeof setTimeout>;
     async function poll() {
       let next: UpdateProgress | null = null;
       try {
@@ -43,16 +50,15 @@ export default function StockFillButton({ code, name }: { code: string; name: st
         setProgress(next);
         if (next && !next.finished) observed.current = next.id;
         if (next?.finished && observed.current === next.id) {
-          observed.current = null; setDone(true); router.refresh();
-          timer = setTimeout(() => { if (alive) setDone(false); }, 8000);
-          return;
+          observed.current = null; complete(next);
+          if (!next.failed && !next.errors.length) doneTimer = setTimeout(() => { if (alive) setDone(false); }, 8000);
         }
       } catch { /* 轮询失败不改变界面状态，下次继续 */ }
       if (alive) timer = setTimeout(poll, next && !next.finished ? 5000 : 30000);
     }
     void poll();
-    return () => { alive = false; clearTimeout(timer); };
-  }, [router]);
+    return () => { alive = false; clearTimeout(timer); clearTimeout(doneTimer); };
+  }, [router, busy]);
   async function start() {
     if (!symbol) return;
     setBusy(true); setError(''); setDone(false);
@@ -60,7 +66,7 @@ export default function StockFillButton({ code, name }: { code: string; name: st
       const value = await requestUpdate({ codes: [symbol], single: true, mode: 'five-year' });
       setProgress(value);
       observed.current = value && !value.finished ? value.id : null;
-      if (value?.finished) { setDone(true); router.refresh(); }
+      if (value?.finished) complete(value);
     } catch (e) { setError(e instanceof Error ? e.message : '补齐失败'); }
     finally { setBusy(false); }
   }
@@ -70,15 +76,18 @@ export default function StockFillButton({ code, name }: { code: string; name: st
       const value = await requestUpdate(undefined, 'DELETE');
       setProgress(value);
       observed.current = null;
+      setDone(false);
+      if (value?.finished) complete(value);
     } catch (e) { setError(e instanceof Error ? e.message : '停止失败'); }
     finally { setBusy(false); }
   }
   if (!symbol) return null;
   // 只把「本页面发起（或点击后并入）的任务」视为自己的进度；别处发起的分组任务不打扰个股页状态。
   const active = !!progress && !progress.finished && observed.current === progress.id;
-  const label = busy ? '提交中…' : active ? `补齐中 ${progress!.done + progress!.skipped + progress!.failed}/${progress!.total}` : done ? '已补齐' : error ? '补齐失败' : '补齐数据';
+  const label = busy ? '提交中…' : active ? `补齐中 ${progress!.done + progress!.skipped + progress!.failed}/${progress!.total}` : done ? '已补齐'
+    : error ? error.includes('已手动停止') ? '已停止' : progress && progress.done + progress.skipped > 0 ? '部分失败' : '补齐失败' : '补齐数据';
   const title = error ? error : active
-    ? `正在补齐${name}：${phaseText(progress!.phase) || '排队中'}（${progress!.workerOnline ? '后台执行中' : '等待后台执行器'}）。抓取失败的阶段会登记缺口，由 WorkBuddy 经 MCP 补齐后自动复核`
+    ? `正在补齐${name}：${phaseText(progress!.phase) || '排队中'}（${progress!.workerOnline ? '后台执行中' : '等待后台执行器'}）`
     : `从网站接口补齐${name}五年行情、财报及估值输入，无需导入文件；可随时停止`;
   return (
     <>

@@ -33,7 +33,11 @@
  *   dividend-impl:      {type:'dividend-impl', record:{symbol:'600004', rows:[{exDate, perShare, perShareStock?,
  *                        precisionPerShare?, cashSource?}]}}
  *   hk-statements:      {type:'hk-statements', record:{symbol:'hk00016', statement:'profit'|'balance'|'cashflow',
- *                        rows:[{date, itemCode, itemName, amount}]}}   // amount=账本币种元，null 表示未知
+ *                        rows:[{date, itemCode, itemName, amount}],
+ *                        completeReports?:[{date,itemCodes:[...]}]}} // amount=账本币种元，null 表示未知
+ *   hk-statements 默认仅补充项目，不表示整期完整。完整报表必须附原始来源的完整 itemCodes 清单，
+ *   对应日期的输入 rows 必须逐项覆盖该清单且至少一个金额有效；旧导入的完整度需重新核验。
+ *   completeReports 是管理员对来源覆盖的声明，不可用已抓到的少量项目冒充来源的完整目录。
  *   hk-dividend-events: {type:'hk-dividend-events', record:{symbol:'hk00016',
  *                        rows:[{exDate, noticeDate?, dps, period, special, fiscalYear?, kind?, eventId?}]}}  // dps=港元/股 税前
  */

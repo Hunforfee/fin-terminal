@@ -20,6 +20,7 @@ import { fetchInterestExpenses } from './datasource/interestExpenses';
 import { fetchDeductedPeriods } from './datasource/deductedPe';
 import { getSecurityBasics,securityBasicsKey,type SecurityBasics } from './marketSecurityBasics';
 import { applyGapClassification, classifyCoverage } from './marketFillGaps';
+import { completeHkStatement } from './marketHkStatements';
 
 export const COLLECTION_LAST_PHASE=13;
 export const coverageKey=(symbol:string)=>`market-coverage:v1:${symbol}:5`;
@@ -118,7 +119,10 @@ export async function collectHistoryPhase(symbol:string,phase:number,signal:Abor
         const dates=points.filter(p=>p.date>=fiveYearStart() && ['annual','semi'].includes(p.kind)).map(p=>p.date);
         if(!dates.length)missingInputs.push('港股五年年报/中报指标');
         for(const date of dates)for(const id of ['balance','profit','cashflow'])required.push(`source-hk-statement:v1:${secucode}:${id}:${date}`);
-        for(const key of required)if(!await store.read(key))missingInputs.push(key);
+        for(const key of required){
+          const row = await store.read(key);
+          if(!row || key.startsWith('source-hk-statement:') && !completeHkStatement(row,key.slice(-10)))missingInputs.push(key);
+        }
       }
       let valuationMissing=false,valuationError='';
       try{
@@ -135,7 +139,7 @@ export async function collectHistoryPhase(symbol:string,phase:number,signal:Abor
       const key=coverageKey(symbol),old=await store.read(key);
       if(!await store.write(marketRecord(key,'market-coverage','internal',record,864e5),old?.digest??null))throw Error('覆盖记录保存失败');
       // 覆盖复核后落地缺口台账：partial 时按 missingInputs/gaps 分类登记（mcp 桶供 WorkBuddy 补齐），ready 时清除。
-      await applyGapClassification(store, symbol, classifyCoverage(record), { mode: 'five-year' }).catch(() => null);
+      await applyGapClassification(store, symbol, classifyCoverage(record), { mode: 'five-year' });
       if(record.status==='partial')throw Error(`已保存可用数据；${gaps.join('；')}`);
     });
   }

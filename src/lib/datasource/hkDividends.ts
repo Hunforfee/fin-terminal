@@ -1,4 +1,5 @@
 import { fetchJson, UpstreamError } from './http';
+import { dividendPeriodInfo as periodInfo, dividendIdentity, mergeHkDividendEvents } from '../hkDividendEvents';
 
 export type HkDividendAsOf = string | Date;
 export type HkDividendKind =
@@ -77,29 +78,6 @@ function asOfDate(asOf?: HkDividendAsOf): string {
     .slice(0, 10);
 }
 
-function periodInfo(period: string): {
-  fiscalYear?: string;
-  kind: HkDividendKind;
-} {
-  const text = period.normalize('NFKC').replace(/\s+/g, '');
-  const fiscalYear = text.match(/(?:^|\D)((?:19|20)\d{2})(?=\D|$)/)?.[1];
-  if (/特别|特殊|special/i.test(text)) return { fiscalYear, kind: 'special' };
-  const quarter =
-    text.match(/第?([一二三四1-4])季(?:度)?/i)?.[1] ??
-    text.match(/Q([1-4])/i)?.[1];
-  if (quarter) {
-    const number =
-      ({ 一: '1', 二: '2', 三: '3', 四: '4' } as Record<string, string>)[
-        quarter
-      ] ?? quarter;
-    return { fiscalYear, kind: `q${number}` as HkDividendKind };
-  }
-  if (/中期|中报|半年|H1/i.test(text)) return { fiscalYear, kind: 'interim' };
-  if (/末期|年终|全年|年度|年报|H2/i.test(text))
-    return { fiscalYear, kind: 'final' };
-  return { fiscalYear, kind: 'unknown' };
-}
-
 function isInKind(text: string): boolean {
   return /实物|實物|每\s*\d+(?:\.\d+)?\s*股\s*分派\s*\d*(?:\.\d+)?\s*股|分派.*(?:普通股|预托股份|預託股份|预留股份)|in[ -]?specie/i.test(
     text,
@@ -142,18 +120,7 @@ function kindSlot(kind: HkDividendKind): string {
 }
 
 function recordKey(record: HkDividendRecord): string {
-  if (record.eventId) return record.eventId;
-  const info = periodInfo(record.period);
-  const kind = record.special ? 'special' : (record.kind ?? info.kind);
-  const fiscalYear = record.fiscalYear ?? info.fiscalYear;
-  return JSON.stringify([
-    fiscalYear ?? record.period,
-    kindSlot(kind),
-    record.exDate,
-    ...(kind === 'special' || kind === 'unknown'
-      ? [record.noticeDate, record.dps]
-      : []),
-  ]);
+  return dividendIdentity(record);
 }
 
 /** 重复披露按事件身份合并；普通息和同日同额特别息是不同事件。 */
@@ -161,7 +128,7 @@ function uniqueRecords(
   records: HkDividendRecord[],
   asOf: string,
 ): HkDividendRecord[] {
-  const unique = new Map<string, HkDividendRecord>();
+  const eligible: HkDividendRecord[] = [];
   for (const record of records) {
     const exDate = dateOnly(record.exDate);
     const noticeDate = dateOnly(record.noticeDate);
@@ -174,12 +141,9 @@ function uniqueRecords(
       fiscalYear: record.fiscalYear ?? info.fiscalYear,
       kind: record.special ? ('special' as const) : (record.kind ?? info.kind),
     };
-    const key = recordKey(next);
-    const previous = unique.get(key);
-    if (!previous || next.noticeDate > previous.noticeDate)
-      unique.set(key, next);
+    eligible.push(next);
   }
-  const result = [...unique.values()];
+  const result = mergeHkDividendEvents([], eligible);
   for (const record of result) {
     if (!record.special || record.fiscalYear || !record.noticeDate) continue;
     const matchingYears = new Set(

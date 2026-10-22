@@ -77,8 +77,9 @@ export async function POST(request: NextRequest) {
       // phase 12 覆盖不足时抛「已保存可用数据；…」（记录已落库），属预期结果；其余错误（超时等）按失败处理。
       if (phaseError && !phaseError.message.startsWith('已保存可用数据')) throw phaseError;
       const coverage = (await store.read<Record<string, unknown>>(coverageKey(symbol)))?.payload ?? null;
+      if (!coverage || !['ready', 'partial'].includes(String(coverage.status))) throw Error('覆盖复核结果缺失或无效');
       const classified = classifyCoverage(coverage as { status?: string; missingInputs?: unknown; gaps?: unknown } | null);
-      const gap = await applyGapClassification(store, symbol, classified, { mode: 'five-year' }).catch(() => null);
+      const gap = await applyGapClassification(store, symbol, classified, { mode: 'five-year' });
       if (gap) results.push({ symbol, status: 'remaining', cleared: false, remaining: { mcp: gap.mcp, manual: gap.manual } });
       else results.push({ symbol, status: 'cleared', cleared: true });
     } catch (e) {

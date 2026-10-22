@@ -128,7 +128,7 @@ export async function recordFillGap(store: MarketStore, symbol: string, entry: O
   if (!await store.write(record, row?.digest ?? null)) {
     // 版本冲突：重读一次最新 digest 再写
     const fresh = await store.read(fillGapKey(n.symbol));
-    if (!await store.write(record, fresh?.digest ?? null)) return gap;
+    if (!await store.write(record, fresh?.digest ?? null)) throw Error('缺口登记版本冲突，请重试');
   }
   return gap;
 }
@@ -138,7 +138,12 @@ export async function clearFillGap(store: MarketStore, symbol: string): Promise<
   if (!n) return false;
   const row = await store.read(fillGapKey(n.symbol));
   if (!row) return false;
-  return !!store.remove && store.remove(fillGapKey(n.symbol), row.digest);
+  if (!store.remove) throw Error('缺口数据库不支持清除记录');
+  if (!await store.remove(fillGapKey(n.symbol), row.digest)) {
+    // A competing remover may already have cleared it. A surviving record is not success.
+    if (await store.read(fillGapKey(n.symbol))) throw Error('缺口清除版本冲突，请重试');
+  }
+  return true;
 }
 
 /** 复核后落地：有可行动缺口则登记，否则清除。返回登记结果（null=已清除/无需登记）。 */

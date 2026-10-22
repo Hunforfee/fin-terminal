@@ -50,7 +50,8 @@ test('one process bounds read traffic',async()=>{
  assert.equal((await api.GET(request({key:'shares-v3:000923'}))).status,429);
 });
 test('file metadata pagination and old versions retain full validated records',async()=>{
- const root=path.resolve('data'),dir=await fsp.mkdtemp(path.join(root,'readonly-test-'));
+ const root=path.resolve('data');await fsp.mkdir(root,{recursive:true});
+ const dir=await fsp.mkdtemp(path.join(root,'readonly-test-'));
  try{
   const store=market.fileMarketStore(dir),key='kline:v2:sh600415:day:none:canonical:prices-only';
   const p={candles:[{date:'2026-10-20',open:10,high:10,low:10,close:10}]};

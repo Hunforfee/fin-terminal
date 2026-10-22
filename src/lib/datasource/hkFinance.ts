@@ -18,6 +18,7 @@ import { fetchJson } from './http';
 import { cachedMarketInput, validateDatedRows } from '../marketInputs';
 import { retainedDate } from '../marketRetention';
 import { getMarketStore, marketRecord } from '../marketStore';
+import { completeHkStatement, mergeHkStatementRows, type HkStatementRow } from '../marketHkStatements';
 import { withMarketRefresh } from '../marketRefresh';
 import { databaseOnly, marketDataMissing } from '../marketReadPolicy';
 import type { CompanyFinancials, Granularity } from './sinaFinancial';
@@ -231,13 +232,7 @@ const STATEMENT_REPORTS: Record<'balance' | 'profit' | 'cashflow', string> = {
 
 export type StatementId = 'balance' | 'profit' | 'cashflow';
 
-export interface HkStatementRow {
-  date: string;
-  itemCode: string;
-  itemName: string;
-  /** 元（账本币种） */
-  amount: number | null;
-}
+export type { HkStatementRow } from '../marketHkStatements';
 
 /** 按报告期集合拉取一张表的全部科目行 */
 export async function fetchHkStatement(
@@ -251,20 +246,21 @@ export async function fetchHkStatement(
     `(SECUCODE="${secucode}")(REPORT_DATE in (${missing.map(d=>`'${d}'`).join(',')}))`));
   const store = getMarketStore(); if (!store) {if(databaseOnly())throw marketDataMissing('港股原始报表');return fetchRows(selected);}
   const read=async()=>{
-    const values = new Map<string,HkStatementRow[]>(), prior = new Map<string,string>();
+    const values = new Map<string,HkStatementRow[]>(), prior = new Map<string,string>(), priorRows = new Map<string,HkStatementRow[]>();
     const key = (date: string)=>`source-hk-statement:v1:${secucode}:${id}:${date}`;
     for (const date of selected) {
       const row = await store.read<HkStatementRow[]>(key(date));
-      if (row) prior.set(date,row.digest);
-      if (row && (Date.parse(row.refreshAfter)>Date.now() || databaseOnly()) && row.payload.length && row.payload.every(r=>r.date===date)) values.set(date,row.payload);
+      if (row) { prior.set(date,row.digest); priorRows.set(date,row.payload); }
+      if (row && (Date.parse(row.refreshAfter)>Date.now() || databaseOnly()) && completeHkStatement(row,date)) values.set(date,row.payload);
     }
     const missing = selected.filter(d=>!values.has(d));
     if(databaseOnly() && missing.length)throw marketDataMissing('港股原始报表');
     if (missing.length) {
       const rows = await fetchRows(missing);
       for (const date of missing) {
-        const part = rows.filter(r=>r.date===date); if (!part.length) continue;
-        if (part.some(r=>r.amount!==null && !Number.isFinite(r.amount))) throw Error('港股报表金额无效');
+        const sourceRows = rows.filter(r=>r.date===date); if (!sourceRows.length) continue;
+        if (!completeHkStatement({source:'hkf10:statement:reported-currency',payload:sourceRows},date)) throw Error('港股报表缺少有效金额或项目无效');
+        const part = mergeHkStatementRows(priorRows.get(date)??[],sourceRows,date);
         values.set(date,part);
         await store.write(marketRecord(key(date),'source-hk-statement','hkf10:statement:reported-currency',part,1800e3),prior.get(date)??null);
       }

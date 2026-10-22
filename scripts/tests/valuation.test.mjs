@@ -1,5 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import vm from 'node:vm';
+import ts from 'typescript';
 import { load } from './load-modules.mjs';
 const v = await load('valuation');
 const analytics = await load('analytics');
@@ -132,7 +136,20 @@ test('kline reports an explicit error when every mirror is blocked',async () => 
  finally{globalThis.fetch=original;}
 });
 test('snapshot identity never substitutes a Shenzhen bank for a Shanghai index', async () => {
- const snapshot=await load('datasource/snapshot');
+ // The downloaded snapshot is gitignored. Keep this identity regression independent
+ // of a developer's downloaded files and do not overwrite the real snapshot.
+ const snapshot={};
+ vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/datasource/snapshot.ts','utf8'),{
+  compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,esModuleInterop:true},
+ }).outputText,{
+  exports:snapshot,process,
+  require(name){
+   if(name==='node:fs/promises')return {readFile:async()=>JSON.stringify({quotes:[{symbol:'sz000001',kind:'index',source:'isolated-fixture',stale:false}],klines:{}})};
+   if(name==='node:path')return path;
+   if(name==='./codes')return {normalizeCode};
+   throw Error(name);
+  },
+ });
  const bank=await snapshot.snapshotQuote('sz000001');
  assert.equal(bank?.kind,'stock');assert.equal(bank?.symbol,'sz000001');
  const index=await snapshot.snapshotQuote('sh000001');

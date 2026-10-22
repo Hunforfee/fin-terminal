@@ -53,16 +53,19 @@ export async function POST(request: NextRequest) {
     const raw = await readBody(request);
     let body; try { body = JSON.parse(raw); } catch { throw new UpdateQueueError('请求格式无效', 400); }
     // 单只补齐（个股页入口）：不要求自选云同步，只要登录；仍走同一全局队列与冷却。
-    const single = body.single === true;
+    const single = body?.single === true;
     if (!single && (typeof body?.groupId !== 'string' || body.groupId.length > 100)) throw new UpdateQueueError('请选择自选分组', 400);
     const codes = updateSymbols(body.codes);
     if (single && codes.length !== 1) throw new UpdateQueueError('单只补齐只接受一只股票', 400);
     const identity = await updateIdentity(request, single ? undefined : body.groupId);
     if (!single && identity.allowed && codes.some(c => !identity.allowed!.includes(c))) throw new UpdateQueueError('只能更新当前已同步分组中的公司', 403);
     if(body.mode!==undefined && !['recent','five-year'].includes(body.mode))throw new UpdateQueueError('更新模式无效',400);
-    const all = single ? { owner: identity.owner, allowed: codes } : await updateIdentity(request, 'all');
-    await registerCollection(getMarketStore()!,identity.owner,all.allowed??codes);
     const data=await q.submit(identity.owner, codes, body.retry === true,body.mode??'recent');
+    // 个股补齐是一次性请求，不替换自动更新订阅；拒绝的提交也不得改变订阅。
+    if (!single) {
+      const all = await updateIdentity(request, 'all');
+      await registerCollection(getMarketStore()!,identity.owner,all.allowed??codes);
+    }
     return json({ ok: true, data });
   } catch (e) { return failure(e); }
 }

@@ -122,23 +122,27 @@ export class MarketUpdateQueue {
     });
   }
   /**
-   * 手动停止：把该用户当前未完成任务的排队/执行项标记为失败。
-   * 执行中的在飞阶段结果会被 finish 的租约校验丢弃（状态已非 running），最多再跑完当前阶段。
+   * 只取消当前用户的订阅。其他活跃任务仍引用的执行项继续使用原租约。
    */
   async cancel(owner: string): Promise<UpdateProgress | null> {
     return this.change((q, now) => {
       const job = [...q.jobs].reverse().find(j => j.owner === owner && !j.result);
       if (!job) return null;
-      for (const symbol of job.symbols) {
-        if (job.skipped.includes(symbol)) continue;
+      const before = this.progress(q, job, now);
+      const cancelled = job.symbols.filter(symbol => !job.skipped.includes(symbol) &&
+        ['queued', 'running'].includes(q.items[symbol]?.state));
+      job.finishedAt = now;
+      job.result = { done: before.done, failed: before.failed + cancelled.length,
+        errors: [...before.errors, ...cancelled.map(symbol => ({ symbol, message: '已手动停止' }))] };
+      for (const symbol of cancelled) {
+        if (q.jobs.some(other => other.id !== job.id && !other.result &&
+          other.symbols.includes(symbol) && !other.skipped.includes(symbol))) continue;
         const i = q.items[symbol];
         if (i && ['queued', 'running'].includes(i.state)) {
           i.state = 'failed'; i.error = '已手动停止'; i.doneAt = now; i.lease = undefined; i.leaseUntil = 0;
         }
       }
-      const p = this.progress(q, job, now);
-      job.finishedAt = now; job.result = { done: p.done, failed: p.failed, errors: p.errors };
-      return p;
+      return this.progress(q, job, now);
     });
   }
 }

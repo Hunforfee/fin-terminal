@@ -1,6 +1,9 @@
 import { marketDigest, marketRecord, type MarketStore } from './marketStore';
 import { marketCutoff } from './marketRetention';
 import { normalizeStockCode } from './datasource/codes';
+import { completeHkStatement, mergeHkStatementRows, type HkStatementRow } from './marketHkStatements';
+import { dividendIdentity, mergeHkDividendEvents } from './hkDividendEvents';
+import type { HkDividendKind, HkDividendRecord } from './datasource/hkDividends';
 
 /**
  * 港股数据导入写入器（WorkBuddy 经 MCP 取数后写回）。
@@ -25,10 +28,11 @@ function hkSecurity(symbol: string) {
   return { symbol: n.symbol, secucode: `${n.code}.HK` };
 }
 
-export interface HkStatementRow { date: string; itemCode: string; itemName: string; amount: number | null }
+export type { HkStatementRow } from './marketHkStatements';
+export interface CompleteHkReport { date: string; itemCodes: string[] }
 
 /** 按报告期逐日写入三大报表；同报告期按 itemCode 合并，null 金额不擦除旧值。 */
-export async function writeHkStatements(store: MarketStore, input: { symbol: string; statement: string; rows: HkStatementRow[] }, now = Date.now()) {
+export async function writeHkStatements(store: MarketStore, input: { symbol: string; statement: string; rows: HkStatementRow[]; completeReports?: CompleteHkReport[] }, now = Date.now()) {
   const { symbol, secucode } = hkSecurity(input.symbol);
   if (!STATEMENTS.includes(input.statement as HkStatementId)) throw Error('港股报表 statement 必须是 profit/balance/cashflow');
   if (!Array.isArray(input.rows) || !input.rows.length) throw Error('港股报表行为空');
@@ -42,25 +46,34 @@ export async function writeHkStatements(store: MarketStore, input: { symbol: str
     if (!byDate.has(r.date)) byDate.set(r.date, []);
     byDate.get(r.date)!.push({ date: r.date, itemCode: r.itemCode.trim(), itemName: r.itemName.trim(), amount: r.amount ?? null });
   }
-  const written: { key: string; items: number }[] = [];
+  // Completeness is an explicit administrator declaration of the original source's
+  // complete item inventory, never inferred from a nonempty partial patch.
+  const declared = new Set<string>();
+  if (input.completeReports !== undefined) {
+    if (!Array.isArray(input.completeReports)) throw Error('完整报表声明格式无效');
+    for (const report of input.completeReports) {
+      const rows = byDate.get(report?.date);
+      if (!rows || declared.has(report.date) || !Array.isArray(report.itemCodes) || !report.itemCodes.length ||
+        report.itemCodes.some(c => typeof c !== 'string' || !c.trim()) ||
+        new Set(report.itemCodes).size !== report.itemCodes.length ||
+        new Set(rows.map(r => r.itemCode)).size !== rows.length ||
+        report.itemCodes.length !== rows.length || rows.some(r => !report.itemCodes.includes(r.itemCode)) ||
+        !rows.some(r => r.amount !== null && Number.isFinite(r.amount))) throw Error('完整报表项目清单不匹配或缺少有效金额');
+      declared.add(report.date);
+    }
+  }
+  const written: { key: string; items: number; complete: boolean }[] = [];
   let identical = 0;
   for (const [date, incoming] of [...byDate.entries()].sort()) {
     const key = `source-hk-statement:v1:${secucode}:${input.statement}:${date}`;
     const old = await store.read<HkStatementRow[]>(key), prior = old?.payload ?? [];
-    const union = new Map(prior.map(r => [r.itemCode, r]));
-    for (const r of incoming) {
-      const prev = union.get(r.itemCode);
-      // A missing amount is not a deletion of a previously known fact.
-      if (prev && r.amount === null && prev.amount !== null) { union.set(r.itemCode, { ...prev, itemName: r.itemName || prev.itemName }); continue; }
-      if (prev && prev.amount !== null && r.amount !== null && Math.abs(prev.amount - r.amount) > Math.max(1e-6, Math.abs(prev.amount) * 1e-9))
-        throw Error(`港股报表金额冲突: ${key} ${r.itemCode}（${prev.amount} → ${r.amount}），保留原记录`);
-      union.set(r.itemCode, { ...prev, ...r, date });
-    }
-    const payload = [...union.values()].filter(r => r.date === date).sort((a, b) => a.itemCode.localeCompare(b.itemCode));
-    if (old && old.digest === marketDigest(payload)) { identical++; written.push({ key, items: payload.length }); continue; }
-    if (!await store.write(marketRecord(key, 'source-hk-statement', 'import:hk-statement:reported-currency', payload, 1800e3, now), old?.digest ?? null))
+    const payload = mergeHkStatementRows(prior, incoming, date);
+    const complete = declared.has(date) || completeHkStatement(old, date);
+    const source = `import:hk-statement:${complete ? 'complete' : 'partial'}:reported-currency`;
+    if (old && old.digest === marketDigest(payload) && (completeHkStatement(old,date) === complete)) { identical++; written.push({ key, items: payload.length, complete }); continue; }
+    if (!await store.write(marketRecord(key, 'source-hk-statement', source, payload, 1800e3, now), old?.digest ?? null))
       throw Error(`写入版本冲突: ${key}`);
-    written.push({ key, items: payload.length });
+    written.push({ key, items: payload.length, complete });
   }
   return { symbol, secucode, statement: input.statement, written, totalDates: byDate.size, ...(identical === byDate.size ? { skipped: true } : {}) };
 }
@@ -88,33 +101,26 @@ export async function writeHkDividendEvents(store: MarketStore, input: { symbol:
   if (!Array.isArray(input.rows) || !input.rows.length) throw Error('港股分红事件为空');
   const cutoff = marketCutoff(now), today = chinaDate(now);
   const seen = new Set<string>();
-  const incoming = input.rows.map(r => {
+  const incoming: HkDividendRecord[] = input.rows.map(r => {
     if (!isoDate(r.exDate) || r.exDate > today || r.exDate < cutoff) throw Error(`港股分红除息日无效或超出保留期: ${r.exDate}`);
     if (r.noticeDate !== undefined && r.noticeDate !== '' && !isoDate(r.noticeDate)) throw Error('港股分红公告日期无效');
     if (r.dps !== null && (typeof r.dps !== 'number' || !Number.isFinite(r.dps) || r.dps < 0)) throw Error('港股每股分红无效');
     if (typeof r.period !== 'string') throw Error('港股分红报告期无效');
     if (typeof r.special !== 'boolean') throw Error('港股分红特别息标记必须为布尔');
     if (r.kind !== undefined && !DIVIDEND_KINDS.has(r.kind)) throw Error('港股分红类型无效');
-    const id = r.eventId ? String(r.eventId) : r.exDate;
+    const id = dividendIdentity({ ...r, noticeDate: r.noticeDate ?? '', kind: r.kind as HkDividendKind | undefined });
     if (seen.has(id)) throw Error(`港股分红事件重复: ${id}`);
     seen.add(id);
     return {
       exDate: r.exDate, noticeDate: r.noticeDate ?? '', dps: r.dps ?? null, period: r.period, special: r.special,
       ...(r.fiscalYear !== undefined ? { fiscalYear: r.fiscalYear } : {}),
-      ...(r.kind !== undefined ? { kind: r.kind } : {}),
+      ...(r.kind !== undefined ? { kind: r.kind as HkDividendKind } : {}),
       ...(r.eventId !== undefined ? { eventId: String(r.eventId) } : {}),
     };
   });
   const key = `hk-dividend-events-v4:${symbol}`;
-  const old = await store.read<Record<string, unknown>[]>(key);
-  const union = new Map((old?.payload ?? []).map(r => [String(r.eventId ?? r.exDate), r]));
-  for (const r of incoming) {
-    const id = r.eventId ?? r.exDate, prior = union.get(id);
-    if (prior && prior.dps != null && r.dps != null && Math.abs(Number(prior.dps) - r.dps) > 0.0001)
-      throw Error(`港股分红金额冲突: ${r.exDate}（${prior.dps} → ${r.dps}），保留原记录`);
-    union.set(id, { ...prior, ...r, dps: r.dps ?? prior?.dps ?? null, noticeDate: r.noticeDate || String(prior?.noticeDate ?? '') });
-  }
-  const payload = [...union.values()].sort((a, b) => String(a.exDate).localeCompare(String(b.exDate)));
+  const old = await store.read<HkDividendRecord[]>(key);
+  const payload = mergeHkDividendEvents(old?.payload ?? [], incoming, true);
   const record = marketRecord(key, 'hk-recent-dividend-events', 'import:HKD-confirmed-DPS:tax-before:recent-100-events', payload, 1800e3, now);
   if (old && old.digest === record.digest) return { symbol, count: payload.length, skipped: true };
   if (!await store.write(record, old?.digest ?? null)) throw Error('港股分红写入版本冲突，请重试');

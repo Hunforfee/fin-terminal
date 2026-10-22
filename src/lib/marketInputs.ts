@@ -4,6 +4,7 @@ import { cached } from './datasource/cache';
 import { withMarketRefresh } from './marketRefresh';
 import { retainMarketPayload } from './marketRetention';
 import { databaseOnly, marketDataMissing } from './marketReadPolicy';
+import { dividendIdentity, mergeHkDividendEvents } from './hkDividendEvents';
 
 export function cachedMarketInput<T>(key: string, kind: string, source: string, ttl: number,
   producer: () => Promise<T>, validate: (value: T) => void): Promise<T> {
@@ -145,12 +146,10 @@ async function readOrFetchInput<T>(key: string, kind: string, source: string, tt
       // 港股分红按 eventId ?? exDate 合并：上游「已确认无派息」或更薄的回复
       // 不得擦除已入库的派息历史（该 kind 用 exDate 而非 date，不适用上面的按日期合并）。
       if (kind === 'hk-recent-dividend-events' && Array.isArray(prior) && Array.isArray(next) && prior.length) {
-        const id = (r: any) => String(r.eventId ?? r.exDate);
-        const kept = new Map<any, any>(prior.map((r: any) => [id(r), r]));
-        for (const r of next) kept.set(id(r), r);
-        value = [...kept.values()].sort((a: any, b: any) => String(a.exDate).localeCompare(String(b.exDate))) as T;
+        const id = (r: any) => dividendIdentity(r);
+        value = mergeHkDividendEvents(prior, next) as T;
         const missing = prior.filter((r: any) => !next.some((n: any) => id(n) === id(r)));
-        if (missing.length) try { await store?.incident(key, 'source_history_shrank', { missingEvents: missing.map(id), kept: prior.length }); } catch {}
+        if (missing.length) try { await store?.incident(key, 'source_history_shrank', { missingEvents: missing.map((r:any)=>r.eventId??id(r)), kept: prior.length }); } catch {}
       }
       validate(value);
     }

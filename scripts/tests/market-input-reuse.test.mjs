@@ -49,3 +49,29 @@ test('persistent freshness and later database writes are not hidden by a second 
   record={...record,payload:{value:2}};assert.equal((await read()).value,2);
   now=1006;assert.equal((await read()).value,3);assert.equal(calls,1);
 });
+
+test('a verified-empty dividend reply cannot erase stored HK dividend history', async () => {
+  const incidents=[];
+  const prior=[
+    { exDate:'2026-06-10', noticeDate:'2026-06-08', dps:0.46088, period:'2025末期', special:false, eventId:'hk00322:2026-06-10' },
+    { exDate:'2025-09-11', noticeDate:'2025-08-29', dps:0.29, period:'2025中期', special:false, eventId:'hk00322:2025-09-11' },
+  ];
+  let record=null;
+  const store={read:async()=>record,write:async value=>{record=value;return true;},incident:async(key,type,detail)=>{incidents.push({key,type,detail});}};
+  const input=producer=>storedMarketInput('hk-dividend-events-v4:hk00322','hk-recent-dividend-events','eastmoney:test',-1000,producer,()=>{},store);
+  // 首次落库两条派息历史
+  const first=await input(async()=>prior);
+  assert.equal(first.length,2);
+  // 刷新时上游「确认无派息」返回空数组：历史必须保留，且记录一次来源收缩事件
+  const second=await input(async()=>[]);
+  assert.equal(second.length,2);
+  assert.deepEqual(second.map(r=>r.exDate),['2025-09-11','2026-06-10']);
+  assert.equal(second[1].dps,0.46088);
+  assert.equal(incidents.length,1);
+  assert.equal(incidents[0].type,'source_history_shrank');
+  assert.deepEqual(incidents[0].detail.missingEvents,['hk00322:2026-06-10','hk00322:2025-09-11']);
+  // 上游带回更薄的真实数据时同样只增不删
+  const third=await input(async()=>[{ exDate:'2026-09-10', noticeDate:'2026-08-28', dps:0.29, period:'2026中期', special:false, eventId:'hk00322:2026-09-10' }]);
+  assert.equal(third.length,3);
+  assert.deepEqual(third.map(r=>r.exDate),['2025-09-11','2026-06-10','2026-09-10']);
+});

@@ -31,7 +31,15 @@ async function readBody(request: NextRequest): Promise<string> {
 }
 export async function GET(request: NextRequest) {
   try {
-    const q = queue(request); const identity = await updateIdentity(request,'all');
+    const q = queue(request);
+    let identity;
+    try {
+      identity = await updateIdentity(request, 'all');
+    } catch (e) {
+      // 未同步自选的登录用户（个股页单只补齐即属此类）：降级为仅 owner 身份，仍可轮询自己的进度。
+      if (e instanceof UpdateQueueError && e.status === 409) identity = await updateIdentity(request);
+      else throw e;
+    }
     if(identity.allowed)await registerCollection(getMarketStore()!,identity.owner,identity.allowed);
     return json({ ok: true, data: await q.status(identity.owner) });
   }
@@ -44,14 +52,27 @@ export async function POST(request: NextRequest) {
     await updateIdentity(request); // Reject unauthenticated uploads before reading a body.
     const raw = await readBody(request);
     let body; try { body = JSON.parse(raw); } catch { throw new UpdateQueueError('请求格式无效', 400); }
-    if (typeof body?.groupId !== 'string' || body.groupId.length > 100) throw new UpdateQueueError('请选择自选分组', 400);
+    // 单只补齐（个股页入口）：不要求自选云同步，只要登录；仍走同一全局队列与冷却。
+    const single = body.single === true;
+    if (!single && (typeof body?.groupId !== 'string' || body.groupId.length > 100)) throw new UpdateQueueError('请选择自选分组', 400);
     const codes = updateSymbols(body.codes);
-    const identity = await updateIdentity(request, body.groupId);
-    if (identity.allowed && codes.some(c => !identity.allowed!.includes(c))) throw new UpdateQueueError('只能更新当前已同步分组中的公司', 403);
+    if (single && codes.length !== 1) throw new UpdateQueueError('单只补齐只接受一只股票', 400);
+    const identity = await updateIdentity(request, single ? undefined : body.groupId);
+    if (!single && identity.allowed && codes.some(c => !identity.allowed!.includes(c))) throw new UpdateQueueError('只能更新当前已同步分组中的公司', 403);
     if(body.mode!==undefined && !['recent','five-year'].includes(body.mode))throw new UpdateQueueError('更新模式无效',400);
-    const all=await updateIdentity(request,'all');
+    const all = single ? { owner: identity.owner, allowed: codes } : await updateIdentity(request, 'all');
     await registerCollection(getMarketStore()!,identity.owner,all.allowed??codes);
     const data=await q.submit(identity.owner, codes, body.retry === true,body.mode??'recent');
+    return json({ ok: true, data });
+  } catch (e) { return failure(e); }
+}
+/** DELETE /api/market-updates —— 停止当前用户未完成的补齐/更新任务（在飞阶段最多再跑完当前阶段）。 */
+export async function DELETE(request: NextRequest) {
+  if (!sameOriginMutation(request)) return json({ ok: false, error: '请求来源无效' }, 403);
+  try {
+    const q = queue(request);
+    const identity = await updateIdentity(request);
+    const data = await q.cancel(identity.owner);
     return json({ ok: true, data });
   } catch (e) { return failure(e); }
 }

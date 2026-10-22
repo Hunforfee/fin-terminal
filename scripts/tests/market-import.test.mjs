@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import { load } from './load-modules.mjs';
 const records = await load('marketImportRecords');
+const hkRecords = await load('marketHkImportRecords');
 const bars = await load('marketImportedBars');
 const market = await load('marketStore');
 const auth = await load('marketImportAuth');
@@ -68,6 +69,7 @@ function route(s) {
       if(name==='@/lib/marketStore')return {...market,getMarketStore:()=>s};
       if(name==='@/lib/marketImportedBars')return bars;
       if(name==='@/lib/marketImportRecords')return records;
+      if(name==='@/lib/marketHkImportRecords')return hkRecords;
       if(name==='@/lib/marketImportAuth')return auth;
       throw Error(name);
     },

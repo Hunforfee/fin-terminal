@@ -526,3 +526,59 @@ test('dividend fetch keeps pagination identity and reports upstream failures wit
     globalThis.fetch = original;
   }
 });
+
+test('an upstream "no dividend records" answer is a verified empty, not a failure', async () => {
+  const original = globalThis.fetch;
+  try {
+    // 东财对从未派息的证券返回 success:false + code 9201（返回数据为空）：
+    // 这是权威源对「无分红记录」的确认，应落库为空而非反复报错。
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          success: false,
+          code: 9201,
+          message: '返回数据为空',
+          result: null,
+        }),
+      );
+    assert.deepEqual(await fetchHkDividends('00013', AS_OF), []);
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({ success: false, message: '没有相关数据', result: null }),
+      );
+    assert.deepEqual(await fetchHkDividends('00013', AS_OF), []);
+    // 成功但空结果集同样是确认无分红
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ success: true, result: null }));
+    assert.deepEqual(await fetchHkDividends('00013', AS_OF), []);
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({ success: true, result: { pages: 0, data: [] } }),
+      );
+    assert.deepEqual(await fetchHkDividends('00013', AS_OF), []);
+    // 其他失败码（限流、系统繁忙、结构异常）仍是错误，不得伪装成「无分红」
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          success: false,
+          code: 9202,
+          message: '系统繁忙',
+          result: null,
+        }),
+      );
+    await assert.rejects(
+      () => fetchHkDividends('00013', AS_OF),
+      /港股分红明细不可用/,
+    );
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({ success: true, result: { pages: 1, data: {} } }),
+      );
+    await assert.rejects(
+      () => fetchHkDividends('00013', AS_OF),
+      /港股分红明细不可用/,
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});

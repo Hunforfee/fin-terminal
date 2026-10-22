@@ -87,3 +87,24 @@ test('one challenged mirror is not retried, while existing alternate mirrors rem
     assert.equal(budget.limited,false);assert.deepEqual(calls,['https://blocked.test/prices','https://alternate.test/prices']);
   }finally{globalThis.fetch=original;}
 });
+
+test('cancel stops queued work and drops an in-flight phase result',async()=>{
+  const f=fixture(),q=new MarketUpdateQueue(f.store,f.clock);
+  await q.submit('one',['600519','300498','hk00700']);
+  const t=await q.claim();
+  const stopped=await q.cancel('one');
+  assert.ok(stopped);assert.equal(stopped.finished,true);
+  assert.equal(stopped.errors.filter(e=>e.message==='已手动停止').length,3);
+  assert.equal(await q.claim(),null,'停止后不应再有可领取任务');
+  assert.equal(await q.finish(t.symbol,t.lease),false,'在飞阶段的结果必须被丢弃');
+  const status=await q.status('one');assert.equal(status.finished,true);assert.equal(status.failed,3);
+  f.advance(61000);
+  const restarted=await q.submit('one',['600519']);assert.equal(restarted.waiting,1,'冷却一分钟后允许重新提交');
+});
+test('cancel only touches the requesting user and ignores idle owners',async()=>{
+  const f=fixture(),q=new MarketUpdateQueue(f.store,f.clock);
+  assert.equal(await q.cancel('nobody'),null);
+  await q.submit('one',['600519']);
+  assert.equal((await q.cancel('two')),null,'他人无法停止别人的任务');
+  assert.equal((await q.status('one')).waiting,1);
+});

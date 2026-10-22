@@ -13,6 +13,7 @@ function worker({phase=0,mode='five-year',failure=false}={}){
    if(name==='./upstreamBudget')return {UpstreamBudget:class{limited=false;}};
    if(name==='./marketUpdateContext')return {withUpstreamBudget:(_budget,read)=>read()};
    if(name==='./marketHistoryCollection')return {coverageKey:s=>s,collectHistoryPhase:async(...args)=>{calls.push(args);if(failure)throw Error('校验失败');}};
+   if(name==='./marketFillGaps')return {clearFillGap:async()=>false,recordGapAfterFailure:async()=>null};
    if(['./datasource','./datasource/codes','./datasource/valueScreen','./valuationInputs','./marketInputs','./datasource/sinaFinance','./watchlistFinancialInputs'].includes(name))return {};
    throw Error(name);
   },

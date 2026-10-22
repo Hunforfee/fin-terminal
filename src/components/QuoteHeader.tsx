@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import AiAnalysisPanel from '@/components/AiAnalysisPanel';
+import StockFillButton from '@/components/StockFillButton';
 import WatchlistButton from '@/components/WatchlistButton';
 import XueqiuLink from '@/components/XueqiuLink';
 import { fmtTime, price, signed, signedPct, toneClass } from '@/lib/format';
@@ -125,6 +126,7 @@ export default function QuoteHeader({ quote }: { quote: Quote }) {
               >
                 财务体检
               </Link>
+              <StockFillButton code={quote.symbol} name={quote.name} />
               <WatchlistButton code={quote.symbol} name={quote.name} />
             </>
           )}

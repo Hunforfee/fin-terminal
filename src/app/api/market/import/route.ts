@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getMarketStore, marketRecord } from '@/lib/marketStore';
 import { importDailyPrices } from '@/lib/marketImportedBars';
 import { denyReason, importAdminIds, readImportIdentity } from '@/lib/marketImportAuth';
+import { writeHkDividendEvents, writeHkStatements } from '@/lib/marketHkImportRecords';
 import { klineCrossConflicts, writeDividendImplemented, writeDividendPlans, writeFinancialHistory, writeFinanceStatements, writeShareHistory } from '@/lib/marketImportRecords';
 
 export const runtime = 'nodejs';
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
   });
 }
 
-/** POST /api/market/import —— 分类型导入：kline / finance / dividend-plans / dividend-impl */
+/** POST /api/market/import —— 分类型导入：kline / finance / financial-history / share-history / dividend-plans / dividend-impl / hk-statements / hk-dividend-events */
 export async function POST(request: NextRequest) {
   const denied = denyReason(request, true);
   if (denied) return json({ ok: false, error: denied }, denied.includes('登录') ? 401 : 403);
@@ -74,8 +75,11 @@ export async function POST(request: NextRequest) {
       // Never delete the old record, including on invalid input or storage failure.
       if (rec.adjust !== undefined && rec.adjust !== 'none') throw Error('仅接受不复权日线');
       if (rec.period !== undefined && rec.period !== 'day') throw Error('仅接受日线');
+      if (rec.source !== undefined && rec.source !== 'qmt' && rec.source !== 'tdx') throw Error('导入来源仅支持 qmt / tdx');
+      // tdx 语义：只补新日期、保留已有更高精度观测、价格冲突拒绝写入（MCP 抓取回补走此路）。
+      const source = rec.source === 'tdx' ? 'tdx' : 'qmt';
       const r = await importDailyPrices(store, {
-        symbol, source: 'qmt', mergeBatch: true, candles,
+        symbol, source, mergeBatch: true, candles,
         listingDate: typeof rec.listingDate === 'string' ? rec.listingDate : undefined,
       });
       result = { imported: r.skipped ? 0 : candles.length, from: r.from, to: r.to, symbol: r.symbol, total: r.count,
@@ -90,6 +94,10 @@ export async function POST(request: NextRequest) {
       result = await writeDividendPlans(store, String(rec.symbol ?? ''), rec.plans as never) as unknown as Record<string, unknown>;
     } else if (body.type === 'dividend-impl') {
       result = await writeDividendImplemented(store, String(rec.symbol ?? ''), rec.rows as never) as unknown as Record<string, unknown>;
+    } else if (body.type === 'hk-statements') {
+      result = await writeHkStatements(store, { symbol: String(rec.symbol ?? ''), statement: String(rec.statement ?? ''), rows: (rec.rows ?? []) as never }) as unknown as Record<string, unknown>;
+    } else if (body.type === 'hk-dividend-events') {
+      result = await writeHkDividendEvents(store, { symbol: String(rec.symbol ?? ''), rows: (rec.rows ?? []) as never }) as unknown as Record<string, unknown>;
     } else {
       return json({ ok: false, error: `未知类型: ${body.type}` }, 400);
     }

@@ -142,6 +142,16 @@ async function readOrFetchInput<T>(key: string, kind: string, source: string, tt
         for (const k of missing) next.set(k, prior.get(k));
         if (missing.length) try { await store?.incident(key, 'disclosure_coverage_shrank', { kept: missing.length }); } catch {}
       }
+      // 港股分红按 eventId ?? exDate 合并：上游「已确认无派息」或更薄的回复
+      // 不得擦除已入库的派息历史（该 kind 用 exDate 而非 date，不适用上面的按日期合并）。
+      if (kind === 'hk-recent-dividend-events' && Array.isArray(prior) && Array.isArray(next) && prior.length) {
+        const id = (r: any) => String(r.eventId ?? r.exDate);
+        const kept = new Map<any, any>(prior.map((r: any) => [id(r), r]));
+        for (const r of next) kept.set(id(r), r);
+        value = [...kept.values()].sort((a: any, b: any) => String(a.exDate).localeCompare(String(b.exDate))) as T;
+        const missing = prior.filter((r: any) => !next.some((n: any) => id(n) === id(r)));
+        if (missing.length) try { await store?.incident(key, 'source_history_shrank', { missingEvents: missing.map(id), kept: prior.length }); } catch {}
+      }
       validate(value);
     }
   }

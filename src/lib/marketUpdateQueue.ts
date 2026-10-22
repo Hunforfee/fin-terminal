@@ -83,7 +83,7 @@ export class MarketUpdateQueue {
     const job = q?.jobs.filter(j => j.owner === owner).at(-1);
     return q && job ? this.progress(q, job, this.clock()) : null;
   }
-  async claim(): Promise<{ symbol: string; lease: string; mode:UpdateMode;phase:number;initialize?:boolean } | null> {
+  async claim(): Promise<{ symbol: string; lease: string; mode:UpdateMode;phase:number;initialize?:boolean;phaseErrors?:Record<string,string> } | null> {
     return this.change((q, now) => {
       q.workerAt = now;
       if (q.pauseUntil > now) return null;
@@ -94,7 +94,7 @@ export class MarketUpdateQueue {
       const item = Object.values(q.items).find(i => i.state === 'queued' && i.nextAt <= now);
       if (!item) return null;
       item.state = 'running'; item.attempts++; item.lease = randomUUID(); item.leaseUntil = now + LEASE;
-      return { symbol: item.symbol, lease: item.lease,mode:item.mode??'recent',phase:item.phase??0,initialize:item.initialize };
+      return { symbol: item.symbol, lease: item.lease,mode:item.mode??'recent',phase:item.phase??0,initialize:item.initialize,phaseErrors:item.phaseErrors };
     });
   }
   async renew(symbol: string, lease: string): Promise<boolean> {
@@ -119,6 +119,26 @@ export class MarketUpdateQueue {
       else { i.state = 'failed'; i.doneAt = now; }
       if (limited) q.pauseUntil = Math.max(q.pauseUntil, now + 5 * 60e3);
       return true;
+    });
+  }
+  /**
+   * 手动停止：把该用户当前未完成任务的排队/执行项标记为失败。
+   * 执行中的在飞阶段结果会被 finish 的租约校验丢弃（状态已非 running），最多再跑完当前阶段。
+   */
+  async cancel(owner: string): Promise<UpdateProgress | null> {
+    return this.change((q, now) => {
+      const job = [...q.jobs].reverse().find(j => j.owner === owner && !j.result);
+      if (!job) return null;
+      for (const symbol of job.symbols) {
+        if (job.skipped.includes(symbol)) continue;
+        const i = q.items[symbol];
+        if (i && ['queued', 'running'].includes(i.state)) {
+          i.state = 'failed'; i.error = '已手动停止'; i.doneAt = now; i.lease = undefined; i.leaseUntil = 0;
+        }
+      }
+      const p = this.progress(q, job, now);
+      job.finishedAt = now; job.result = { done: p.done, failed: p.failed, errors: p.errors };
+      return p;
     });
   }
 }

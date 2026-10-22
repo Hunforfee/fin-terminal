@@ -46,6 +46,8 @@ export interface HkRollingDividend {
 type Row = Record<string, unknown>;
 type Response = {
   success: boolean;
+  code?: number;
+  message?: string;
   result?: { pages: number; data: Row[] } | null;
 };
 const HK_HEADERS = { Referer: 'https://emweb.securities.eastmoney.com/' };
@@ -395,10 +397,14 @@ export async function fetchHkDividends(
       timeoutMs: 15000,
       headers: HK_HEADERS,
     });
-    if (
-      !response.success ||
-      (response.result && !Array.isArray(response.result.data))
-    )
+    // 上游明确回答「该证券无分红记录」与抓取失败是两回事：前者是已验证的事实
+    // （如从未派息的生物科技公司），返回空数组供调用方落库「确认无分红」；
+    // 后者（限流、超时、结构异常）仍是错误，交由上游重试或网站重试。
+    if (!response.success) {
+      if (response.code === 9201 || /返回数据为空|没有相关数据|查无数据/.test(String(response.message ?? ''))) break;
+      throw new UpstreamError('港股分红明细不可用', url.toString(), 'parse');
+    }
+    if (response.result && !Array.isArray(response.result.data))
       throw new UpstreamError('港股分红明细不可用', url.toString(), 'parse');
     const list = response.result?.data ?? [];
     if (list.length === 0) break;

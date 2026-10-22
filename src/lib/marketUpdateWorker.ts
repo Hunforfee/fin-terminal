@@ -10,6 +10,7 @@ import { cachedMarketInput, validateDatedRows } from './marketInputs';
 import { fetchShareHistory } from './datasource/sinaFinance';
 import { getWatchlistFinancialInputs } from './watchlistFinancialInputs';
 import { collectHistoryPhase, coverageKey } from './marketHistoryCollection';
+import { recordGapAfterFailure } from './marketFillGaps';
 
 /** One short-range stock per tick. Slow work never runs in the browser POST. */
 export async function runMarketUpdateTick() {
@@ -25,6 +26,7 @@ export async function runMarketUpdateTick() {
   let error: string | undefined;
   let nextPhase:number|undefined;
   let initializing=task.mode==='five-year';
+  const startedAt = Date.now();
   try {
     const coverage=await store.read<{status:string}>(coverageKey(task.symbol));
     // New/partial stocks must initialize from website APIs even when added after
@@ -81,8 +83,14 @@ export async function runMarketUpdateTick() {
     // being saved. The final DB-only readiness gate still rejects missing facts.
     const last=initializing?13:8;
     if(task.phase<last && !abort.signal.aborted)nextPhase=task.phase+1;
+    // 登记缺口：网站抓不到的按 mcp/manual 分类登记，供 WorkBuddy 经 MCP 补齐（phase 12 已处理的跳过）。
+    // 超时/租约失效属于基础设施中断，不是数据缺口，不登记。
+    if (!abort.signal.aborted) await recordGapAfterFailure(store, task.symbol, { mode: task.mode, phase: task.phase, error, phaseErrors: task.phaseErrors, startedAt }).catch(() => null);
+  } finally {
+    // 缺口台账的唯一定清点：phase 12 覆盖达标（ready）时由 applyGapClassification 清除；
+    // 中途阶段成功不清除——其他阶段的数据域可能仍缺失，留待 phase 12 或下次复核判定。
+    abort.abort(Error('本次任务已结束')); clearInterval(heartbeat); clearTimeout(deadline);
   }
-  finally { abort.abort(Error('本次任务已结束')); clearInterval(heartbeat); clearTimeout(deadline); }
   const accepted = await queue.finish(task.symbol, task.lease, error, budget.limited,nextPhase);
   return { processed: true, accepted, symbol: task.symbol, ok: !error };
 }

@@ -287,7 +287,11 @@ export async function getHkCurrentValuation(symbol: string, price: number | null
       if (!value) throw new Error('港股财务指标暂缺');
       return value;
     }, value => validateDatedRows([value as unknown as Record<string, unknown>], 'reportDate', ['bps', 'peTTM'])).catch(() => null),
-    storedMarketInput(`hk-dividend-events-v4:${n.symbol}`, 'hk-recent-dividend-events', 'eastmoney:HKD-confirmed-DPS:tax-before:recent-100-events', 1800e3, () => fetchHkDividends(n.code), rows => { if (!rows.length || rows.some(r => r.dps != null && (!Number.isFinite(r.dps) || r.dps < 0))) throw Error('港股分红输入缺失或金额无效'); }).catch(() => null),
+    storedMarketInput(`hk-dividend-events-v4:${n.symbol}`, 'hk-recent-dividend-events', 'eastmoney:HKD-confirmed-DPS:tax-before:recent-100-events', 1800e3, () => fetchHkDividends(n.code), rows => {
+      // 空数组 = 上游已确认该证券无派息记录（从未分红的公司）；只有金额非法才算坏数据。
+      // 落库空记录后，覆盖检查不再把「确认无分红」误判为缺失数据。
+      if (rows.some(r => r.dps != null && (!Number.isFinite(r.dps) || r.dps < 0))) throw Error('港股分红金额无效');
+    }).catch(() => null),
   ]);
   return computeHkValuation(fundamental, dividends, price, asOf);
 }

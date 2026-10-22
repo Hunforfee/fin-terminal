@@ -19,6 +19,7 @@ import { fetchDebtRatios } from './datasource/debtRatios';
 import { fetchInterestExpenses } from './datasource/interestExpenses';
 import { fetchDeductedPeriods } from './datasource/deductedPe';
 import { getSecurityBasics,securityBasicsKey,type SecurityBasics } from './marketSecurityBasics';
+import { applyGapClassification, classifyCoverage } from './marketFillGaps';
 
 export const COLLECTION_LAST_PHASE=13;
 export const coverageKey=(symbol:string)=>`market-coverage:v1:${symbol}:5`;
@@ -133,6 +134,8 @@ export async function collectHistoryPhase(symbol:string,phase:number,signal:Abor
         collection:'website-apis',listingDate,missingInputs,validation:'structural-and-source-overlap',gaps,checkedAt:new Date().toISOString()};
       const key=coverageKey(symbol),old=await store.read(key);
       if(!await store.write(marketRecord(key,'market-coverage','internal',record,864e5),old?.digest??null))throw Error('覆盖记录保存失败');
+      // 覆盖复核后落地缺口台账：partial 时按 missingInputs/gaps 分类登记（mcp 桶供 WorkBuddy 补齐），ready 时清除。
+      await applyGapClassification(store, symbol, classifyCoverage(record), { mode: 'five-year' }).catch(() => null);
       if(record.status==='partial')throw Error(`已保存可用数据；${gaps.join('；')}`);
     });
   }

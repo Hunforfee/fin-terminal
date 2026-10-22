@@ -161,4 +161,6 @@ test('systemCloseProgress aggregates only scheduled runs',async()=>{
   assert.ok(live);assert.equal(live.active,true);assert.equal(live.total,3);
   assert.equal(live.mode,'daily');assert.equal(live.date,'2026-10-22');
   assert.equal(live.done+live.failed+live.running+live.waiting,3);
+  assert.equal(typeof live.pausedUntil,'number','限流暂停时间需带出供页面显示');
+  assert.equal(typeof live.workerOnline,'boolean');
 });

@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import type { RunLog } from '@/lib/marketUpdateRunLog';
 
-type Live = { active: boolean; date?: string; mode?: string; total: number; done: number; failed: number; running: number; waiting: number; finished: boolean } | null;
+type Live = { active: boolean; date?: string; mode?: string; total: number; done: number; failed: number; running: number; waiting: number; finished: boolean; pausedUntil: number; workerOnline: boolean } | null;
 
 const MODE_LABEL: Record<string, string> = {
   daily: '每日轻量', recent: '周日完整复核', 'ten-year': '十年补齐', 'five-year': '五年补齐（旧）',
@@ -41,6 +41,12 @@ export default function UpdateRunLogPage() {
   }, []);
 
   const livePct = live && live.total ? Math.round(((live.done + live.failed) / live.total) * 100) : 0;
+  // 区分三种"不动"：来源限流暂停 / 执行器离线 / 正在排队执行。
+  const pauseMs = live && live.pausedUntil > Date.now() ? live.pausedUntil - Date.now() : 0;
+  const pauseText = pauseMs >= 60e3 ? `${Math.round(pauseMs / 60e3)} 分钟` : `${Math.max(1, Math.ceil(pauseMs / 1000))} 秒`;
+  const idleText = pauseMs ? `来源限流，已自动暂停（约 ${pauseText}后恢复）`
+    : live && !live.workerOnline ? '后台执行器未在线，任务已保存，恢复后自动继续'
+      : '排队中，等待后台执行器接续';
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-6 text-slate-700">
@@ -58,7 +64,7 @@ export default function UpdateRunLogPage() {
           </div>
           <p className="mt-2 text-xs text-slate-500">
             成功 {live.done} · 失败 {live.failed} · 排队 {live.waiting} · 执行 {live.running}
-            {live.running === 0 && live.waiting === 0 && ' · 等待后台执行器接续'}
+            {live.running === 0 && live.waiting === 0 && <span className="text-orange-600"> · {idleText}</span>}
           </p>
         </section>
       )}

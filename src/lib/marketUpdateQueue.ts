@@ -116,8 +116,9 @@ export class MarketUpdateQueue {
     });
   }
   /** Aggregate live progress of the scheduled (system-owned) close/recovery runs. */
-  async systemCloseProgress(): Promise<{ active: boolean; date?: string; mode?: UpdateMode; total: number; done: number; failed: number; running: number; waiting: number; finished: boolean } | null> {
+  async systemCloseProgress(): Promise<{ active: boolean; date?: string; mode?: UpdateMode; total: number; done: number; failed: number; running: number; waiting: number; finished: boolean; pausedUntil: number; workerOnline: boolean } | null> {
     const row = await this.store.read<Queue>(KEY); const q = row?.payload; if (!q) return null;
+    const now = this.clock();
     let total = 0, done = 0, failed = 0, running = 0, waiting = 0; let date: string | undefined; let mode: UpdateMode | undefined; let active = false;
     for (const job of q.jobs) {
       if (!job.owner.startsWith('system:close')) continue;
@@ -129,7 +130,8 @@ export class MarketUpdateQueue {
       if (!p.finished) active = true;
     }
     if (total === 0) return null;
-    return { active, date, mode, total, done, failed, running, waiting, finished: !active };
+    return { active, date, mode, total, done, failed, running, waiting, finished: !active,
+      pausedUntil: q.pauseUntil, workerOnline: now - q.workerAt < 90e3 };
   }
   async status(owner: string): Promise<UpdateProgress | null> {
     const row = await this.store.read<Queue>(KEY); const q = row?.payload;

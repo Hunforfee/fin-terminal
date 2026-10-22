@@ -3,11 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
-function worker({phase=0,mode='five-year',failure=false,initialized=false,phaseErrors}={}){
+import {load} from './load-modules.mjs';
+const plan=await load('marketHistoryPlan');
+function worker({phase=0,mode='ten-year',failure=false,initialized=false,phaseErrors}={}){
  const exported={},calls=[],finished=[],gaps=[];
  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/marketUpdateWorker.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{
   exports:exported,Error,AbortController,setTimeout,clearTimeout,setInterval,clearInterval,
   require(name){
+   if(name==='./marketHistoryPlan')return plan;
    if(name==='./marketStore')return {getMarketStore:()=>({read:async()=>initialized?{payload:{status:'ready'}}:null})};
    if(name==='./marketUpdateQueue')return {MarketUpdateQueue:class{async claim(){return {symbol:'sh600519',lease:'lease',mode,phase,phaseErrors};}async finish(...args){finished.push(args);return true;}async renew(){return true;}}};
    if(name==='./upstreamBudget')return {UpstreamBudget:class{limited=false;}};
@@ -34,10 +37,10 @@ test('a recent job without initialized coverage also starts the full website col
 });
 
 test('readiness failure never advances the stock to an apparent success',async()=>{
- const w=worker({phase:13,failure:true});const result=await w.run();assert.equal(result.ok,false);assert.equal(w.finished[0][4],undefined);
+ const w=worker({phase:18,failure:true});const result=await w.run();assert.equal(result.ok,false);assert.equal(w.finished[0][4],undefined);
 });
 test('last history phase is the readiness check and only it finishes the stock',async()=>{
- const w=worker({phase:13});await w.run();assert.equal(w.calls[0][1],12);assert.equal(w.finished[0][4],undefined);
+ const w=worker({phase:18});await w.run();assert.equal(w.calls[0][1],12);assert.equal(w.finished[0][4],undefined);
 });
 
 test('recent failures classify the actual collection phase and historical phase errors',async()=>{

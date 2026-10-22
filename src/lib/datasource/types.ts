@@ -132,6 +132,7 @@ export interface MinutePoint {
 
 /** 估值指标（含历史分位） */
 export interface Valuation {
+  historyCache?: { generatedAt: string; state: 'fresh' | 'updating' | 'saved' };
   code: string;
   pe: number | null;
   pb: number | null;

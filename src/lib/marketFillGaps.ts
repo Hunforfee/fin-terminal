@@ -1,5 +1,6 @@
 import { marketRecord, type MarketStore } from './marketStore';
 import { normalizeStockCode } from './datasource/codes';
+import { coverageKey, financialYearForPhase } from './marketHistoryPlan';
 
 /**
  * 待补齐缺口登记（gap ledger）。
@@ -59,14 +60,9 @@ export function classifyMissingKey(key: string): { domain: string; mcp: boolean 
 /** coverage.gaps 文案 → 数据域。设计性缺口返回 null（不登记）。 */
 export function classifyGapText(text: string): { domains: string[]; mcp: boolean; note?: string } | null {
   if (text.includes('港股历史估值仍缺少可核验的公告与分红快照，不生成历史分位')) return null; // Legacy message only.
-  if (text.includes('历史起点覆盖不足')) return { domains: ['kline'], mcp: true, note: 'K 线历史起点不足五年或缺少已核实上市日期，可经 MCP 回补不复权日线' };
+  if (text.includes('历史起点覆盖不足')) return { domains: ['kline'], mcp: true, note: 'K 线历史起点不足十年或缺少已核实上市日期，可经 MCP 回补不复权日线' };
   if (text.includes('部分交易日缺少已披露财报')) return { domains: ['statements-v3', 'shares-v3'], mcp: true, note: '部分交易日缺少财报/股本/复权数据，可经 MCP 全量导入财务史与股本史' };
   return { domains: [text], mcp: false };
-}
-
-/** phase 3—9 每年对应一个抓取阶段；失败域按年份精确化。 */
-function yearForPhase(phase: number, now = Date.now()): number {
-  return new Date(now + 8 * 3600e3).getUTCFullYear() - (phase - 3);
 }
 
 export function classifyPhaseFailure(phase: number, market: 'A' | 'HK', now = Date.now()): GapClassification {
@@ -75,8 +71,8 @@ export function classifyPhaseFailure(phase: number, market: 'A' | 'HK', now = Da
   else if (phase === 2) {
     if (market === 'HK') { mcp.push('hk-dividend-events'); manual.push('hk-main-currency-v4'); }
     else { mcp.push('dividend-plans', 'dividend-impl', 'share-history'); manual.push('screen-company-input:v1', 'watchlist-financial-inputs:v1'); }
-  } else if (phase >= 3 && phase <= 9) {
-    const year = yearForPhase(phase, now);
+  } else if (financialYearForPhase(phase, now) !== null) {
+    const year = financialYearForPhase(phase, now)!;
     if (market === 'HK') { mcp.push('hk-statements'); manual.push('source-hk-indicators:v1'); }
     else {
       mcp.push(`finance:profit:${year}`, `finance:balance:${year}`, `finance:cashflow:${year}`);
@@ -173,7 +169,7 @@ export async function listFillGaps(store: MarketStore, limit = 200): Promise<Fil
  */
 export async function recordGapAfterFailure(store: MarketStore, symbol: string, options: { mode?: string; phase: number; error?: string; phaseErrors?: Record<string, string>; startedAt: number; now?: number }): Promise<FillGap | null> {
   const now = options.now ?? Date.now();
-  const coverage = await store.read<{ status?: string; missingInputs?: unknown; gaps?: unknown; checkedAt?: string }>(`market-coverage:v1:${symbol}:5`);
+  const coverage = await store.read<{ status?: string; missingInputs?: unknown; gaps?: unknown; checkedAt?: string }>(coverageKey(symbol));
   if (coverage?.payload?.checkedAt && coverage.payload.checkedAt >= new Date(options.startedAt).toISOString()) return null; // phase 12 已处理
   const n = normalizeStockCode(symbol);
   const market = n?.market === 'HK' ? 'HK' : 'A';

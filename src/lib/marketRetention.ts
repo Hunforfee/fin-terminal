@@ -9,7 +9,14 @@ export const retainedDate = (date: unknown, now = Date.now()) => typeof date ===
 
 export function retainMarketPayload<T>(kind: string, payload: T, now = Date.now()): T {
   const today=new Date(now+8*3600e3).toISOString().slice(0,10);
-  const p = payload as any, keep = (date: unknown) => retainedDate(date, now) && (date as string).slice(0,10)<=today;
+  // Ten-year valuations need prior-year reports, announcement dates and dividend
+  // evidence at the left boundary. This buffer is input-only; charts stay ten years.
+  const buffered = ['financial-history','disclosure-dates','source-sina-page','source-sina-indicators',
+    'implemented-dividends','announced-dividend-plans'].includes(kind);
+  const boundary = new Date(marketCutoff(now)+'T00:00:00Z');
+  if(buffered)boundary.setUTCFullYear(boundary.getUTCFullYear()-2);
+  const cutoff=boundary.toISOString().slice(0,10);
+  const p = payload as any, keep = (date: unknown) => typeof date==='string' && date.slice(0,10)>=cutoff && date.slice(0,10)<=today;
   if (!p) return payload;
   if (kind === 'source-hk-valuation') return { ...p, rows: p.rows.filter((r: any) => keep(r.date)) };
   if(kind==='company-announcements' || kind==='company-reports')return p.filter((r:any)=>keep(r.date));
@@ -60,6 +67,6 @@ export function retainMarketPayload<T>(kind: string, payload: T, now = Date.now(
 export function disposableMarketRecord(row: {kind: string; acquiredAt: string}, now: number): boolean {
   // Expiration means "refresh required", not "historical facts can be destroyed".
   const age = now - Date.parse(row.acquiredAt);
-  return ['latest-quote','latest-hk-financials','latest-company-financial-input','watchlist-financial-inputs'].includes(row.kind)
+  return ['latest-quote','latest-hk-financials','latest-company-financial-input','watchlist-financial-inputs','valuation-result','display-metric'].includes(row.kind)
     && age > 30 * 864e5;
 }

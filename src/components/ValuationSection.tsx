@@ -9,6 +9,7 @@ import type {
 } from '@/lib/datasource/types';
 
 type Metric = 'pe' | 'pb' | 'dy';
+const recentResults = new Map<string,{at:number;value:ValuationResp}>();
 
 const METRICS: {
   key: Metric;
@@ -383,17 +384,25 @@ export default function ValuationSection({ code }: { code: string }) {
   useEffect(() => {
     let alive = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    setLoading(true);
-    setData(null);
+    const controller=new AbortController();
+    const key=`${code}:${years}`,saved=recentResults.get(key);
+    const previous=saved && Date.now()-saved.at<30*60e3?saved.value:null;
+    let displayed=!!previous;
+    setLoading(!previous);
+    setData(previous);
     setErr(null);
-    const load = (attempt: number) => {
-      fetch(`/api/valuation?code=${encodeURIComponent(code)}&years=${years}`)
+    const load = (attempt: number, refreshes=0) => {
+      fetch(`/api/valuation?code=${encodeURIComponent(code)}&years=${years}`,{signal:controller.signal,cache:'no-store'})
         .then((r) => r.json())
         .then((j) => {
           if (!alive) return;
           if (j.ok) {
             setData(j.data as ValuationResp);
+            displayed=true;
+            recentResults.delete(key);recentResults.set(key,{at:Date.now(),value:j.data});
+            while(recentResults.size>20)recentResults.delete(recentResults.keys().next().value!);
             setLoading(false);
+            if(j.data.historyCache?.state==='updating' && refreshes<4)timer=setTimeout(()=>load(1,refreshes+1),3000);
             return;
           }
           throw new Error(j.error ?? '估值数据加载失败');
@@ -402,16 +411,17 @@ export default function ValuationSection({ code }: { code: string }) {
           if (!alive) return;
           // 上游行情源偶发被拦截（WAF 501 / 限频）：稍候自动重试，避免整块报错
           if (attempt < 2) {
-            timer = setTimeout(() => load(attempt + 1), 1500);
+            timer = setTimeout(() => load(attempt + 1,refreshes), 1500);
             return;
           }
-          setErr(e instanceof Error ? e.message : String(e));
+          if(!displayed)setErr(e instanceof Error ? e.message : String(e));
           setLoading(false);
         });
     };
     load(1);
     return () => {
       alive = false;
+      controller.abort();
       if (timer) clearTimeout(timer);
     };
   }, [code, years]);
@@ -491,6 +501,7 @@ export default function ValuationSection({ code }: { code: string }) {
           ))}
         </div>
       </div>
+      {data?.historyCache?.state==='updating' && <p role="status" className="mb-2 text-xs text-slate-500">已显示上次生成的走势，后台正在刷新；数据截至日期见图表下方。</p>}
       {loading && (
         <div
           role="status"

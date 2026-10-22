@@ -111,6 +111,7 @@ export default function QuoteHeader({ quote }: { quote: Quote }) {
           )}
           {isStock && (
             <>
+              <StockFillButton key={quote.symbol} code={quote.symbol} name={quote.name} />
               {xueqiu && (
                 <XueqiuLink key={quote.symbol} url={xueqiu} name={quote.name} />
               )}
@@ -126,7 +127,6 @@ export default function QuoteHeader({ quote }: { quote: Quote }) {
               >
                 财务体检
               </Link>
-              <StockFillButton code={quote.symbol} name={quote.name} />
               <WatchlistButton code={quote.symbol} name={quote.name} />
             </>
           )}

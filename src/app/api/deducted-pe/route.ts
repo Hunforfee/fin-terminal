@@ -1,4 +1,6 @@
 import type { NextRequest } from 'next/server';
+import { after } from 'next/server';
+import { cachedDisplayMetric } from '@/lib/displayMetricCache';
 import { ok, fail, sp } from '@/lib/api';
 import { normalizeStockCode } from '@/lib/datasource/codes';
 import { fetchDeductedPeriods, computeDeductedPe } from '@/lib/datasource/deductedPe';
@@ -68,7 +70,8 @@ export async function GET(request: NextRequest) {
   if (!symbols.length) return fail('缺少 codes 参数，如 codes=600519,000858', 400);
 
   try {
-    const data = await mapLimit(symbols, 4, one);
+    const data = await mapLimit(symbols, 4, symbol=>cachedDisplayMetric(symbol,'deducted-pe',15000,()=>one(symbol),
+      value=>value.pe!==null || value.quarters.length===4,work=>after(work)));
     return ok(data satisfies DeductedPeRow[]);
   } catch (e) {
     return fail(e instanceof Error ? e.message : '扣非 PE 获取失败', 502, e);

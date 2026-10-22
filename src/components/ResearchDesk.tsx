@@ -1,6 +1,8 @@
 'use client';
 
 import { personalStorage } from '@/lib/personalStorage';
+import { useAccount } from './AccountProvider';
+import { WATCHLIST_DISPLAY_KEY, readWatchlistDisplay, takePrioritized, requestLimiter } from '@/lib/watchlistDisplay';
 import { useResearchWorkspace } from './ResearchWorkspaceProvider';
 import { researchNoteSymbol } from '@/lib/researchNotes';
 
@@ -43,6 +45,7 @@ export default function ResearchDesk({
   management?: boolean;
 }) {
   const wl = useWatchlist();
+  const { user } = useAccount();
   const { codes, ready, remove } = wl;
   const [activeGroup, setActiveGroup] = useState('all');
   const [updateVersion, setUpdateVersion] = useState(0);
@@ -93,6 +96,12 @@ export default function ResearchDesk({
   const [finLoading, setFinLoading] = useState(false);
   const [error, setError] = useState('');
   const [finErrors, setFinErrors] = useState<string[]>([]);
+  const priority=useRef<string[]>([]);
+  const hydratedFor=useRef<string|null>(null);
+  const hasSnapshot=useRef(false);
+  const [snapshotAt,setSnapshotAt]=useState<number|null>(null);
+  const [metricDates,setMetricDates]=useState<Map<string,{at:string;stale:boolean}>>(()=>new Map());
+  const owner=user?.id??'anonymous';
   const { notebook, openNotes, setNoteCompanies } = useResearchWorkspace();
   const noteCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -248,9 +257,43 @@ export default function ResearchDesk({
   }, []);
   // Sorting and group edits do not refetch unchanged market/financial data.
   const signature = [...codes].sort().join(',');
+  useEffect(()=>{
+    if(!ready)return;
+    let saved=null;
+    try {saved=readWatchlistDisplay(personalStorage.getItem(WATCHLIST_DISPLAY_KEY),codes);}catch{}
+    setQuotes(saved?.quotes??[]);setOtherAssets(saved?.otherAssets??[]);setFinancials(saved?.financials??[]);
+    setDividendYields(new Map(saved?.dividendYields??[]));setDeductedPes(new Map(saved?.deductedPes??[]));
+    setMetricDates(new Map(saved?.metricDates??[]));
+    setSnapshotAt(saved?.at??null);hasSnapshot.current=!!saved;hydratedFor.current=owner;
+  },[owner,ready]);
+  useEffect(()=>{
+    if(!ready || hydratedFor.current!==owner || !quotes.length && !otherAssets.length)return;
+    const timer=setTimeout(()=>{
+      try {personalStorage.setItem(WATCHLIST_DISPLAY_KEY,JSON.stringify({version:1,at:Date.now(),quotes,otherAssets,financials,
+        dividendYields:[...dividendYields],deductedPes:[...deductedPes],metricDates:[...metricDates]}));}catch{/* A full browser cache never blocks the table. */}
+    },750);
+    return ()=>clearTimeout(timer);
+  },[quotes,otherAssets,financials,dividendYields,deductedPes,metricDates,ready,owner]);
   useEffect(() => {
     if (!ready) return;
     let alive = true;
+    const controller=new AbortController(),limited=requestLimiter(2,controller.signal);
+    const read=(url:string,init?:RequestInit)=>limited(()=>fetch(url,{...init,signal:controller.signal}).then(r=>r.json()));
+    const metricTimers=new Set<ReturnType<typeof setTimeout>>();
+    type MetricRow={symbol:string;dy?:number|null;pe?:number|null;calculatedAt?:string;stale?:boolean};
+    const applyMetrics=(rows:MetricRow[],metric:'dy'|'peDeducted')=>{
+      setMetricDates(prev=>{const next=new Map(prev);for(const row of rows)if(row.calculatedAt)next.set(`${row.symbol}:${metric}`,{at:row.calculatedAt,stale:!!row.stale});return next;});
+      const update=(previous:Map<string,number|null>)=>{const next=new Map(previous);for(const row of rows)next.set(row.symbol,(metric==='dy'?row.dy:row.pe)??null);return next;};
+      if(metric==='dy')setDividendYields(update);else setDeductedPes(update);
+    };
+    const refreshMetrics=(url:string,metric:'dy'|'peDeducted',rows:MetricRow[],attempt=0)=>{
+      if(attempt>=3 || !rows.some(row=>row.stale))return;
+      const timer=setTimeout(()=>{
+        metricTimers.delete(timer);if(!alive)return;
+        void read(url).then(next=>{if(alive && next.ok && Array.isArray(next.data)){applyMetrics(next.data,metric);refreshMetrics(url,metric,next.data,attempt+1);}}).catch(()=>{});
+      },3000);
+      metricTimers.add(timer);
+    };
     setQuotes((prev) => prev.filter((q) => codes.includes(q.symbol)));
     setOtherAssets((prev) => prev.filter((q) => codes.includes(q.symbol)));
     setFinancials((prev) =>
@@ -260,7 +303,7 @@ export default function ResearchDesk({
     );
     setError('');
     setFinErrors([]);
-    setLoading(true);
+    setLoading(!hasSnapshot.current);
     setFinLoading(false);
     async function load() {
       if (!codes.length) {
@@ -270,17 +313,19 @@ export default function ResearchDesk({
       try {
         const all: Quote[] = [];
         // Imports can exceed the quote API's 200-symbol request limit.
-        for (let offset = 0; offset < codes.length && alive; offset += 100) {
-          const batch = codes.slice(offset, offset + 100);
-          const q = await fetch(
+        const waitingQuotes=new Set(codes);
+        while(waitingQuotes.size && alive) {
+          const batch = takePrioritized(waitingQuotes,priority.current,100);
+          const q = await read(
             `/api/quote?codes=${encodeURIComponent(batch.join(','))}`,
-          ).then((r) => r.json());
+          );
           if (!alive) return;
           if (!q.ok || !Array.isArray(q.data))
             throw Error(q.error ?? '行情获取失败');
           all.push(...q.data);
-          setQuotes(all.filter((x) => x.kind === 'stock'));
-          setOtherAssets(all.filter((x) => x.kind !== 'stock'));
+          const merged=(previous:Quote[],kind:boolean)=>[...previous.filter(q=>codes.includes(q.symbol) && !all.some(next=>next.symbol===q.symbol)),...all.filter(q=>(q.kind==='stock')===kind)];
+          setQuotes(prev=>merged(prev,true));setOtherAssets(prev=>merged(prev,false));
+          setLoading(false);
         }
         const rows = all.filter((x) => x.kind === 'stock');
         setLoading(false);
@@ -288,10 +333,12 @@ export default function ResearchDesk({
         async function loadFinancials() {
           try {
             // Sequential batches keep first paint fast without flooding the financial source.
-            for (let i = 0; i < rows.length && alive; i += 4) {
-              const batch = rows.slice(i, i + 4);
+            const pending=new Set(rows.map(r=>r.symbol));
+            while(pending.size && alive) {
+              const targets=takePrioritized(pending,priority.current,4);
+              const batch = rows.filter(r=>targets.includes(r.symbol));
               try {
-                const j = await fetch('/api/finance-compare', {
+                const j = await read('/api/finance-compare', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
@@ -300,7 +347,7 @@ export default function ResearchDesk({
                     granularity: 'quarter',
                     fields: ['roe', 'netMargin', 'ocfPerShare', 'debtRatio'],
                   }),
-                }).then((r) => r.json());
+                });
                 if (!alive) return;
                 if (!j.ok) throw Error(j.error ?? '财报获取失败');
                 setFinancials((prev) => [
@@ -326,23 +373,16 @@ export default function ResearchDesk({
         }
         async function loadDividendYields() {
           // 与估值分析共用算法；A股预期、港股完整财年静态，失败留空。
-          for (let i = 0; i < rows.length && alive; i += 20) {
-            const batch = rows.slice(i, i + 20);
+          const pending=new Set(rows.map(r=>r.symbol));
+          while(pending.size && alive) {
+            const targets=takePrioritized(pending,priority.current,4);
+            const batch = rows.filter(r=>targets.includes(r.symbol));
             try {
-              const j = await fetch(
-                `/api/dividend-yield?codes=${encodeURIComponent(batch.map((r) => r.symbol).join(','))}`,
-              ).then((r) => r.json());
+              const url=`/api/dividend-yield?codes=${encodeURIComponent(batch.map((r) => r.symbol).join(','))}`;
+              const j = await read(url);
               if (!alive) return;
               if (j.ok && Array.isArray(j.data)) {
-                setDividendYields((prev) => {
-                  const next = new Map(prev);
-                  for (const row of j.data as {
-                    symbol: string;
-                    dy: number | null;
-                  }[])
-                    next.set(row.symbol, row.dy);
-                  return next;
-                });
+                applyMetrics(j.data,'dy');refreshMetrics(url,'dy',j.data);
               }
             } catch {
               /* 预期股息率不可用时该列显示「—」 */
@@ -351,20 +391,16 @@ export default function ResearchDesk({
         }
         async function loadDeductedPe() {
           // 扣非 PE 需要四个季度扣非净利润，单独批量取；失败只置空
-          for (let i = 0; i < rows.length && alive; i += 20) {
-            const batch = rows.slice(i, i + 20);
+          const pending=new Set(rows.map(r=>r.symbol));
+          while(pending.size && alive) {
+            const targets=takePrioritized(pending,priority.current,4);
+            const batch = rows.filter(r=>targets.includes(r.symbol));
             try {
-              const j = await fetch(
-                `/api/deducted-pe?codes=${encodeURIComponent(batch.map((r) => r.symbol).join(','))}`,
-              ).then((r) => r.json());
+              const url=`/api/deducted-pe?codes=${encodeURIComponent(batch.map((r) => r.symbol).join(','))}`;
+              const j = await read(url);
               if (!alive) return;
               if (j.ok && Array.isArray(j.data)) {
-                setDeductedPes((prev) => {
-                  const next = new Map(prev);
-                  for (const row of j.data as { symbol: string; pe: number | null }[])
-                    next.set(row.symbol, row.pe);
-                  return next;
-                });
+                applyMetrics(j.data,'peDeducted');refreshMetrics(url,'peDeducted',j.data);
               }
             } catch {
               /* 扣非 PE 不可用时该列显示「—」 */
@@ -384,8 +420,10 @@ export default function ResearchDesk({
     load();
     return () => {
       alive = false;
+      controller.abort();
+      for(const timer of metricTimers)clearTimeout(timer);
     };
-  }, [signature, ready]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [signature, ready, owner]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const financialMap = useMemo(
     () => new Map(financials.map((f) => [f.code, f])),
@@ -417,7 +455,7 @@ export default function ResearchDesk({
       quote[column as 'pe' | 'pb' | 'price' | 'changePct' | 'totalMarketCap'];
     return val != null && Number.isFinite(val) ? val : null;
   };
-  const rows = quotes
+  const rows = (hydratedFor.current===owner?quotes:[])
     .filter(
       (q) =>
         codeSet.has(q.symbol) &&
@@ -449,6 +487,7 @@ export default function ResearchDesk({
   const safePage = Math.floor(start / pageSize) + 1;
   const pageRows = rows.slice(start, start + pageSize);
   const visibleSignature = pageRows.map(q => q.symbol).join(',');
+  priority.current=[...new Set([...pageRows.map(q=>q.symbol),...savedCodes])];
   useEffect(() => {
     if (!updateVersion || !visibleSignature) return;
     const controller = new AbortController();
@@ -504,7 +543,7 @@ export default function ResearchDesk({
   const visibleSelected = selected.filter((symbol) =>
     rows.some((row) => row.symbol === symbol),
   );
-  const filteredOtherAssets = otherAssets
+  const filteredOtherAssets = (hydratedFor.current===owner?otherAssets:[])
     .filter(
       (q) =>
         codeSet.has(q.symbol) &&
@@ -556,9 +595,9 @@ export default function ResearchDesk({
           active={group}
           onChange={setActiveGroup}
           onConfigureColumns={() => setColumnsOpen(true)}
+          managementTools={<MarketUpdateButton codes={savedCodes} groupId={group} onComplete={() => setUpdateVersion(v => v + 1)} />}
           toolbar={
             <>
-            <MarketUpdateButton codes={savedCodes} groupId={group} onComplete={() => setUpdateVersion(v => v + 1)} />
             <input
               type="search"
               aria-label="筛选关注公司"
@@ -950,16 +989,18 @@ export default function ResearchDesk({
                   </td>
                   {columns.map((c) => {
                     const v = columnValue(q, c.id);
+                    const date=metricDates.get(`${q.symbol}:${c.id}`);
+                    const metricDate=date?` 指标生成于 ${new Date(date.at).toLocaleString('zh-CN',{hour12:false})}${date.stale?'，显示已保存数据，后台刷新中。':''}`:'';
                     return (
                       <td
                         key={c.id}
-                        title={c.id === 'dy'
+                        title={(c.id === 'dy'
                           ? q.dividendYieldMethod === 'hk-static'
                             ? `${q.dividendFiscalYear ?? '暂无完整'}财年静态股息率；每股现金股息 ${value(q.dividendPerShare?.total)} 港元（普通 ${value(q.dividendPerShare?.ordinary)}，特别 ${value(q.dividendPerShare?.special)}），按当前港元股价计算。`
                             : '预期股息率：按已公告方案估计未来一年的税前现金股息。'
                           : c.id === 'pb' && q.market === 'HK'
                             ? '港元股价 ÷ 同币种每股净资产，使用最新已披露财报。'
-                            : undefined}
+                            : ['roe','netMargin','ocfPerShare','debtRatio'].includes(c.id)?`财报报告期 ${financialMap.get(q.code)?.periods.at(-1)??'暂缺'}`:'')+metricDate || undefined}
                         className={`td !py-1 ${c.id === 'roe' ? 'font-semibold' : ''} ${c.id === 'dy' ? '!text-teal-700' : ''} ${typeof v === 'number' && v < 0 ? '!text-amber-700' : ''} ${c.id === 'period' ? '!text-xs !text-slate-500' : ''}`}
                       >
                         {c.id === 'period'
@@ -994,7 +1035,8 @@ export default function ResearchDesk({
         </div>
 
         <div className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-2 border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
-          {finLoading && <span role="status">财报加载中…</span>}
+          {snapshotAt && <span title="首次显示上次保存的数据，行情时间与财报报告期以各行显示为准">已显示缓存 · 保存于 {new Date(snapshotAt).toLocaleString('zh-CN',{hour12:false})}</span>}
+          {finLoading && <span role="status">财报后台刷新中，优先处理当前页…</span>}
           {finErrors.length > 0 && (
             <span className="text-amber-700" title={finErrors.join('、')}>
               财报暂不可用：{finErrors.length} 家公司

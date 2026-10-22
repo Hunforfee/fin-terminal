@@ -42,6 +42,6 @@ test('cold recent jobs pin initialization and failed-stage retry resumes its ear
  assert.equal((await queue.status('one')).failed,1);clock+=61000;
  await queue.submit('one',['600415'],true,'recent');t=await queue.claim();assert.equal(t.phase,0);assert.equal(t.initialize,true);
  await queue.finish(t.symbol,t.lease,undefined,false,1);
- const key='market-coverage:v1:sh600415:5';await store.write(marketRecord(key,'market-coverage','test',{status:'ready'},60000),null);
+ const key='market-coverage:v1:sh600415:10';await store.write(marketRecord(key,'market-coverage','test',{status:'ready'},60000),null);
  clock+=1100;t=await queue.claim();assert.equal(t.initialize,true,'mid-job coverage changes cannot change phase numbering');
 });

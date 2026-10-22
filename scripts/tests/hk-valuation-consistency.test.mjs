@@ -10,12 +10,15 @@ const cache = await load('datasource/cache');
 const { clearCache } = cache;
 const codes = await load('datasource/codes');
 const valuationInputs = await load('valuationInputs');
+const metricCache = await load('displayMetricCache');
 const route = {};
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/app/api/dividend-yield/route.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText, {
   exports: route,
   require(name) {
+    if(name==='next/server')return {after:()=>{}};
+    if(name==='@/lib/displayMetricCache')return metricCache;
     if (name === '@/lib/api') return {
       ok: data => ({ ok: true, data }), fail: error => ({ ok: false, error }),
       sp: request => new URL(request.url).searchParams,

@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server';
+import { after } from 'next/server';
 import { ok, fail, sp } from '@/lib/api';
 import { getValuation } from '@/lib/datasource';
 
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
   const years = Math.min(Math.max(Number(p.get('years') ?? 5) || 5, 1), 10);
   const method = p.get('method') === 'cutoff' ? 'cutoff' : 'disclosure';
   try {
-    return ok(await getValuation(code, years, method));
+    return ok(await getValuation(code, years, method, {schedule:work=>after(work)}));
   } catch (e) {
     return fail(e instanceof Error ? e.message : '估值计算失败', 502, e);
   }

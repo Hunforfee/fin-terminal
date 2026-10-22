@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { marketRecord, type MarketStore } from './marketStore';
 import { normalizeStockCode } from './datasource/codes';
+import { collectionPhases, coverageKey } from './marketHistoryPlan';
 
 const KEY = 'market-update-queue:v1';
 const COOLDOWN = 10 * 60e3;
 const LEASE = 5 * 60e3;
 type State = 'queued' | 'running' | 'done' | 'failed';
-export type UpdateMode = 'recent' | 'five-year' | 'daily';
+export type UpdateMode = 'recent' | 'ten-year' | 'daily' | 'five-year'; // five-year: stored legacy jobs only.
 interface Item { symbol: string; state: State; attempts: number; nextAt: number; mode?:UpdateMode; initialize?:boolean; phase?:number; phaseErrors?:Record<string,string>; doneAt?: number; error?: string; lease?: string; leaseUntil?: number }
 interface Job { id: string; owner: string; symbols: string[]; skipped: string[]; createdAt: number; mode?:UpdateMode; finishedAt?: number; result?: { done: number; failed: number; errors: { symbol: string; message: string }[] } }
 interface Queue { jobs: Job[]; items: Record<string, Item>; workerAt: number; pauseUntil: number }
@@ -26,6 +27,12 @@ export class MarketUpdateQueue {
       const row = await this.store.read<Queue>(KEY);
       const q = row?.payload ?? { jobs: [], items: {}, workerAt: 0, pauseUntil: 0 };
       const now = this.clock();
+      // Restart unfinished legacy fills under the new plan; old leases cannot finish them.
+      for (const item of Object.values(q.items)) if (item.mode === 'five-year' && ['queued','running'].includes(item.state)) {
+        Object.assign(item, { mode:'ten-year', initialize:true, state:'queued', phase:0, attempts:0, nextAt:now });
+        delete item.phaseErrors; delete item.error; delete item.lease; delete item.leaseUntil;
+      }
+      for (const job of q.jobs) if (job.mode === 'five-year' && !job.result) job.mode = 'ten-year';
       for (const job of q.jobs) if (!job.finishedAt && job.symbols.every(s => job.skipped.includes(s) || ['done', 'failed'].includes(q.items[s]?.state))) {
         const p = this.progress(q, job, now); job.finishedAt = now; job.result = { done: p.done, failed: p.failed, errors: p.errors };
       }
@@ -41,14 +48,17 @@ export class MarketUpdateQueue {
     if (j.result) return { id: j.id, mode:j.mode, total: j.symbols.length, skipped: j.skipped.length, ...j.result, running: 0, waiting: 0, finished: true, workerOnline: now - q.workerAt < 90e3, pausedUntil: q.pauseUntil };
     const active = j.symbols.filter(s => !j.skipped.includes(s)).map(s => q.items[s]);
     const count = (state: State) => active.filter(i => i?.state === state).length;
-    return { id: j.id, mode:j.mode,phase:active.find(i=>i?.state==='running')?.phase, total: j.symbols.length, done: count('done'), skipped: j.skipped.length, failed: count('failed'), running: count('running'), waiting: count('queued'),
+    const current = active.find(i=>i?.state==='running');
+    const phase = current ? collectionPhases(current.mode ?? 'recent', current.initialize ?? false)[current.phase ?? 0] : undefined;
+    return { id: j.id, mode:j.mode,phase, total: j.symbols.length, done: count('done'), skipped: j.skipped.length, failed: count('failed'), running: count('running'), waiting: count('queued'),
       finished: active.every(i => i && ['done', 'failed'].includes(i.state)), workerOnline: now - q.workerAt < 90e3,
       pausedUntil: q.pauseUntil, errors: active.filter(i => i?.state === 'failed').map(i => ({ symbol: i.symbol, message: i.error ?? '更新失败' })) };
   }
   async submit(owner: string, codes: unknown, retry = false, mode:UpdateMode='recent'): Promise<UpdateProgress> {
+    if (mode === 'five-year') mode = 'ten-year';
     const symbols = updateSymbols(codes);
-    const initialization=new Map(await Promise.all(symbols.map(async symbol=>[symbol,mode==='five-year' ||
-      (await this.store.read<{status:string}>(`market-coverage:v1:${symbol}:5`))?.payload.status!=='ready'] as const)));
+    const initialization=new Map(await Promise.all(symbols.map(async symbol=>[symbol,mode==='ten-year' ||
+      (await this.store.read<{status:string}>(coverageKey(symbol)))?.payload.status!=='ready'] as const)));
     return this.change((q, now) => {
       const previous = q.jobs.filter(j => j.owner === owner).at(-1);
       if (previous && !this.progress(q, previous, now).finished) return this.progress(q, previous, now);
@@ -64,9 +74,9 @@ export class MarketUpdateQueue {
       const skipped: string[] = [];
       for (const symbol of symbols) {
         const item = q.items[symbol];
-        if (item?.state === 'done' && now - (item.doneAt ?? 0) < COOLDOWN && (mode==='recent' || item.mode==='five-year')) { skipped.push(symbol); continue; }
+        if (item?.state === 'done' && now - (item.doneAt ?? 0) < COOLDOWN && (mode==='daily' || mode==='recent' && item.mode!=='daily' || item.mode==='ten-year')) { skipped.push(symbol); continue; }
         if (item && ['queued', 'running'].includes(item.state)) {
-          if(mode==='five-year' && item.mode!=='five-year')throw new UpdateQueueError('该股票正在更新，请完成后再补齐五年数据',409);
+          if(mode==='ten-year' && item.mode!=='ten-year')throw new UpdateQueueError('该股票正在更新，请完成后再补齐十年数据',409);
           continue;
         }
         if (item?.state === 'failed' && now - (item.doneAt ?? 0) < 60e3) throw new UpdateQueueError('失败后请稍候再重试', 429);

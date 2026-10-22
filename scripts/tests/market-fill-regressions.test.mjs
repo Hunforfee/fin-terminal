@@ -11,6 +11,7 @@ const gaps = await load('marketFillGaps'), codes = await load('datasource/codes'
 const { MarketUpdateQueue } = await load('marketUpdateQueue');
 const { mergeHkDividendEvents } = await load('hkDividendEvents');
 const hkHistory = await load('datasource/hkValuationHistory');
+const plan=await load('marketHistoryPlan');
 const now = Date.parse('2026-10-22T08:00:00Z');
 function memory() {
   const data = new Map();
@@ -80,9 +81,10 @@ test('uncertain events are not collapsed and special cash is not erased by a nul
 function coverageCollector(s) {
   let collection;
   collection = compile('src/lib/marketHistoryCollection.ts', name => {
+    if (name === './marketHistoryPlan') return plan;
     if (name === './marketStore') return { getMarketStore: () => s, marketRecord: market.marketRecord };
-    if (name === './datasource') return { getKLine: async () => ({ candles: [{ date: collection.fiveYearStart(), close: 10 }, { date: '2026-10-21', close: 10 }], source: 'test' }), getValuation: async () => {
-      const rows=Array.from({length:12},(_,i)=>({date:i?`2026-10-${String(i+10).padStart(2,'0')}`:collection.fiveYearStart(),pe:10,pb:1}));
+    if (name === './datasource') return { getKLine: async () => ({ candles: [{ date: collection.historyStart(), close: 10 }, { date: '2026-10-21', close: 10 }], source: 'test' }), getValuation: async () => {
+      const rows=Array.from({length:12},(_,i)=>({date:i?`2026-10-${String(i+10).padStart(2,'0')}`:collection.historyStart(),pe:10,pb:1}));
       return {history:rows,historyByMetric:{pe:rows,pb:rows}};
     } };
     if (name === './datasource/codes') return codes;
@@ -111,7 +113,7 @@ test('partial or all-null imported statements never satisfy the reader or readin
   });
   await assert.rejects(reader.fetchHkStatement('00016.HK','balance',[date]), /missing/);
   for (const key of ['source-hk-indicators:v1:00016.HK','watchlist-financial-inputs:v1:hk00016','hk-main-currency-v4:hk00016','hk-dividend-events-v4:hk00016']) s.seed(key, 'test', {});
-  for (const metric of ['pe','pb']) s.seed(hkHistory.hkRatioHistoryKey('hk00016',metric,5),'test',{});
+  for (const metric of ['pe','pb']) for(const years of [5,10]) s.seed(hkHistory.hkRatioHistoryKey('hk00016',metric,years),'test',{});
   const collection = coverageCollector(s);
   await assert.rejects(collection.collectHistoryPhase('hk00016',12,new AbortController().signal), /已保存可用数据/);
   const checked = (await s.read(collection.coverageKey('hk00016'))).payload;
@@ -188,27 +190,28 @@ function stockButton(fetch) {
     if(name==='react/jsx-runtime')return {Fragment:'fragment',jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})};
     if(name==='next/navigation')return {useRouter:()=>router};
     if(name==='@/lib/datasource/codes')return codes;
+    if(name==='@/lib/marketHistoryPlan')return plan;
     throw Error(name);
   },{fetch,setTimeout(fn,ms){const key=++id;timers.set(key,{fn,ms});return key;},clearTimeout(key){timers.delete(key);}});
   const render=()=>{index=0;return component.default({code:'hk00016',name:'新鸿基地产'});};
-  return {render,effects,timers,label:()=>render().props.children[0].props.children[1],async tick(ms){const [key,timer]=[...timers].find(([,t])=>t.ms===ms)??[];assert.ok(timer,`missing timer ${ms}`);timers.delete(key);await timer.fn();}};
+  return {render,effects,timers,label:()=>render().props.children[0].props['aria-label'],async tick(ms){const [key,timer]=[...timers].find(([,t])=>t.ms===ms)??[];assert.ok(timer,`missing timer ${ms}`);timers.delete(key);await timer.fn();}};
 }
 const progress=(id,finished,failed=0)=>({id,finished,total:1,done:finished&&!failed?1:0,failed,skipped:0,errors:failed?[{symbol:'hk00016',message:'数据缺失'}]:[]});
 const response=data=>({ok:true,json:async()=>({ok:true,data})});
 test('the stock button never labels a failed result as completed',async()=>{
   const button=stockButton(async()=>response(progress('job',true,1)));
   button.render().props.children[0].props.onClick();await new Promise(r=>setImmediate(r));
-  assert.equal(button.label(),'补齐失败');
+  assert.match(button.label(),/补齐失败/);
   assert.match(button.render().props.children[0].props.title,/数据缺失/);
 });
 test('the stock button keeps polling and can finish a second task on the same mount',async()=>{
-  let gets=0;
-  const button=stockButton(async(_url,o)=>response(o.method==='POST'?progress('second',false):progress(++gets>2?'second':'first',gets>1)));
-  button.render();button.effects[0]();await new Promise(r=>setImmediate(r));
-  await button.tick(5000);assert.equal(button.label(),'已补齐');
+  let gets=0,posts=0;
+  const button=stockButton(async(_url,o)=>response(o.method==='POST'?progress(++posts>1?'second':'first',false):progress(++gets>1?'second':'first',true)));
+  button.render().props.children[0].props.onClick();await new Promise(r=>setImmediate(r));
+  button.effects[0]();await new Promise(r=>setImmediate(r));assert.match(button.label(),/已补齐/);
   await button.tick(8000);
   button.render().props.children[0].props.onClick();await new Promise(r=>setImmediate(r));
   assert.match(button.label(),/补齐中/);
-  await button.tick(30000);assert.equal(button.label(),'已补齐');
+  await button.tick(30000);assert.match(button.label(),/已补齐/);
   assert.ok([...button.timers.values()].some(t=>t.ms===30000));
 });

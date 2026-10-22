@@ -1,6 +1,7 @@
 import { crossCheckMainlandRaw, MarketDataConflict } from '../klineCrossCheck';
 import { databaseOnly } from '../marketReadPolicy';
 import { getMarketStore } from '../marketStore';
+import { cachedValuationResult, valuationInputVersion, type ValuationCacheOptions } from '../valuationResultCache';
 import { sharedQuotes } from '../quoteInputs';
 import { getValuationPlans, getValuationDividends } from '../valuationInputs';
 import { fetchHkRatioHistory, attachHkValuationHistory } from './hkValuationHistory';
@@ -49,6 +50,7 @@ import {
   buildRealValuationSeries,
   buildTimelineFromStatements,
   summarizeReal,
+  seriesStats,
 } from '../valuation';
 import * as sinaFinStmt from './sinaFinStatements';
 import { buildDividendYieldByDate, adjustCandlesForChart } from '../analytics';
@@ -418,14 +420,33 @@ export async function getMinute(input: string): Promise<MinutePoint[]> {
  * 历史序列用**已披露定期报告**还原当期 TTM EPS 与 BPS（见 `lib/valuation.ts`），
  * 价格为不复权收盘价 —— 与前复权价倒推的旧口径相比，不会因除权而低估历史 PE。
  */
-export async function getValuation(input: string, years = 5, method: ValuationMethod = 'disclosure'): Promise<Valuation> {
+export async function getValuation(input: string, years = 5, method: ValuationMethod = 'disclosure', options: ValuationCacheOptions = {}): Promise<Valuation> {
+  const n=normalizeStockCode(input);
+  if(!n || n.kind!=='stock')throw Error('真实财报估值仅支持 A 股 / 港股股票');
+  const span=Math.min(Math.max(years,1),10);
+  const value=await cachedValuationResult(n.symbol,span,method,()=>calculateValuation(n.symbol,span,method),options);
+  if(n.market!=='HK' || !value.historyCache)return value;
+  // Historical samples are durable, while HK current cards still use live prices.
+  try {
+    const quote=await getQuote(n.symbol);
+    const current=await getHkCurrentValuation(n.symbol,quote?.stale?null:quote?.price??null);
+    const dyStats=seriesStats((value.historyByMetric?.dy??value.history).map(p=>p.dy),current.dividendYield);
+    return {...value,pe:current.pe,pb:current.pb,dividendYield:current.dividendYield,
+      dyPercentile:dyStats.percentile,...(value.stats?{stats:{...value.stats,dy:dyStats}}:{}),
+      dividendFiscalYear:current.fiscalYear,
+      dividendPerShare:{ordinary:current.ordinaryDps,special:current.specialDps,total:current.ttmDps},
+      marketComparison:{pe:quote?.marketPe??quote?.pe??null,pb:quote?.pb??null,ts:quote?.ts??null},
+      stale:!quote || quote.stale};
+  } catch {return {...value,stale:true,warnings:[...(value.warnings??[]),'当前港股估值刷新失败，保留已保存数据，请留意日期。']};}
+}
+async function calculateValuation(input: string, years = 5, method: ValuationMethod = 'disclosure'): Promise<Valuation> {
   const n = normalizeStockCode(input);
   if (!n || n.kind !== 'stock') throw new Error('真实财报估值仅支持 A 股 / 港股股票');
   if (n.market === 'HK') {
     const span = Math.min(Math.max(years, 1), 10);
     const [q, points] = await Promise.all([
       getQuote(n.symbol),
-      cached(`hk-indicators-currency-v3:${n.symbol}:${span}`, 6 * 3600e3,
+        cached(`hk-indicators-currency-v3:${n.symbol}:${span}:${await valuationInputVersion(getMarketStore(),n.symbol)}`, 6 * 3600e3,
         () => hkFinance.fetchHkIndicatorPoints(`${n.code}.HK`, span + 3)),
     ]);
     if (!q) throw new Error('行情获取失败');
@@ -444,7 +465,7 @@ export async function getValuation(input: string, years = 5, method: ValuationMe
     return { ...result, stale: q.stale };
   }
   const span = Math.min(Math.max(years, 1), 10);
-  return cached(`val-qfq-forward-dy-v3:${n.symbol}:${span}:${method}:${databaseOnly()}`, databaseOnly()?0:defaultTtl(), async () => {
+  return cached(`val-qfq-forward-dy-v3:${n.symbol}:${span}:${method}:${databaseOnly()}:${await valuationInputVersion(getMarketStore(),n.symbol)}`, databaseOnly()?0:defaultTtl(), async () => {
     const start = ymdYearsAgo(span);
     // 行情两条 3200 根分页链（raw/qfq）并行会触发上游限频，改为串行；
     // qfq 仅用于价格曲线；缺失时留空，不能缩短用 raw 计算的估值历史。

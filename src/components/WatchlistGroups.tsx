@@ -80,11 +80,13 @@ export default function WatchlistGroups({
   onChange,
   toolbar,
   onConfigureColumns,
+  managementTools,
 }: {
   active: string;
   onChange: (id: string) => void;
   toolbar?: ReactNode;
   onConfigureColumns?: () => void;
+  managementTools?: ReactNode;
 }) {
   const wl = useWatchlist();
   const menuId = useId();
@@ -246,13 +248,13 @@ export default function WatchlistGroups({
           >
             管理
           </button>
-          {menuOpen && (
             <div
+              hidden={!menuOpen}
               ref={menuPanel}
               id={menuId}
               role="group"
               aria-label="自选管理"
-              className="absolute right-0 top-[calc(100%+4px)] z-40 w-36 max-w-[calc(100vw-24px)] rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+              className={`absolute right-0 top-[calc(100%+4px)] z-40 ${managementTools?'w-80':'w-36'} max-h-[calc(100dvh-160px)] max-w-[calc(100vw-24px)] overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg`}
             >
               {onConfigureColumns && (
                 <button
@@ -276,8 +278,8 @@ export default function WatchlistGroups({
                 }}
                 className="block min-h-8 w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50"
               >管理分组</button>
+              {managementTools}
             </div>
-          )}
           </div>
         </div>
       </div>

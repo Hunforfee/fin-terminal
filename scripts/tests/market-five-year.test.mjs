@@ -104,10 +104,10 @@ test('complete IPO history outranks a newer short source tail in database mode',
  }finally{if(old===undefined)delete process.env.MARKET_READ_MODE;else process.env.MARKET_READ_MODE=old;}
 });
 
-test('multi-phase jobs checkpoint and resume, and a recent update cannot satisfy five-year completion',async()=>{
+test('multi-phase jobs checkpoint and resume, and a recent update cannot satisfy ten-year completion',async()=>{
  const store=memory();let clock=now;const q=new MarketUpdateQueue(store,()=>clock);
  await q.submit('one',['600519']);let t=await q.claim();await q.finish(t.symbol,t.lease);clock+=61000;
- await q.submit('one',['600519'],false,'five-year');t=await q.claim();assert.equal(t.phase,0);assert.equal(t.mode,'five-year');
+ await q.submit('one',['600519'],false,'ten-year');t=await q.claim();assert.equal(t.phase,0);assert.equal(t.mode,'ten-year');
  await q.finish(t.symbol,t.lease,undefined,false,1);assert.equal((await q.status('one')).finished,false);
  clock+=1001;t=await new MarketUpdateQueue(store,()=>clock).claim();assert.equal(t.phase,1);
  await q.finish(t.symbol,t.lease,'source offline');clock+=61000;t=await q.claim();assert.equal(t.phase,1);
@@ -116,7 +116,7 @@ test('multi-phase jobs checkpoint and resume, and a recent update cannot satisfy
 
 test('close scheduler deduplicates overlapping groups and only schedules once per close date',async()=>{
  const store=memory();await registerCollection(store,'one',['600519','300498']);await registerCollection(store,'two',['600519']);
- for(const symbol of ['sh600519','sz300498'])await store.write(marketRecord(`market-coverage:v1:${symbol}:5`,'market-coverage','test',{status:'ready'},60000,now),null);
+ for(const symbol of ['sh600519','sz300498'])await store.write(marketRecord(`market-coverage:v1:${symbol}:10`,'market-coverage','test',{status:'ready'},60000,now),null);
  assert.equal(closeTarget(Date.parse('2026-10-21T08:29:00Z')),'2026-10-20');
  assert.equal(closeTarget(Date.parse('2026-10-21T08:30:00Z')),'2026-10-21');
  assert.equal(closeTarget(Date.parse('2026-10-24T08:30:00Z')),'2026-10-23');
@@ -129,7 +129,7 @@ test('close scheduler deduplicates overlapping groups and only schedules once pe
 
 test('daily updates schedule every registered stock; only not-ready ones initialize',async()=>{
  const store=memory();await registerCollection(store,'one',['600519','300498']);
- await store.write(marketRecord('market-coverage:v1:sh600519:5','market-coverage','test',{status:'ready'},60000,now),null);
+ await store.write(marketRecord('market-coverage:v1:sh600519:10','market-coverage','test',{status:'ready'},60000,now),null);
  assert.equal((await scheduleMarketClose(store,now)).scheduled,2);
  const q=new MarketUpdateQueue(store,()=>now);
  const claimed=[];let t;while((t=await q.claim())){claimed.push(t);await q.finish(t.symbol,t.lease);}

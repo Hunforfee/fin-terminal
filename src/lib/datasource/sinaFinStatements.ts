@@ -164,7 +164,7 @@ export async function fetchYearStatement(code: string, year: number, shareHistor
 export async function fetchStatementHistory(code: string, years = 12): Promise<FinStatementPoint[]> {
   const thisYear = new Date().getFullYear();
   const yearList: number[] = [];
-  for (let y = thisYear; yearList.length < Math.min(10,Math.max(1,years)) + 1 && y >= 1998; y--) yearList.push(y);
+  for (let y = thisYear; yearList.length < Math.min(11,Math.max(1,years)) + 1 && y >= 1998; y--) yearList.push(y);
 
   const shareHistory = await cachedMarketInput(`shares-v3:${code}`,'share-events','sina-shares:10000shares',1800e3,
     ()=>fetchShareHistory(code),rows=>validateDatedRows(rows as unknown as Record<string,unknown>[],'date',['sharesWan']));

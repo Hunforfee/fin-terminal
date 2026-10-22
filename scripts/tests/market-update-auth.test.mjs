@@ -100,7 +100,8 @@ test('single-stock fill needs no group sync and DELETE stops only the caller',as
   const single=await exported.POST(rawRequest(JSON.stringify({single:true,codes:['sh600519'],mode:'five-year'})));
   assert.equal(single.status,200);
   const args=submitted.at(-1);
-  assert.equal(args[0],'real');assert.deepEqual([...args[1]],['sh600519']);assert.equal(args[2],false);assert.equal(args[3],'five-year');
+  assert.equal(args[0],'real');assert.deepEqual([...args[1]],['sh600519']);assert.equal(args[2],false);assert.equal(args[3],'ten-year');
+  assert.equal((await exported.POST(rawRequest(JSON.stringify({single:true,codes:['sh600519'],mode:'recent'})))).status,400,'手动更新数据入口已移除');
   assert.equal((await exported.POST(rawRequest(JSON.stringify({single:true,codes:['sh600519','sh600000']})))).status,400,'单只补齐不接受多只');
   assert.equal((await exported.POST(rawRequest(JSON.stringify({codes:['sh600519']})))).status,400,'缺少分组仍被拒绝');
   const stopped=await exported.DELETE({safe:true,headers:new Headers()});

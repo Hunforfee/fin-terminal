@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAccount } from './AccountProvider';
 import { normalizeStockCode } from '@/lib/datasource/codes';
 import type { UpdateProgress } from '@/lib/marketUpdateQueue';
+import { collectionPhaseLabel } from '@/lib/marketHistoryPlan';
 
 async function requestUpdate(body?: unknown, method: 'GET' | 'POST' | 'DELETE' = body ? 'POST' : 'GET') {
   const response = await fetch('/api/market-updates', {
@@ -25,9 +26,7 @@ export default function MarketUpdateButton({ codes, groupId, onComplete }: { cod
   const observed = useRef<string | null>(null);
   const eligible = [...new Set(codes.flatMap(c => { const n = normalizeStockCode(c); return n ? [n.symbol] : []; }))];
   const active = !!progress && !progress.finished;
-  const phase=progress?.phase;
-  const phaseText=phase===undefined?'':phase>=3 && phase<=9 ? `${new Date(Date.now()+8*3600e3).getUTCFullYear()-(phase-3)} 年财报`
-    : ({0:'历史行情',1:'复权行情',2:'最新财务与分红',10:'估值基础数据',11:'财报公告日期',12:'公司资料',13:'完整性检查'} as Record<number,string>)[phase];
+  const phaseText=collectionPhaseLabel(progress?.phase);
   useEffect(() => {
     let alive = true; let timer: ReturnType<typeof setTimeout>;
     async function poll() {
@@ -45,12 +44,11 @@ export default function MarketUpdateButton({ codes, groupId, onComplete }: { cod
     return () => { alive = false; clearTimeout(timer); };
   }, [user?.id, busy]);
   useEffect(() => { setProgress(null); setError(''); observed.current = null; }, [user?.id]);
-  async function start(retry = false, mode:'recent'|'five-year'='recent') {
+  async function start(retry = false) {
     setBusy(true); setError('');
     try {
-      const selectedMode=retry?progress?.mode??mode:mode;
       const targets = retry ? progress?.errors.map(e => e.symbol).filter(s => eligible.includes(s)) ?? [] : eligible;
-      const value = await requestUpdate({ codes: targets, groupId, retry,mode:selectedMode });
+      const value = await requestUpdate({ codes: targets, groupId, retry,mode:'ten-year' });
       setProgress(value);
       if (value) {
         observed.current = value.finished ? null : value.id;
@@ -68,25 +66,23 @@ export default function MarketUpdateButton({ codes, groupId, onComplete }: { cod
     } catch (e) { setError(e instanceof Error ? e.message : '停止失败'); setDetails(true); }
     finally { setBusy(false); }
   }
-  return <div className="relative shrink-0">
-    <button type="button" disabled={busy || active || !eligible.length} onClick={()=>void start(false,'five-year')}
-      title="从网站接口补齐当前分组五年行情、财报及估值输入，无需导入文件；完成后每日收盘更新"
-      className="mr-1 h-8 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2.5 text-xs text-slate-600 hover:text-brand-600 disabled:opacity-60">补齐5年</button>
-    <button type="button" disabled={busy || active || !eligible.length} onClick={() => void start()}
-      title="只更新当前分组缺失或过期的近期价格、财务和分红，后台排队执行"
-      className="h-8 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2.5 text-xs text-slate-600 hover:border-brand-300 hover:text-brand-600 disabled:cursor-default disabled:opacity-60">
-      {busy ? '提交中…' : active ? `更新 ${progress.done + progress.skipped + progress.failed}/${progress.total}` : '更新数据'}
-    </button>
-    {(progress || error) && <button type="button" aria-expanded={details} aria-label="查看更新进度" onClick={() => setDetails(v => !v)}
-      className="ml-1 text-xs text-slate-500 hover:text-brand-600">{progress?.failed ? `${progress.failed} 失败` : active ? '进度' : error ? '详情' : '完成'}</button>}
-    {active && <button type="button" disabled={busy} onClick={() => void stop()}
-      title="停止本次补齐/更新：已排队和正在执行的阶段都会取消，已入库的数据保留"
-      className="ml-1 h-8 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2.5 text-xs text-slate-600 hover:border-red-300 hover:text-red-600 disabled:opacity-60">停止</button>}
-    {details && <div role="status" className="absolute right-0 top-10 z-30 w-72 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600 shadow-lg">
-      <div className="mb-2 flex justify-between font-medium text-slate-900"><span>{progress?.mode==='five-year'?'五年数据入库':'数据更新'}</span><button type="button" onClick={() => setDetails(false)} className="text-slate-400">关闭</button></div>
+  return <div className="border-t border-slate-100 px-3 py-2 text-xs">
+    <div className="flex flex-wrap items-center gap-2">
+      <button type="button" disabled={busy || active || !eligible.length} onClick={()=>void start()}
+        title="补齐当前分组十年行情、财报及估值输入，已有有效数据复用"
+        className="min-h-8 rounded-md px-2 text-slate-700 hover:bg-slate-50 hover:text-brand-600 disabled:opacity-60">
+        {busy ? '提交中…' : active ? `补齐中 ${progress.done + progress.skipped + progress.failed}/${progress.total}` : '补齐10年'}
+      </button>
+      {(progress || error) && <button type="button" aria-expanded={details} aria-label="查看补齐进度" onClick={() => setDetails(v => !v)}
+        className="min-h-8 text-slate-500 hover:text-brand-600">{details?'收起进度':'查看进度'}</button>}
+      {active && <button type="button" disabled={busy} onClick={() => void stop()}
+        title="停止本次补齐，已入库的数据保留" className="min-h-8 text-slate-500 hover:text-red-600 disabled:opacity-60">停止补齐</button>}
+    </div>
+    {details && <div role="status" className="mt-2 rounded-md bg-slate-50 p-2.5 leading-5 text-slate-600">
+      <p className="mb-1 font-medium text-slate-900">十年数据补齐</p>
       {error && <p className="mb-2 text-orange-700">{error}</p>}
       {progress && <>
-        <p>已完成 {progress.done} · 近期已更新 {progress.skipped} · 失败 {progress.failed}</p>
+        <p>已完成 {progress.done} · 已复用 {progress.skipped} · 失败 {progress.failed}</p>
         {active && phaseText && <p className="mt-1">正在处理：{phaseText}</p>}
         {active && <p className="mt-1">{!progress.workerOnline ? '等待后台执行器恢复，任务已保存' : progress.pausedUntil > Date.now() ? '来源限流，已自动暂停' : `排队 ${progress.waiting} · 执行 ${progress.running}`}</p>}
         <p className="mt-2 text-slate-400">缺失或校验失败的数据保留原记录。</p>

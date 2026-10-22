@@ -11,6 +11,7 @@ import { fetchShareHistory } from './datasource/sinaFinance';
 import { getWatchlistFinancialInputs } from './watchlistFinancialInputs';
 import { collectHistoryPhase, coverageKey } from './marketHistoryCollection';
 import { recordGapAfterFailure } from './marketFillGaps';
+import { collectionPhases } from './marketHistoryPlan';
 
 /** One short-range stock per tick. Slow work never runs in the browser POST. */
 export async function runMarketUpdateTick() {
@@ -25,21 +26,16 @@ export async function runMarketUpdateTick() {
   const budget = new UpstreamBudget(abort.signal);
   let error: string | undefined;
   let nextPhase:number|undefined;
-  const daily = task.mode === 'daily';
   let phases:number[] = [2,0,1,3,4,10,11,13,12];
   const startedAt = Date.now();
   try {
     const coverage=await store.read<{status:string}>(coverageKey(task.symbol));
     // New/partial stocks must initialize from website APIs even when added after
     // deployment or submitted by the daily scheduler. No broker seed.
-    const initialize=task.initialize??(task.mode==='five-year' || coverage?.payload.status!=='ready');
+    const initialize=task.initialize??(task.mode==='ten-year' || coverage?.payload.status!=='ready');
     // 轻量模式：仅当日价格增量 + 最新财报/分红(phase 2) 与库内完整性校验(phase 12)；
     // 完整历史复核由周日 recent 任务承担。未就绪标的仍走全量初始化。
-    phases = daily && !initialize
-      ? [2, 12]
-      : task.mode === 'five-year' || initialize
-        ? [0,1,2,3,4,5,6,7,8,9,10,11,13,12]
-        : [2,0,1,3,4,10,11,13,12];
+    phases = collectionPhases(task.mode, initialize);
     const phase=phases[task.phase];
     if(phase===undefined)throw Error('后台任务阶段无效');
     await withUpstreamBudget(budget, async () => {

@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { retainMarketPayload } from './marketRetention';
+import { normalizeStockCode } from './datasource/codes';
 
 export interface MarketRecord<T = unknown> {
   schema: 1; key: string; kind: string; source: string; payload: T;
@@ -25,6 +26,58 @@ export interface MarketStore {
   readVersions?(key: string, limit: number): Promise<MarketRecord[]>;
   remove?(key: string, expected: string): Promise<boolean>;
   pruneAux?(now: number): Promise<void>;
+}
+export const valuationRevisionKey = (symbol: string) => `valuation-input-version:v1:${symbol}`;
+const valuationKinds = new Set(['kline','financial-history','disclosure-dates','share-events','implemented-dividends',
+  'announced-dividend-plans','source-sina-page','source-sina-indicators','source-hk-indicators','source-hk-statement',
+  'source-hk-valuation','hk-recent-dividend-events','latest-hk-financials','hk-main-currency','deducted-periods']);
+function valuationSymbol(record: MarketRecord): string | null {
+  if(!valuationKinds.has(record.kind))return null;
+  const code=record.key.match(/(?:^|:)((?:sh|sz|bj)\d{6}|hk\d{5}|\d{5}\.HK|\d{6})(?=:|$)/)?.[1];
+  return code ? normalizeStockCode(code)?.symbol ?? null : null;
+}
+/** Derived chart versions change on actual input writes, including manual imports. */
+export function trackValuationChanges(store: MarketStore): MarketStore {
+  async function invalidate(symbols: Iterable<string>) {
+    for(const symbol of new Set(symbols)) {
+      const key=valuationRevisionKey(symbol);
+      let written=false;
+      for(let attempt=0;attempt<12 && !written;attempt++) {
+        const old=await store.read(key);
+        written=await store.write(marketRecord(key,'valuation-input-version','internal',{version:randomUUID()},365*864e5),old?.digest??null);
+      }
+      if(!written)throw Error('估值输入版本更新冲突，请重试');
+    }
+  }
+  return { ...store,
+    async write(record,expected) {
+      const symbol=valuationSymbol(record);
+      let changed=!!symbol && expected!==record.digest;
+      if(changed && record.kind==='kline') {
+        const old=await store.read(record.key);
+        // Query timestamps and paging bookkeeping are not changed market facts.
+        const facts=(row:MarketRecord)=>{const p=row.payload as any;return {source:row.source,symbol:p.symbol,adjust:p.adjust,
+          complete:p.complete,listingDate:p.listingDate,candles:p.candles};};
+        if(old && marketDigest(facts(old))===marketDigest(facts(record)))changed=false;
+      }
+      const written=await store.write(record,expected);
+      if(written && changed)await invalidate([symbol!]);
+      return written;
+    },
+    ...(store.writeInputs?{async writeInputs(items: {record:MarketRecord;expected:string|null}[]) {
+      const count=await store.writeInputs!(items);
+      const changed=items.filter(i=>i.expected!==i.record.digest && valuationSymbol(i.record));
+      const saved=await Promise.all(changed.map(async i=>(await store.read(i.record.key))?.digest===i.record.digest?valuationSymbol(i.record):null));
+      await invalidate(saved.filter((s):s is string=>!!s));
+      return count;
+    }}:{}),
+    ...(store.remove?{async remove(key:string,expected:string) {
+      const old=await store.read(key),removed=await store.remove!(key,expected);
+      const symbol=old && valuationSymbol(old);
+      if(removed && symbol)await invalidate([symbol]);
+      return removed;
+    }}:{}),
+  };
 }
 // PostgreSQL JSONB changes object-key order. Hash canonical JSON, not insertion order.
 export const marketDigest = (value: unknown) => createHash('sha256').update(JSON.stringify(value, (_key, v) =>
@@ -152,7 +205,7 @@ export function fileMarketStore(directory: string): MarketStore {
       await fs.rename(temp, target);
     }),
   };
-  return adapter;
+  return trackValuationChanges(adapter);
 }
 
 export function postgresMarketStore(connectionString: string, poolFactory?: () => Promise<any>, options:{initialize?:boolean;readOnly?:boolean}={}): MarketStore {
@@ -179,7 +232,7 @@ export function postgresMarketStore(connectionString: string, poolFactory?: () =
     `).then(() => {}).catch((e: unknown) => { ready = undefined; throw e; });
     await ready; return pool;
   };
-  return {
+  const adapter: MarketStore = {
     async close() { if(pool)await pool.end(); },
     coordinated: true,
     async scan(after, limit) {
@@ -310,6 +363,7 @@ export function postgresMarketStore(connectionString: string, poolFactory?: () =
       await db.query("DELETE FROM fin_market_incidents WHERE at < now() - interval '30 days'");
     },
   };
+  return options.readOnly ? adapter : trackValuationChanges(adapter);
 }
 
 let configured: MarketStore | undefined;

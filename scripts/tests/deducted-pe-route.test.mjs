@@ -39,6 +39,8 @@ function harness() {
   vm.runInNewContext(routeCode, {
     exports: routeExports,
     require(name) {
+      if(name==='next/server')return {after:()=>{}};
+      if(name==='@/lib/displayMetricCache')return {cachedDisplayMetric:(_symbol,_name,_ttl,produce)=>produce()};
       if (name === '@/lib/api') return {
         ok: data => ({ ok: true, data }), fail: error => ({ ok: false, error }),
         sp: request => new URL(request.url).searchParams,

@@ -1,0 +1,104 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {load} from './load-modules.mjs';
+const {marketRecord,trackValuationChanges,valuationRevisionKey}=await load('marketStore');
+const {cachedValuationResult,valuationResultKey,valuationInputVersion}=await load('valuationResultCache');
+const {cachedDisplayMetric}=await load('displayMetricCache');
+function memory(){const rows=new Map();return {rows,read:async key=>structuredClone(rows.get(key)??null),
+ async write(row,expected){if((rows.get(row.key)?.digest??null)!==expected)return false;rows.set(row.key,structuredClone(row));return true;},
+ remove:async key=>rows.delete(key),incident:async()=>{}};}
+const value=(pe=10)=>({code:'600519',history:[{date:'2026-10-21',pe,pb:1,dy:2,close:10}],pe,pb:1,dividendYield:2,stale:false});
+async function change(store,key,payload,kind='financial-history'){
+ const old=await store.read(key);return store.write(marketRecord(key,kind,'test',payload,60000),old?.digest??null);
+}
+test('a stored complete valuation survives new request contexts without invoking the producer',async()=>{
+ const store=memory();let calls=0;
+ await cachedValuationResult('sh600519',10,'disclosure',async()=>{calls++;return value();},{},store);
+ const reused=await cachedValuationResult('sh600519',10,'disclosure',async()=>{throw Error('must not fetch');},{},store);
+ assert.equal(reused.pe,10);assert.equal(reused.historyCache.state,'fresh');assert.equal(calls,1);
+});
+test('5/10-year windows, methods and stock identities never share a result',async()=>{
+ const store=memory();let calls=0;
+ for(const [symbol,years,method]of [['sh600519',5,'disclosure'],['sh600519',10,'disclosure'],['sh600519',10,'cutoff'],['hk00700',10,'disclosure']])
+   await cachedValuationResult(symbol,years,method,async()=>{calls++;return value();},{},store);
+ assert.equal(calls,4);assert.equal(store.rows.size,4);
+});
+test('actual input changes dirty only the related stock; unchanged writes and live quotes do not',async()=>{
+ const store=trackValuationChanges(memory());
+ assert.equal(await valuationInputVersion(store,'sh600519'),'initial');
+ await change(store,'statements-v3:600519:11',[{date:'2026-06-30',npParent:10}]);
+ const before=await valuationInputVersion(store,'sh600519');assert.notEqual(before,'initial');
+ await change(store,'statements-v3:600519:11',[{date:'2026-06-30',npParent:10}]);
+ await change(store,'latest-quote:v1:sh600519:raw-provider',{price:20},'latest-quote');
+ assert.equal(await valuationInputVersion(store,'sh600519'),before);
+ assert.equal(await valuationInputVersion(store,'hk00700'),'initial');
+ await change(store,'statements-v3:600519:11',[{date:'2026-06-30',npParent:11}]);
+ assert.notEqual(await valuationInputVersion(store,'sh600519'),before);
+});
+test('changed inputs show the saved chart immediately, then replace it after deferred rebuild',async()=>{
+ const store=trackValuationChanges(memory()),scheduled=[];
+ await cachedValuationResult('sh600519',10,'disclosure',async()=>value(),{},store);
+ await change(store,'shares-v3:600519',[{date:'2026-10-21',sharesWan:100}],'share-events');
+ let built=false;
+ const old=await cachedValuationResult('sh600519',10,'disclosure',async()=>{built=true;return value(20);},{schedule:fn=>scheduled.push(fn)},store);
+ assert.equal(old.pe,10);assert.equal(old.historyCache.state,'updating');assert.equal(built,false);
+ await scheduled[0]();
+ const next=await cachedValuationResult('sh600519',10,'disclosure',async()=>{throw Error('unexpected');},{},store);
+ assert.equal(next.pe,20);assert.equal(next.historyCache.state,'fresh');
+});
+test('failed background rebuild never erases a good curve; readiness can request strict failure',async()=>{
+ const store=trackValuationChanges(memory()),scheduled=[];
+ await cachedValuationResult('sh600519',10,'disclosure',async()=>value(),{},store);
+ await change(store,'disclosures-v3:600519:12',{$marketMap:[['2026-06-30','2026-08-01']]},'disclosure-dates');
+ const old=await cachedValuationResult('sh600519',10,'disclosure',async()=>{throw Error('source unavailable');},{schedule:fn=>scheduled.push(fn)},store);
+ await scheduled[0]();assert.equal(old.pe,10);
+ assert.equal((await store.read(valuationResultKey('sh600519',10,'disclosure'))).payload.value.pe,10);
+ await assert.rejects(cachedValuationResult('sh600519',10,'disclosure',async()=>{throw Error('source unavailable');},{force:true},store),/source unavailable/);
+});
+test('cold concurrent requests share one build and empty/stale curves are never persisted',async()=>{
+ const store=memory();let calls=0;
+ await Promise.all(Array.from({length:4},()=>cachedValuationResult('sh600519',5,'disclosure',async()=>{calls++;await new Promise(r=>setTimeout(r,10));return value();},{},store)));
+ assert.equal(calls,1);
+ await cachedValuationResult('hk00700',5,'disclosure',async()=>({...value(),history:[]}),{},store);
+ assert.equal(await store.read(valuationResultKey('hk00700',5,'disclosure')),null);
+ await cachedValuationResult('hk00700',10,'disclosure',async()=>({...value(),stale:true}),{},store);
+ assert.equal(await store.read(valuationResultKey('hk00700',10,'disclosure')),null);
+});
+test('a cold build acquiring its own inputs is repeated against stable saved versions',async()=>{
+ const store=trackValuationChanges(memory());let calls=0;
+ const result=await cachedValuationResult('sh600519',10,'disclosure',async()=>{
+   if(++calls===1)await change(store,'shares-v3:600519',[{date:'2026-10-21',sharesWan:100}],'share-events');
+   return value(calls);
+ },{},store);
+ assert.equal(calls,2);assert.equal(result.pe,2);
+ assert.equal((await store.read(valuationResultKey('sh600519',10,'disclosure'))).payload.revision,await valuationInputVersion(store,'sh600519'));
+});
+test('metric caches preserve explicit zero and refresh expired results without blocking the reply',async()=>{
+ const store=memory(),scheduled=[];let calls=0;
+ const produce=async()=>{calls++;return {dy:0};};
+ await cachedDisplayMetric('sh600519','dy',60000,produce,v=>v.dy!==null,fn=>scheduled.push(fn),store);
+ const hit=await cachedDisplayMetric('sh600519','dy',60000,produce,v=>v.dy!==null,fn=>scheduled.push(fn),store);
+ assert.equal(hit.dy,0);assert.equal(calls,1);
+ const key='display-metric:v1:sh600519:dy',row=await store.read(key);row.refreshAfter='2000-01-01T00:00:00Z';store.rows.set(key,row);
+ const old=await cachedDisplayMetric('sh600519','dy',60000,async()=>({dy:null}),v=>v.dy!==null,fn=>scheduled.push(fn),store);
+ assert.equal(old.dy,0);assert.equal(old.stale,true);assert.equal(scheduled.length,1);
+ await scheduled[0]();assert.equal((await store.read(key)).payload.value.dy,0);
+});
+test('deleting a source input dirties its saved valuation and rejected writes do not',async()=>{
+ const store=trackValuationChanges(memory());
+ await change(store,'source-hk-valuation:v1:hk00700:pe:10',{rows:[]},'source-hk-valuation');
+ const key='source-hk-valuation:v1:hk00700:pe:10',row=await store.read(key),version=await valuationInputVersion(store,'hk00700');
+ assert.equal(await store.write({...row,digest:'fake'},'wrong'),false);
+ assert.equal(await valuationInputVersion(store,'hk00700'),version);
+ await store.remove(key,row.digest);assert.notEqual(await valuationInputVersion(store,'hk00700'),version);
+ assert.ok(await store.read(valuationRevisionKey('hk00700')));
+});
+test('price query bookkeeping does not invalidate charts, but a changed close does',async()=>{
+ const store=trackValuationChanges(memory()),key='kline:v2:sh600519:day:none:tencent:prices-only';
+ const price={symbol:'sh600519',adjust:'none',complete:true,candles:[{date:'2026-10-21',open:10,high:11,low:9,close:10}],queries:[{at:1}]};
+ await change(store,key,price,'kline');const version=await valuationInputVersion(store,'sh600519');
+ await change(store,key,{...price,queries:[{at:2}]},'kline');
+ assert.equal(await valuationInputVersion(store,'sh600519'),version);
+ await change(store,key,{...price,candles:[{...price.candles[0],close:11}]},'kline');
+ assert.notEqual(await valuationInputVersion(store,'sh600519'),version);
+});

@@ -96,7 +96,7 @@ test('applyGapClassification records actionable gaps and clears the rest', async
 test('recordGapAfterFailure skips when phase 12 already wrote fresh coverage', async () => {
   const s = store();
   const startedAt = Date.parse('2026-10-21T12:00:00Z');
-  s.seed('market-coverage:v1:hk00016:5', 'market-coverage', { status: 'partial', missingInputs: ['hk-dividend-events-v4:hk00016'], gaps: [], checkedAt: new Date(startedAt + 60e3).toISOString() });
+  s.seed('market-coverage:v1:hk00016:10', 'market-coverage', { status: 'partial', missingInputs: ['hk-dividend-events-v4:hk00016'], gaps: [], checkedAt: new Date(startedAt + 60e3).toISOString() });
   assert.equal(await gaps.recordGapAfterFailure(s, 'hk00016', { phase: 3, error: 'boom', startedAt }), null);
   // 更早 tick 留下的旧 coverage 仍参与分类
   const stale = await gaps.recordGapAfterFailure(s, 'hk00016', { phase: 3, error: 'boom', startedAt: startedAt + 600e3 }, now);

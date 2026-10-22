@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
       const coverage = (await store.read<Record<string, unknown>>(coverageKey(symbol)))?.payload ?? null;
       if (!coverage || !['ready', 'partial'].includes(String(coverage.status))) throw Error('覆盖复核结果缺失或无效');
       const classified = classifyCoverage(coverage as { status?: string; missingInputs?: unknown; gaps?: unknown } | null);
-      const gap = await applyGapClassification(store, symbol, classified, { mode: 'five-year' });
+      const gap = await applyGapClassification(store, symbol, classified, { mode: 'ten-year' });
       if (gap) results.push({ symbol, status: 'remaining', cleared: false, remaining: { mcp: gap.mcp, manual: gap.manual } });
       else results.push({ symbol, status: 'cleared', cleared: true });
     } catch (e) {

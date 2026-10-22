@@ -1,5 +1,7 @@
 import { getValuationPlans, getValuationDividends } from '@/lib/valuationInputs';
 import type { NextRequest } from 'next/server';
+import { after } from 'next/server';
+import { cachedDisplayMetric } from '@/lib/displayMetricCache';
 import { ok, fail, sp } from '@/lib/api';
 import { normalizeStockCode } from '@/lib/datasource/codes';
 import { getKLine, getQuote, getHkCurrentValuation } from '@/lib/datasource';
@@ -94,9 +96,9 @@ export async function GET(request: NextRequest) {
   try {
     const data = await mapLimit(symbols, 4, async (symbol) => ({
       symbol,
-      ...(symbol.startsWith('hk')
+      ...await cachedDisplayMetric(symbol,'dividend-yield',symbol.startsWith('hk')?15000:15*60e3,async()=>symbol.startsWith('hk')
         ? await hkYield(symbol)
-        : { dy: await expectedYield(symbol), method: 'announced-forward' as const }),
+        : { dy: await expectedYield(symbol), method: 'announced-forward' as const },value=>value.dy!==null,work=>after(work)),
     }));
     return ok(data satisfies DividendYieldRow[]);
   } catch (e) {

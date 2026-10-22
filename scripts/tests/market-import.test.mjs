@@ -106,7 +106,7 @@ test('invalid units, duplicate fields, future financials and Hong Kong currency 
   assert.equal(s.data.size,0);
 });
 test('ten-year pruning keeps disclosure dates aligned with the remaining financial columns',()=>{
-  const p=retention.retainMarketPayload('source-sina-page',{dates:['2016-09-30','2016-12-31'],announceDates:['2016-10-20','2017-03-30'],rows:[{kind:'field',name:'营业收入',vals:['1','2']}]},now);
+  const p=retention.retainMarketPayload('source-sina-page',{dates:['2010-09-30','2016-12-31'],announceDates:['2010-10-20','2017-03-30'],rows:[{kind:'field',name:'营业收入',vals:['1','2']}]},now);
   assert.deepEqual(p.dates,['2016-12-31']);assert.deepEqual(p.announceDates,['2017-03-30']);assert.deepEqual(p.rows[0].vals,['2']);
 });
 test('batch imports reject inconsistent overlaps and duplicates and survive ten-year boundary pruning',async()=>{

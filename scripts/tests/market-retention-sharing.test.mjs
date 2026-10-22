@@ -17,7 +17,7 @@ test('ten-calendar-year cutoff handles leap days and prunes aligned financial co
   assert.equal(marketCutoff(now),'2016-10-21');assert.equal(marketCutoff(Date.parse('2024-02-29T04:00Z')),'2014-02-28');
   const page={dates:['2016-09-30','2016-12-31','2026-06-30'],rows:[{kind:'field',name:'收入',vals:['1','2','3']},{kind:'group',name:'现金流',vals:[]}],unit:'万元'};
   const kept=retainMarketPayload('source-sina-page',page,now);
-  assert.deepEqual(kept.dates,['2016-12-31','2026-06-30']);assert.deepEqual(kept.rows[0].vals,['2','3']);assert.equal(kept.rows[1].kind,'group');
+  assert.deepEqual(kept.dates,['2016-09-30','2016-12-31','2026-06-30']);assert.deepEqual(kept.rows[0].vals,['1','2','3']);assert.equal(kept.rows[1].kind,'group');
   const series=retainMarketPayload('watchlist-financial-inputs',{periods:page.dates,periodLabels:['old','a','b'],series:{roe:[1,2,3]}},now);
   assert.deepEqual(series.series.roe,[2,3]);assert.deepEqual(series.periodLabels,['a','b']);
 });

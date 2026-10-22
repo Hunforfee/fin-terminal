@@ -11,6 +11,8 @@ const market = await load('marketStore');
 const auth = await load('marketImportAuth');
 const session = await load('auth/session');
 const retention = await load('marketRetention');
+const datasource = await load('datasource/sinaStatements');
+const plan = await load('marketHistoryPlan');
 const now = Date.parse('2026-10-21T13:00:00Z');
 function store() {
   const data = new Map();
@@ -148,7 +150,7 @@ test('Hong Kong indicator imports land on the site key, merge fields, and prune 
   await hkRecords.writeHkIndicators(s,{symbol:'hk00639',points:[{date:'2026-06-30',raw:{ROE_AVG:13},currency:'港元',kind:'semi',label:'中报'}]},now);
   const q=(await s.read(key)).payload[0].raw;
   assert.equal(q.BASIC_EPS,0.8);assert.equal(q.ROE_AVG,13);
-  await assert.rejects(hkRecords.writeHkIndicators(s,{symbol:'hk00639',points:[{date:'2015-06-30',raw:{ROE_AVG:1},currency:'港元',kind:'semi',label:'中报'}]},now),/超出保留期/);
+  await assert.rejects(hkRecords.writeHkIndicators(s,{symbol:'hk00639',points:[{date:'2014-06-30',raw:{ROE_AVG:1},currency:'港元',kind:'semi',label:'中报'}]},now),/超出保留期/);
   await assert.rejects(hkRecords.writeHkIndicators(s,{symbol:'hk00639',points:[{date:'2027-06-30',raw:{ROE_AVG:1},currency:'港元',kind:'semi',label:'中报'}]},now));
   await assert.rejects(hkRecords.writeHkIndicators(s,{symbol:'hk00639',points:[]},now));
   await assert.rejects(hkRecords.writeHkIndicators(s,{symbol:'600415',points:[{date:'2026-06-30',raw:{},currency:'CNY',kind:'semi',label:'中报'}]},now));
@@ -193,4 +195,38 @@ test('actual shares have an explicit unit and replace the obsolete wrong field, 
   assert.equal((await s.read('shares-v3:000923')).payload[0].sharesWan,65272.8961);
   await assert.rejects(records.writeShareHistory(s,{symbol:'sz000923',unit:'wan',rows:[{date:'2025-12-31',shares:652728961}]},now));
   await assert.rejects(records.writeShareHistory(s,{symbol:'sz000923',unit:'shares',rows:[{date:'2025-12-31',shares:652728960}]},now),/冲突/);
+});
+
+test('financial admission is year-granular: boundary reports of the ten-year window are accepted',async()=>{
+  // now=2026-10-21 → reportCutoff=2015-01-01；旧口径（marketCutoff=2016-10-21）会拒掉下面前两个报告期。
+  const s=store(),input={symbol:'600415',statement:'profit',reportDates:['2016-09-30'],items:[{name:'营业收入',vals:[100]}]};
+  // 2016 三季报：十年窗口左边界（2016-10-21）之前最后一个已披露报告期，必须可入库。
+  await records.writeFinanceStatements(s,input,now);
+  assert.ok(await s.read('source-sina-page:v1:600415:profit:2016'));
+  // 2015 年报：覆盖检查按 FINANCIAL_LOOKBACK=11 年要求它，导入侧必须肯收（此前结构性不可达）。
+  await records.writeFinanceStatements(s,{...input,reportDates:['2015-12-31']},now);
+  assert.ok(await s.read('source-sina-page:v1:600415:profit:2015'));
+  // 再早一年的年报仍须拒绝，保留边界不失控。
+  await assert.rejects(records.writeFinanceStatements(s,{...input,reportDates:['2014-12-31']},now),/超出十年保留期限/);
+  // 站点抓取入口同样按年度放行 2015（范围检查是同步抛错，用 throws）。
+  assert.throws(()=>datasource.fetchStatementSourcePage('600415','profit',2014),/超出十年保留期限/);
+  assert.equal(plan.financialEarliestYear(now),2015);
+  assert.equal(plan.reportCutoff(now),'2015-01-01');
+  assert.equal(retention.marketCutoff(now),'2016-10-21');
+});
+
+test('financial history keeps the boundary-year row after the union write-back',async()=>{
+  const s=store();
+  const input={symbol:'600415',unit:'wan',reportDates:['2015-12-31','2025-12-31'],
+    items:[{code:'npParent',vals:[1000,900]},{code:'equityParent',vals:[5000,4500]}]};
+  await records.writeFinancialHistory(s,input,now);
+  const rows=(await s.read('statements-v3:600415:11')).payload;
+  assert.ok(rows.some(r=>r.date==='2015-12-31'),'2015 年报行不应在 union 写回时被过滤');
+});
+
+test('Hong Kong statement admission uses the same year-granular cutoff',async()=>{
+  const s=store();
+  await hkRecords.writeHkStatements(s,{symbol:'hk00013',statement:'balance',rows:[{date:'2015-06-30',itemCode:'TOTAL_ASSETS',itemName:'资产总计',amount:100000000}]},now);
+  assert.ok(await s.read('source-hk-statement:v1:00013.HK:balance:2015-06-30'));
+  await assert.rejects(hkRecords.writeHkStatements(s,{symbol:'hk00013',statement:'balance',rows:[{date:'2014-06-30',itemCode:'TOTAL_ASSETS',itemName:'资产总计',amount:100000000}]},now),/超出保留期/);
 });

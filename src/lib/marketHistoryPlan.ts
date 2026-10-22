@@ -9,6 +9,19 @@ export function historyStart(now = Date.now()) {
   if (date.getUTCMonth() !== month) date.setUTCDate(0);
   return date.toISOString().slice(0, 10);
 }
+/**
+ * 财报/财务指标等「输入数据」的准入下限。
+ *
+ * 图表窗口（historyStart）是日期粒度——十年前的今天；而覆盖检查（marketHistoryCollection）
+ * 按年份要求最近 FINANCIAL_LOOKBACK=HISTORY_YEARS+1 年的财报页。若输入准入也按日期粒度，
+ * 窗口左边界之前最近一个已披露报告期（前一年年报、当年各季报）会被一并拒绝：
+ * 2016-10-24 起算的十年窗口，其最早一批交易日只有 2016-09-30 三季报可作估值依据，
+ * 而该日期早于日期粒度的截止点。故输入准入放宽一年、按年度粒度，
+ * 与覆盖检查口径一致；保留层（source-sina-page 等多留 2 年）本就允许。
+ */
+export const financialEarliestYear = (now = Date.now()) =>
+  new Date(now + 8 * 3600e3).getUTCFullYear() - HISTORY_YEARS - 1;
+export const reportCutoff = (now = Date.now()) => `${financialEarliestYear(now)}-01-01`;
 // Keep IDs 10–13 stable for existing gap records and the independent resolve API.
 export function financialYearForPhase(phase: number, now = Date.now()): number | null {
   const offset = phase >= 3 && phase <= 9 ? phase - 3 : phase >= 14 && phase <= 18 ? phase - 7 : null;

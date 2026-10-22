@@ -154,7 +154,8 @@ export async function fetchSinaFinancial(
     periods,
     periodLabels: periods.map(periodLabel),
     series,
-    source: [...new Set(pages.filter((p):p is IndicatorSourcePage=>!!p).map(p=>financialPageSource(p,'sina:reported-indicators')))].join(' + '),
+    source: [...new Set([...pages.filter((p):p is IndicatorSourcePage=>!!p).map(p=>financialPageSource(p,'sina:reported-indicators')),
+      ...(debt.size?['eastmoney:explicit-interest-debt-ratio']:[])])].join(' + '),
   };
 }
 

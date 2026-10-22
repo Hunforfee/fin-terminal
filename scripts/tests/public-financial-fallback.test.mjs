@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {load} from './load-modules.mjs';
 const em=await load('datasource/eastmoneyStatements');
-const {fetchStatementSourcePage}=await load('datasource/sinaStatements');
+const {fetchStatementSourcePage,fetchCustomFinancials}=await load('datasource/sinaStatements');
 const {fetchIndicatorSourceYear}=await load('datasource/sinaFinancial');
 const {storedMarketInput}=await load('marketInputs');
 const {marketRecord}=await load('marketStore');
@@ -67,6 +67,25 @@ test('every mainland exchange uses the same fallback, with no sample-stock white
   }
   assert.equal(calls.filter(u=>u.hostname==='datacenter.eastmoney.com').length,3);
   assert.ok(calls.every(u=>!u.hostname.includes('mcp')));
+}));
+test('a valid Sina page is reused without requesting a backup provider',()=>networkFixture(async calls=>{
+  const original=globalThis.fetch;let count=0;
+  globalThis.fetch=async url=>{
+    count++;assert.equal(new URL(String(url)).hostname,'money.finance.sina.com.cn');
+    // Minimal GBK source fixture: report-date header and one numeric subject.
+    return new Response(Buffer.concat([Buffer.from('<tr><td>'),Buffer.from('b1a8b1edc8d5c6da','hex'),
+      Buffer.from('</td><td>2025-03-31</td></tr><tr><td style="padding-left:30px">asset</td><td>10</td></tr>')]));
+  };
+  try{
+    const value=await fetchStatementSourcePage('600519','balance',2025);
+    assert.equal(value.rows[0].vals[0],'10');assert.match(em.financialPageSource(value),/^sina:/);
+    await fetchStatementSourcePage('600519','balance',2025);assert.equal(count,1);
+  }finally{globalThis.fetch=original;}
+}));
+test('custom financial API exposes the real fallback contributor instead of a Sina-only label',()=>networkFixture(async()=>{
+  const value=await fetchCustomFinancials('600519',['pl_归属于母公司所有者的净利润'],1);
+  assert.match(value.source,/eastmoney:/);assert.equal(value.source.includes('sina-statements'),false);
+  assert.equal(value.series['pl_归属于母公司所有者的净利润'][0],12345.6789);
 }));
 test('empty general-industry financials try verified bank/securities/insurance tables, never a different stock',async()=>{
   const original=globalThis.fetch,calls=[];

@@ -277,6 +277,7 @@ async function fetchOneStatement(
   id: StatementId,
   years: number,
   byDate: Map<string, Map<string, number | null>>,
+  sources: Set<string>,
 ): Promise<void> {
   const meta = STATEMENT_META[id];
   const pages = await Promise.all(
@@ -291,6 +292,7 @@ async function fetchOneStatement(
   );
   for (const p of pages) {
     if (!p || p.dates.length === 0) continue;
+    sources.add(financialPageSource(p));
     for (let i = 0; i < p.dates.length; i++) {
       const date = p.dates[i];
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
@@ -335,6 +337,7 @@ export async function fetchCustomFinancials(
   if (fields.length === 0) throw new Error('未指定任何字段');
 
   const byDate = new Map<string, Map<string, number | null>>();
+  const sources = new Set<string>();
 
   const statementFields = fields.filter((k) => /^(bs|pl|cf)_/.test(k) && !INTEREST_FIELDS.some(f => f === k));
   const indicatorKeys = fields.filter((k) => !/^(bs|pl|cf)_/.test(k) && k !== 'interestDebtRatio');
@@ -343,6 +346,7 @@ export async function fetchCustomFinancials(
   if (fields.includes('interestDebtRatio')) {
     tasks.push((async () => {
       const rows = await fetchDebtRatios(code, years).catch(() => new Map<string, number | null>());
+      if(rows.size)sources.add('eastmoney:explicit-interest-debt-ratio');
       for (const [date, value] of rows) {
         const rec = byDate.get(date) ?? new Map<string, number | null>();
         rec.set('interestDebtRatio', value);
@@ -353,12 +357,13 @@ export async function fetchCustomFinancials(
   const statementIds = new Set(statementFields.map(key =>
     (key.startsWith('bs_') ? 'balance' : key.startsWith('pl_') ? 'profit' : 'cashflow') as StatementId));
   for (const id of statementIds) {
-    tasks.push(fetchOneStatement(code, id, years, byDate));
+    tasks.push(fetchOneStatement(code, id, years, byDate, sources));
   }
   if (fields.some(k => INTEREST_FIELDS.some(f => f === k))) {
     tasks.push((async () => {
       // 分红/财报附注明细缺失时保留空值，不回退到净财务费用或现金流附注。
       const rows = await fetchInterestExpenses(code, years).catch(() => new Map<string, Map<string,number|null>>());
+      if(rows.size)sources.add('eastmoney:explicit-interest-expense');
       for (const [date, values] of rows) {
         const rec = byDate.get(date) ?? new Map<string,number|null>();
         for (const [key,value] of values) if (fields.includes(key)) rec.set(key,value);
@@ -374,6 +379,7 @@ export async function fetchCustomFinancials(
         const { fetchSinaFinancial } = await import('./sinaFinancial');
         const f = await fetchSinaFinancial(code, years, name).catch(() => null);
         if (!f) return;
+        if(f.source)sources.add(f.source);
         for (let i = 0; i < f.periods.length; i++) {
           let rec = byDate.get(f.periods[i]);
           if (!rec) {
@@ -406,7 +412,7 @@ export async function fetchCustomFinancials(
       periods,
       periodLabels: periods.map((d) => periodLabel(d, 'half')),
       series,
-      source: PROVIDER_NAME,
+      source: [...sources].sort().join(' + ') || 'public-financials',
     },
     years,
   );

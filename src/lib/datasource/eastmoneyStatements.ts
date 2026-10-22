@@ -126,24 +126,24 @@ async function fetchYear(code: string, id: keyof typeof reports, year: number) {
   for (const reportName of candidates) {
     const rows:RawRow[]=[];
     for (let page=1; page<=2; page++) {
-    const url=new URL('https://datacenter.eastmoney.com/securities/api/data/v1/get');
-    url.search=new URLSearchParams({reportName,columns:'ALL',
-      filter:`(SECUCODE="${secucode}")(REPORT_DATE>='${year}-01-01')(REPORT_DATE<='${year}-12-31')`,
-      pageSize:'10',pageNumber:String(page),sortColumns:'REPORT_DATE',sortTypes:'-1'}).toString();
-    const j=await fetchJson<{success?:boolean;code?:number;message?:string;result?:{data?:RawRow[];pages?:number}|null}>(url.toString(),
-      {timeoutMs:12000,retries:0,headers:{Referer:'https://emweb.securities.eastmoney.com/'}});
-    // Empty general-industry reports are not proof that a bank/insurer has no
-    // financials. Do not fan out after timeouts, HTTP limits or malformed replies.
-    if(j.success===false && j.result==null && /返回数据为空/.test(j.message??''))break;
-    if(j.success !== true || !Array.isArray(j.result?.data) || !Number.isInteger(j.result.pages) || (j.result.pages??0)<1 || (j.result.pages??0)>2)
-      throw Error('东方财富备用财报不可用或分页不完整');
-    rows.push(...j.result.data);
-    if(page===j.result.pages){
-      const valid=validateEastmoneyFinancialRows(rows,code,year);
-      if(familyHints.size>=512)familyHints.delete(familyHints.keys().next().value!);
-      familyHints.set(`${code}:${id}`,{reportName,until:Date.now()+3600e3});
-      return {rows:valid,reportName};
-    }
+      const url=new URL('https://datacenter.eastmoney.com/securities/api/data/v1/get');
+      url.search=new URLSearchParams({reportName,columns:'ALL',
+        filter:`(SECUCODE="${secucode}")(REPORT_DATE>='${year}-01-01')(REPORT_DATE<='${year}-12-31')`,
+        pageSize:'10',pageNumber:String(page),sortColumns:'REPORT_DATE',sortTypes:'-1'}).toString();
+      const j=await fetchJson<{success?:boolean;code?:number;message?:string;result?:{data?:RawRow[];pages?:number}|null}>(url.toString(),
+        {timeoutMs:12000,retries:0,headers:{Referer:'https://emweb.securities.eastmoney.com/'}});
+      // Empty general-industry reports are not proof that a bank/insurer has no
+      // financials. Do not fan out after timeouts, HTTP limits or malformed replies.
+      if(j.success===false && j.result==null && /返回数据为空/.test(j.message??''))break;
+      if(j.success !== true || !Array.isArray(j.result?.data) || !Number.isInteger(j.result.pages) || (j.result.pages??0)<1 || (j.result.pages??0)>2)
+        throw Error('东方财富备用财报不可用或分页不完整');
+      rows.push(...j.result.data);
+      if(page===j.result.pages){
+        const valid=validateEastmoneyFinancialRows(rows,code,year);
+        if(familyHints.size>=512)familyHints.delete(familyHints.keys().next().value!);
+        familyHints.set(`${code}:${id}`,{reportName,until:Date.now()+3600e3});
+        return {rows:valid,reportName};
+      }
     }
   }
   throw Error('东方财富备用财报分页未结束');

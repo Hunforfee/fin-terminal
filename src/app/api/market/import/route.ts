@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getMarketStore, marketRecord } from '@/lib/marketStore';
 import { importDailyPrices } from '@/lib/marketImportedBars';
 import { denyReason, importAdminIds, readImportIdentity } from '@/lib/marketImportAuth';
+import { maintainToken, readMaintainIdentity } from '@/lib/marketMaintainAuth';
 import { writeHkDividendEvents, writeHkIndicators, writeHkStatements } from '@/lib/marketHkImportRecords';
 import { klineCrossConflicts, writeDividendImplemented, writeDividendPlans, writeFinancialHistory, writeFinanceStatements, writeShareHistory } from '@/lib/marketImportRecords';
 
@@ -15,6 +16,24 @@ const LOG_KEY = 'import-log:v1';
 const LOG_LIMIT = 200;
 interface LogEntry { at: string; userId: string; action: string; detail?: unknown }
 
+/** 写入身份：浏览器管理员会话（原路径）或维护令牌（机器客户端，如异地维护端）。 */
+interface ImportIdentity { userId: string; via: 'session' | 'maintain-token' }
+
+/**
+ * 鉴权解析顺序：
+ * 1. 维护令牌（x-fin-maintain-token / Bearer）：无浏览器会话的机器客户端走此路，
+ *    身份记为令牌指纹 maintain:<fp12>，可单独撤销/轮换，不读任何账号数据；
+ * 2. 登录会话 + MARKET_IMPORT_ADMIN_IDS 白名单 + 同源校验：网站管理员原路径不变。
+ * 两条路都不通时 fail closed。
+ */
+function authorizeImport(request: NextRequest): { identity: ImportIdentity } | { denied: string; status: number } {
+  const machine = readMaintainIdentity(request);
+  if (machine) return { identity: { userId: machine.tokenId, via: 'maintain-token' } };
+  const denied = denyReason(request, true);
+  if (denied) return { denied, status: denied.includes('登录') ? 401 : 403 };
+  return { identity: { userId: readImportIdentity(request)!.userId, via: 'session' } };
+}
+
 async function appendLog(store: NonNullable<ReturnType<typeof getMarketStore>>, entry: LogEntry) {
   for (let i = 0; i < 3; i++) {
     const old = await store.read<{ entries: LogEntry[] }>(LOG_KEY).catch(() => null);
@@ -23,15 +42,18 @@ async function appendLog(store: NonNullable<ReturnType<typeof getMarketStore>>, 
   }
 }
 
-/** GET /api/market/import —— 身份与白名单自检 + 最近导入日志 */
+/** GET /api/market/import —— 身份自检（会话或维护令牌）+ 最近导入日志 */
 export async function GET(request: NextRequest) {
-  const identity = readImportIdentity(request);
+  const machine = maintainToken() ? readMaintainIdentity(request) : null;
+  const sessionIdentity = machine ? null : readImportIdentity(request);
   const store = getMarketStore();
-  const log = identity && store ? (await store.read<{ entries: LogEntry[] }>(LOG_KEY).catch(() => null))?.payload?.entries ?? [] : [];
+  const log = (machine || sessionIdentity) && store ? (await store.read<{ entries: LogEntry[] }>(LOG_KEY).catch(() => null))?.payload?.entries ?? [] : [];
   return json({
     ok: true,
-    authorized: !!identity,
-    userId: identity?.userId ?? null,
+    authorized: !!(machine || sessionIdentity),
+    via: machine ? 'maintain-token' : sessionIdentity ? 'session' : null,
+    userId: machine?.tokenId ?? sessionIdentity?.userId ?? null,
+    maintainTokenConfigured: !!maintainToken(),
     adminConfigured: importAdminIds().length > 0,
     log: log.slice(-50).reverse(),
   });
@@ -39,9 +61,9 @@ export async function GET(request: NextRequest) {
 
 /** POST /api/market/import —— 分类型导入：kline / finance / financial-history / share-history / dividend-plans / dividend-impl / hk-statements / hk-indicators / hk-dividend-events */
 export async function POST(request: NextRequest) {
-  const denied = denyReason(request, true);
-  if (denied) return json({ ok: false, error: denied }, denied.includes('登录') ? 401 : 403);
-  const identity = readImportIdentity(request)!;
+  const auth = authorizeImport(request);
+  if ('denied' in auth) return json({ ok: false, error: auth.denied }, auth.status);
+  const identity = auth.identity;
   const store = getMarketStore();
   if (!store) return json({ ok: false, error: '市场数据库不可用' }, 503);
 

@@ -154,9 +154,8 @@ test('resolve returns an error when partial coverage cannot be persisted', async
     if (name==='next/server') return { NextResponse:{json:(body,o)=>({body,status:o?.status??200})} };
     if (name==='@/lib/marketStore') return { getMarketStore:()=>({read:async()=>({payload:{status:'partial',missingInputs:['hk-dividend-events-v4:hk00016']}})}) };
     if (name==='@/lib/marketImportAuth') return {denyReason:()=>null,readImportIdentity:()=>({userId:'test'})};
-    if (name==='@/lib/marketHistoryCollection') return {coverageKey:s=>s,collectHistoryPhase:async()=>{throw Error('已保存可用数据；缺失');}};
-    if (name==='@/lib/marketFillGaps') return {...gaps,applyGapClassification:async()=>{throw Error('database failure');},readFillGap:async()=>null};
-    if (name==='@/lib/datasource/codes') return codes;
+    if (name==='@/lib/marketFillGaps') return {...gaps,listFillGaps:async()=>[]};
+    if (name==='@/lib/marketGapResolve') return {resolveMarketGaps:async()=>[{symbol:'hk00016',status:'error',cleared:false,error:'database failure'}]};
     throw Error(name);
   });
   const response = await route.POST({text:async()=>JSON.stringify({symbols:['hk00016']})});

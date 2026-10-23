@@ -149,6 +149,19 @@ export class MarketUpdateQueue {
     const job = q?.jobs.filter(j => j.owner === owner).at(-1);
     return q && job ? this.progress(q, job, this.clock()) : null;
   }
+  /** 全局 worker 暂停截止时间（0 = 未暂停）。 */
+  async workerPausedUntil(): Promise<number> {
+    const row = await this.store.read<Queue>(KEY);
+    return row?.payload?.pauseUntil ?? 0;
+  }
+  /** 管理员主动暂停/恢复后台队列消费：暂停期间 claim() 不派发新任务，在飞阶段照常收尾。 */
+  async setWorkerPaused(paused: boolean, durationMs = 24 * 3600e3): Promise<number> {
+    if (!Number.isFinite(durationMs) || durationMs <= 0 || durationMs > 7 * 24 * 3600e3) throw new UpdateQueueError('暂停时长无效（最长 7 天）', 400);
+    return this.change((q, now) => {
+      q.pauseUntil = paused ? now + durationMs : 0;
+      return q.pauseUntil;
+    });
+  }
   async claim(): Promise<{ symbol: string; lease: string; mode:UpdateMode;targetDate?:string;phase:number;initialize?:boolean;phaseErrors?:Record<string,string> } | null> {
     return this.change((q, now) => {
       q.workerAt = now;

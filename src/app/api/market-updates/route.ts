@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getMarketStore } from '@/lib/marketStore';
 import { MarketUpdateQueue, UpdateQueueError, updateSymbols } from '@/lib/marketUpdateQueue';
 import { localUpdatePreview, updateIdentity } from '@/lib/marketUpdateAuth';
+import { denyReason } from '@/lib/marketImportAuth';
 import { sameOriginMutation } from '@/lib/auth/session';
 import { registerCollection } from '@/lib/marketCollection';
 export const runtime = 'nodejs';
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
       else throw e;
     }
     if(identity.allowed)await registerCollection(getMarketStore()!,identity.owner,identity.allowed);
-    return json({ ok: true, data: await q.status(identity.owner) });
+    return json({ ok: true, data: await q.status(identity.owner), workerPausedUntil: await q.workerPausedUntil() });
   }
   catch (e) { return failure(e); }
 }
@@ -78,5 +79,24 @@ export async function DELETE(request: NextRequest) {
     const identity = await updateIdentity(request);
     const data = await q.cancel(identity.owner);
     return json({ ok: true, data });
+  } catch (e) { return failure(e); }
+}
+
+/**
+ * PUT /api/market-updates —— 管理员主动暂停/恢复后台队列消费（body: {paused: boolean, hours?}）。
+ * 暂停期间后台执行器不再派发新任务（在飞阶段照常收尾）；已排队的任务保留，恢复后继续。
+ */
+export async function PUT(request: NextRequest) {
+  if (!sameOriginMutation(request)) return json({ ok: false, error: '请求来源无效' }, 403);
+  try {
+    const q = queue(request);
+    const denied = denyReason(request, true);
+    if (denied) return json({ ok: false, error: denied }, denied.includes('登录') ? 401 : 403);
+    let body: { paused?: unknown; hours?: unknown };
+    try { body = JSON.parse(await readBody(request)); } catch { throw new UpdateQueueError('请求格式无效', 400); }
+    if (typeof body.paused !== 'boolean') throw new UpdateQueueError('paused 必须是布尔值', 400);
+    const hours = body.hours === undefined ? 24 : Number(body.hours);
+    const data = await q.setWorkerPaused(body.paused, hours * 3600e3);
+    return json({ ok: true, data: { pausedUntil: data } });
   } catch (e) { return failure(e); }
 }

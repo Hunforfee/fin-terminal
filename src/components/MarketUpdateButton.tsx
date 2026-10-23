@@ -5,7 +5,7 @@ import { normalizeStockCode } from '@/lib/datasource/codes';
 import type { UpdateProgress } from '@/lib/marketUpdateQueue';
 import { collectionPhaseLabel } from '@/lib/marketHistoryPlan';
 
-async function requestUpdate(body?: unknown, method: 'GET' | 'POST' | 'DELETE' = body ? 'POST' : 'GET') {
+async function requestUpdate(body?: unknown, method: 'GET' | 'POST' | 'PUT' | 'DELETE' = body ? 'POST' : 'GET') {
   const response = await fetch('/api/market-updates', {
     method, cache: 'no-store',
     credentials: 'same-origin',
@@ -14,7 +14,7 @@ async function requestUpdate(body?: unknown, method: 'GET' | 'POST' | 'DELETE' =
   });
   const result = await response.json();
   if (!response.ok || !result.ok) throw Error(result.error ?? '更新服务暂不可用');
-  return result.data as UpdateProgress | null;
+  return result;
 }
 export default function MarketUpdateButton({ codes, groupId, onComplete }: { codes: string[]; groupId: string; onComplete: () => void }) {
   const { user } = useAccount();
@@ -22,6 +22,8 @@ export default function MarketUpdateButton({ codes, groupId, onComplete }: { cod
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [details, setDetails] = useState(false);
+  const [workerPausedUntil, setWorkerPausedUntil] = useState(0);
+  const [workerBusy, setWorkerBusy] = useState(false);
   const completion = useRef(onComplete); completion.current = onComplete;
   const observed = useRef<string | null>(null);
   const eligible = [...new Set(codes.flatMap(c => { const n = normalizeStockCode(c); return n ? [n.symbol] : []; }))];
@@ -32,9 +34,11 @@ export default function MarketUpdateButton({ codes, groupId, onComplete }: { cod
     async function poll() {
       let next: UpdateProgress | null = null;
       try {
-        next = await requestUpdate();
+        const result = await requestUpdate();
+        next = result.data as UpdateProgress | null;
         if (!alive) return;
         setProgress(next);
+        setWorkerPausedUntil(result.workerPausedUntil ?? 0);
         if (next && !next.finished) observed.current = next.id;
         if (next?.finished && observed.current === next.id) { observed.current = null; completion.current(); }
       } catch { /* Polling never turns a running job into an apparent success. */ }
@@ -48,7 +52,7 @@ export default function MarketUpdateButton({ codes, groupId, onComplete }: { cod
     setBusy(true); setError('');
     try {
       const targets = retry ? progress?.errors.map(e => e.symbol).filter(s => eligible.includes(s)) ?? [] : eligible;
-      const value = await requestUpdate({ codes: targets, groupId, retry,mode:'ten-year' });
+      const value = (await requestUpdate({ codes: targets, groupId, retry,mode:'ten-year' })).data as UpdateProgress | null;
       setProgress(value);
       if (value) {
         observed.current = value.finished ? null : value.id;
@@ -60,11 +64,21 @@ export default function MarketUpdateButton({ codes, groupId, onComplete }: { cod
   async function stop() {
     setBusy(true); setError('');
     try {
-      const value = await requestUpdate(undefined, 'DELETE');
+      const value = (await requestUpdate(undefined, 'DELETE')).data as UpdateProgress | null;
       setProgress(value);
       observed.current = null;
     } catch (e) { setError(e instanceof Error ? e.message : '停止失败'); setDetails(true); }
     finally { setBusy(false); }
+  }
+  /** 管理员主动暂停/恢复后台队列消费：暂停后不再派发新任务，已排队任务保留，恢复后继续。 */
+  async function toggleWorker() {
+    setWorkerBusy(true); setError('');
+    const paused = workerPausedUntil <= Date.now();
+    try {
+      const result = await requestUpdate({ paused, hours: 24 }, 'PUT');
+      setWorkerPausedUntil((result.data as { pausedUntil: number }).pausedUntil ?? 0);
+    } catch (e) { setError(e instanceof Error ? e.message : (paused ? '暂停失败' : '恢复失败')); setDetails(true); }
+    finally { setWorkerBusy(false); }
   }
   return <div className="border-t border-slate-100 px-3 py-2 text-xs">
     <div className="flex flex-wrap items-center gap-2">
@@ -78,6 +92,11 @@ export default function MarketUpdateButton({ codes, groupId, onComplete }: { cod
       <a href="/market-updates/log" className="min-h-8 text-slate-500 hover:text-brand-600">更新日志</a>
       {active && <button type="button" disabled={busy} onClick={() => void stop()}
         title="停止本次补齐，已入库的数据保留" className="min-h-8 text-slate-500 hover:text-red-600 disabled:opacity-60">停止补齐</button>}
+      <button type="button" disabled={workerBusy} onClick={() => void toggleWorker()}
+        title={workerPausedUntil > Date.now() ? '恢复后台队列派发新任务（暂停期间已排队任务保留）' : '暂停后台队列：不再派发新任务，在飞阶段照常收尾'}
+        className={`min-h-8 disabled:opacity-60 ${workerPausedUntil > Date.now() ? 'text-brand-600' : 'text-slate-500 hover:text-red-600'}`}>
+        {workerBusy ? '处理中…' : workerPausedUntil > Date.now() ? '启动后台队列' : '停止后台队列'}
+      </button>
     </div>
     {details && <div role="status" className="mt-2 rounded-md bg-slate-50 p-2.5 leading-5 text-slate-600">
       <p className="mb-1 font-medium text-slate-900">十年数据补齐</p>

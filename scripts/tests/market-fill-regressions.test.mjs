@@ -153,7 +153,7 @@ test('resolve returns an error when partial coverage cannot be persisted', async
   const route = compile('src/app/api/market/gaps/resolve/route.ts', name => {
     if (name==='next/server') return { NextResponse:{json:(body,o)=>({body,status:o?.status??200})} };
     if (name==='@/lib/marketStore') return { getMarketStore:()=>({read:async()=>({payload:{status:'partial',missingInputs:['hk-dividend-events-v4:hk00016']}})}) };
-    if (name==='@/lib/marketImportAuth') return {denyReason:()=>null,readImportIdentity:()=>({userId:'test'})};
+    if (name==='@/lib/marketImportAuth') return {denyReason:()=>null,readImportIdentity:()=>({userId:'test'}),importAdminIds:()=>['test']};
     if (name==='@/lib/marketFillGaps') return {...gaps,listFillGaps:async()=>[]};
     if (name==='@/lib/marketGapResolve') return {resolveMarketGaps:async()=>[{symbol:'hk00016',status:'error',cleared:false,error:'database failure'}]};
     throw Error(name);
@@ -169,6 +169,7 @@ test('single-stock fill does not replace automatic subscriptions', async () => {
     if(name==='@/lib/marketStore')return {getMarketStore:()=>({})};
     if(name==='@/lib/marketCollection')return {registerCollection:async()=>{registrations++;}};
     if(name==='@/lib/marketUpdateAuth')return {localUpdatePreview:()=>false,updateIdentity:async()=>({owner:'alice'})};
+    if(name==='@/lib/marketImportAuth')return {denyReason:()=>null,readImportIdentity:()=>({userId:'test'}),importAdminIds:()=>['test']};
     if(name==='@/lib/auth/session')return {sameOriginMutation:()=>true};
     if(name==='@/lib/marketUpdateQueue')return {updateSymbols:v=>v,UpdateQueueError:class extends Error{},MarketUpdateQueue:class{async submit(){return {id:'job'};}}};
     throw Error(name);

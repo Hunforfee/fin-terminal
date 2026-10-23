@@ -1,4 +1,4 @@
-import { financialPageGaps } from './financialPageQuality';
+import { financialPageGaps, missingIndicatorReports } from './financialPageQuality';
 import { getMarketStore, marketRecord, type MarketStore } from './marketStore';
 import { getKLine, getValuation } from './datasource';
 import { fetchStatementSourcePage } from './datasource/sinaStatements';
@@ -70,11 +70,14 @@ export async function collectHistoryPhase(symbol:string,phase:number,signal:Abor
         const stored=await persistCheck(store,`source-sina-page:v1:${n.code}:${id}:${year}`);
         if(requiredDates.some(date=>!(stored.payload as {dates:string[]}).dates.includes(date)))throw Error(`${year} 年${id}完整报告期尚未确认入库`);
       }
-      let indicators=await fetchIndicatorSourceYear(n.code,year);
-      if(requiredDates.some(date=>!indicators.dates.includes(date)))indicators=await fetchIndicatorSourceYear(n.code,year,{forceRefresh:true});
-      if(requiredDates.some(date=>!indicators.dates.includes(date)))throw Error(`${year} 年财务指标仍缺少已到披露期限的报告期`);
+      const indicatorKey=`source-sina-indicators:v1:${n.code}:${year}`;
+      const savedIndicators=await store.read<Parameters<typeof missingIndicatorReports>[0]>(indicatorKey);
+      if(year<new Date().getUTCFullYear()-1 && savedIndicators && !missingIndicatorReports(savedIndicators.payload,requiredDates).length)return;
+      let indicators=await fetchIndicatorSourceYear(n.code,year,{requiredDates});
+      if(missingIndicatorReports(indicators,requiredDates).length)indicators=await fetchIndicatorSourceYear(n.code,year,{forceRefresh:true,requiredDates});
+      if(missingIndicatorReports(indicators,requiredDates).length)throw Error(`${year} 年财务指标仍缺少已到披露期限的报告期`);
       const storedIndicators=await persistCheck(store,`source-sina-indicators:v1:${n.code}:${year}`);
-      if(requiredDates.some(date=>!(storedIndicators.payload as {dates:string[]}).dates.includes(date)))throw Error(`${year} 年完整财务指标尚未确认入库`);
+      if(missingIndicatorReports(storedIndicators.payload as Parameters<typeof missingIndicatorReports>[0],requiredDates).length)throw Error(`${year} 年完整财务指标尚未确认入库`);
     }
   }else if((phase===10 || phase===11) && n.market==='HK'){
     const metric=phase===10?'pe':'pb';
@@ -128,7 +131,7 @@ export async function collectHistoryPhase(symbol:string,phase:number,signal:Abor
           const row=await store.read(key);
           const annual=key.match(/^source-sina-(?:page:v1:\d+:\w+|indicators:v1:\d+):(\d{4})$/);
           const statement=key.match(/source-sina-page:v1:\d+:(balance|profit|cashflow):/);
-          if(!row || annual && (statement ? financialPageGaps(row.payload as import('./datasource/eastmoneyStatements').StatementSourcePage,statement[1] as 'balance'|'profit'|'cashflow',requiredFinancialReports(Number(annual[1]),listingDate)).length>0 : requiredFinancialReports(Number(annual[1]),listingDate).some(date=>!(row.payload as {dates?:string[]}).dates?.includes(date))))missingInputs.push(key);
+          if(!row || annual && (statement ? financialPageGaps(row.payload as import('./datasource/eastmoneyStatements').StatementSourcePage,statement[1] as 'balance'|'profit'|'cashflow',requiredFinancialReports(Number(annual[1]),listingDate)).length>0 : missingIndicatorReports(row.payload as Parameters<typeof missingIndicatorReports>[0],requiredFinancialReports(Number(annual[1]),listingDate)).length>0))missingInputs.push(key);
         }
       }else{
         const secucode=`${n.code}.HK`;

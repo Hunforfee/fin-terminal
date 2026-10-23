@@ -5,7 +5,7 @@ export function upstreamGroup(url:string){
  const host=new URL(url).hostname;
  if(host==='eastmoney.com'||host.endsWith('.eastmoney.com'))return 'eastmoney';
  if(['sina.com.cn','sinajs.cn','sinajs.com.cn'].some(d=>host===d||host.endsWith('.'+d)))return 'sina';
- if(host==='gtimg.cn'||host.endsWith('.gtimg.cn'))return 'tencent';
+ if(host==='gtimg.cn'||host.endsWith('.gtimg.cn')||host==='proxy.finance.qq.com')return 'tencent';
  return host;
 }
 type State={owner:string;until:number;nextAt:number;cooldownUntil:number;status:number;failures:number};
@@ -43,7 +43,9 @@ export async function acquireSourceSlot(store:MarketStore,url:string,signal?:Abo
   const numeric=retryAfter?.trim()?Number(retryAfter):NaN;
   const requested=Number.isFinite(numeric)?numeric*1000:retryAfter?Date.parse(retryAfter)-now:0;
   const defaults:Record<number,number>={403:60e3,429:300e3,501:60e3,503:30e3};
-  const delay=failed?Math.min(1800e3,Math.max(requested||0,(defaults[status]??(failures>=2?30e3:0))*Math.min(4,2**Math.max(0,failures-1)))):0;
+  // Cap our own backoff, never shorten the supplier's explicit Retry-After.
+  const backoff=Math.min(1800e3,(defaults[status]??(failures>=2?30e3:0))*Math.min(4,2**Math.max(0,failures-1)));
+  const delay=failed?Math.max(Number.isFinite(requested)?requested:0,backoff):0;
   const next={owner:'',until:0,nextAt:now+interval,cooldownUntil:now+delay,status,failures};
   if(!await store.write(marketRecord(key,'source-gate','internal',next,864e5),row.digest))throw Error('来源请求额度保存冲突');
  }};

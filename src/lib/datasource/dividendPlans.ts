@@ -46,8 +46,8 @@ export function parseDividendPlans(rows: Row[]): DividendPlan[] {
 
 /** 方案包含董事会预案、零分红和实施方案；不把仅有政策上限的预披露当成具体金额。 */
 export async function fetchDividendPlans(code: string): Promise<DividendPlan[]> {
-  const plans = parseDividendPlans(await fetchDividendPlanRows(code));
-  if (!plans.length) throw new Error('缺少有效分红公告');
+  const rows = await fetchDividendPlanRows(code), plans = parseDividendPlans(rows);
+  if (rows.length && !plans.length) throw new Error('缺少有效分红公告');
   return plans;
 }
 /** Raw implementation and proposal readers share one bounded current response.
@@ -68,6 +68,10 @@ async function fetchAllDividendPlanRows(code:string):Promise<Row[]>{
       filter: `(SECURITY_CODE="${code}")`, pageSize: '100', pageNumber: String(page),
       sortColumns: 'PLAN_NOTICE_DATE,REPORT_DATE', sortTypes: '-1,-1' }).toString();
     const data = await fetchJson<Response>(url.toString(), { timeoutMs: 12000,retries:0 });
+    // Only an explicitly successful, complete zero-count response confirms no
+    // records. Empty HTML, result:null and incomplete pages remain failures.
+    if(page===1 && data.success===true && data.result?.count===0 && Array.isArray(data.result.data)
+      && data.result.data.length===0 && [0,1].includes(data.result.pages))return [];
     if (!data.success || !data.result || !Array.isArray(data.result.data) || !(data.result.pages >= 1)) {
       // 接口空响应也可能是限流或字段变化，不能当成确认不分红。
       throw new UpstreamError('分红方案数据不可用', url.toString(), 'parse');

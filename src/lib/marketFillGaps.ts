@@ -68,7 +68,7 @@ export function classifyGapText(text: string): { domains: string[]; mcp: boolean
 export function classifyPhaseFailure(phase: number, market: 'A' | 'HK', now = Date.now()): GapClassification {
   const mcp: string[] = [], manual: string[] = [], notes: string[] = [];
   if (phase === 0 || phase === 1) mcp.push('kline');
-  else if (phase === 2) {
+  else if (phase === 2 || phase === 20) {
     if (market === 'HK') { mcp.push('hk-dividend-events'); manual.push('hk-main-currency-v4'); }
     else { mcp.push('dividend-plans', 'dividend-impl', 'share-history'); manual.push('screen-company-input:v1', 'watchlist-financial-inputs:v1'); }
   } else if (financialYearForPhase(phase, now) !== null) {

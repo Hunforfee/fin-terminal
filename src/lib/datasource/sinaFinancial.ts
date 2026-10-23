@@ -12,6 +12,7 @@
 
 import { fetchText } from './http';
 import { cachedMarketInput } from '../marketInputs';
+import { missingIndicatorReports } from '../financialPageQuality';
 import { fetchDebtRatios } from './debtRatios';
 import { fetchEastmoneyIndicators, financialPageSource, type IndicatorSourcePage } from './eastmoneyStatements';
 
@@ -160,16 +161,19 @@ export async function fetchSinaFinancial(
 }
 
 /** Annual source unit for bounded background collection; foreground readers share these rows. */
-export function fetchIndicatorSourceYear(code:string,year:number,options: { forceRefresh?: boolean } = {}){
+export function fetchIndicatorSourceYear(code:string,year:number,options: { forceRefresh?: boolean; requiredDates?:string[] } = {}){
   const url=URL_TEMPLATE.replace('{code}',code).replace('{year}',String(year));
   const age=new Date().getUTCFullYear()-year;
   const validate=(value:IndicatorSourcePage)=>{if(!value.dates.length || !value.rows.size
-    || ![...value.rows.values()].some(values=>values.some(v=>toNum(v)!==null)))throw Error('财务指标来源为空');};
+    || ![...value.rows.values()].some(values=>values.some(v=>toNum(v)!==null)))throw Error('财务指标来源为空');
+    const missing=missingIndicatorReports(value,options.requiredDates??[]);
+    if(missing.length)throw Error(`财务指标缺少有效报告期: ${missing.join(',')}`);
+  };
   return cachedMarketInput<IndicatorSourcePage>(`source-sina-indicators:v1:${code}:${year}`,'source-sina-indicators','sina:reported-indicators',age<=1?1800e3:7*864e5,
     async()=>{
       try{const value=parsePage(await fetchText(url,{encoding:'gbk',timeoutMs:10000,retries:0}));validate(value);return value;}
       catch(primary){
-        try{return await fetchEastmoneyIndicators(code,year);}
+        try{const value=await fetchEastmoneyIndicators(code,year);validate(value);return value;}
         catch(backup){throw Error(`公网财务指标均不可用（新浪：${primary instanceof Error?primary.message:'不可用'}；东方财富：${backup instanceof Error?backup.message:'不可用'}）`);}
       }
     },validate,value=>financialPageSource(value,'sina:reported-indicators'),options);

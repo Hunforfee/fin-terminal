@@ -1,6 +1,7 @@
 import { crossCheckMainlandRaw, MarketDataConflict } from '../klineCrossCheck';
 import { databaseOnly } from '../marketReadPolicy';
-import { getMarketStore } from '../marketStore';
+import { getMarketStore, getMarketReadStore } from '../marketStore';
+import { readStoredFinancialSummary } from '../storedFinancialSummary';
 import { readRemoteMarketData, remoteMarketDataEnabled } from '../marketDataClient';
 import { cachedValuationResult, valuationInputVersion, type ValuationCacheOptions } from '../valuationResultCache';
 import { sharedQuotes } from '../quoteInputs';
@@ -538,6 +539,7 @@ async function calculateValuation(input: string, years = 10, method: ValuationMe
     if (missingAdjusted) warnings.push(`${missingAdjusted} 个交易日前复权价格缺失，价格曲线留空；估值仍按不复权价格与当日股本计算。`);
     if (raw.complete===false || Date.parse(history[0].date)-Date.parse(cutoff)>14*864e5) warnings.push('估值数据覆盖不足所选区间，请以实际起止日期和样本数为准。');
     if (dividends === null) warnings.push('分红数据源不可用，股息率暂不计算。');
+    if (dividends?.some(e=>e.reconciliationPending)) warnings.push('已实施分红已取得，独立分红方案核对暂不可用；相关金额尚未完成跨源核对。');
     if (dividends?.some(e => e.cashConflict)) warnings.push('部分历史分红来源金额有冲突，相关十二个月静态股息率留空，不将争议金额计入。');
     if (plans === null) warnings.push('分红方案数据不可用，预期股息率暂不计算；静态值仍按可取得的已实施分红计算。');
     if (raw.stale || adjusted?.stale || q.stale) warnings.push('部分行情来自历史快照，请留意数据日期。');
@@ -566,6 +568,10 @@ export async function getFinancial(input: string): Promise<FinancialSummary> {
   const n = normalizeStockCode(input);
   if (!n) throw new Error(`无法解析代码 ${input}`);
   return cached(`fin:${n.code}`, 30 * 60 * 1000, async () => {
+    if(n.market!=='HK' && n.kind==='stock'){
+      const reported=await readStoredFinancialSummary(getMarketReadStore(),n.code);
+      if(reported)return reported;
+    }
     const q = await getQuote(n.symbol);
     if (!q) throw new Error('行情获取失败');
     // 优先走 iFinD 真实三表；未启用则降级为恒等式派生

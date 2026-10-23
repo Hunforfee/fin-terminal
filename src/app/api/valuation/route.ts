@@ -17,7 +17,8 @@ export async function GET(request: NextRequest) {
   const p = sp(request);
   const code = p.get('code');
   if (!code) return fail('缺少 code 参数', 400);
-  const years = Math.min(Math.max(Number(p.get('years') ?? HISTORY_YEARS) || HISTORY_YEARS, 1), HISTORY_YEARS);
+  // 默认显示 10 年；12 年仍为上可选上限（HISTORY_YEARS），存储保留策略不变
+  const years = Math.min(Math.max(Number(p.get('years') ?? 10) || 10, 1), HISTORY_YEARS);
   const method = p.get('method') === 'cutoff' ? 'cutoff' : 'disclosure';
   try {
     return await marketOk(() => getValuation(code, years, method, {schedule:work=>after(work)}));

@@ -166,7 +166,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
   const [granularity, setGranularity] = useState<'annual' | 'semi' | 'quarter'>(
     'annual',
   );
-  const [years, setYears] = useState<5 | 10 | 12>(12);
+  const [years, setYears] = useState<5 | 10 | 12>(10);
   const [customData, setCustomData] = useState<CustomData | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);

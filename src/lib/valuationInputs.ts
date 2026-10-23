@@ -28,19 +28,25 @@ export function getValuationPlans(code: string): Promise<DividendPlan[]> {
   return cachedMarketInput(`dividend-plans-v2:${code}`, 'announced-dividend-plans',
     'eastmoney:CNY:tax-before:per-share:announced-not-implemented', 1800e3, () => fetchDividendPlans(code), plans => {
       const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0,10);
-      if (!plans.length || plans.some(p => p.announceDate > today || p.perShare != null && (!Number.isFinite(p.perShare) || p.perShare < 0))) throw Error('分红公告或金额无效');
-    });
+      if (!Array.isArray(plans) || plans.some(p => p.announceDate > today || p.perShare != null && (!Number.isFinite(p.perShare) || p.perShare < 0))) throw Error('分红公告或金额无效');
+    },plans=>plans.length?'eastmoney:CNY:tax-before:per-share:announced-not-implemented':'eastmoney:verified-empty:dividend-plans');
 }
 export function getValuationDividends(code: string): Promise<DividendEvent[]> {
   return cachedMarketInput(`implemented-dividends-v4:${code}`, 'implemented-dividends',
     'sina+eastmoney:CNY:tax-before:per-share:ex-date:rounding-reconciled', 1800e3, async () => {
-      const [events, plans] = await Promise.all([fetchDividends(code), getValuationPlans(code)]);
-      const reconciled = reconcileCashDividends(events, plans, new Date(Date.now() + 8 * 3600e3).toISOString().slice(0,10));
+      const [eventsResult, plansResult] = await Promise.allSettled([fetchDividends(code), getValuationPlans(code)]);
+      if(eventsResult.status==='rejected')throw eventsResult.reason;
+      const events=eventsResult.value;
+      if(plansResult.status==='rejected')return events.map(event=>({...event,reconciliationPending:true}));
+      const reconciled = reconcileCashDividends(events, plansResult.value, new Date(Date.now() + 8 * 3600e3).toISOString().slice(0,10));
       const conflicts = reconciled.filter(e => e.cashConflict);
       if (conflicts.length) try { await getMarketStore()?.incident(code, 'cash_dividend_conflict', conflicts); } catch {}
       return reconciled;
     }, rows => {
-      validateDatedRows(rows as unknown as Record<string, unknown>[], 'exDate', ['perShare']);
+      if (!Array.isArray(rows)) throw Error('已实施分红记录格式无效');
+      if (rows.length) validateDatedRows(rows as unknown as Record<string, unknown>[], 'exDate', ['perShare']);
       if (rows.some(r => !Number.isFinite(r.perShare) || r.perShare < 0 || r.perShareStock != null && (!Number.isFinite(r.perShareStock) || r.perShareStock < 0))) throw Error('分红金额或送转比例无效');
-    },rows=>[...new Set(rows.map(r=>r.cashSource??'existing-dividend-evidence'))].sort().join('+')+':CNY:tax-before:per-share:ex-date');
+    },rows=>!rows.length?'eastmoney:verified-empty:implemented-dividends':
+      [...new Set(rows.map(r=>r.cashSource??'existing-dividend-evidence'))].sort().join('+')+':CNY:tax-before:per-share:ex-date'
+      +(rows.some(r=>r.reconciliationPending)?':reconciliation-pending':''));
 }

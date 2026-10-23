@@ -19,7 +19,8 @@ export async function runMarketMaintenance(store:MarketStore|null=getMarketStore
       const empty=row.kind==='kline' && !(payload as any).candles.length
         || ['source-sina-page','source-sina-indicators'].includes(row.kind) && !(payload as any).dates.length
         || ['source-hk-indicators','source-hk-statement','financial-history','implemented-dividends','announced-dividend-plans','hk-recent-dividend-events','deducted-periods'].includes(row.kind) && Array.isArray(payload) && !payload.length;
-      if(empty || ['input-failure','source-gate'].includes(row.kind) && Date.parse(row.refreshAfter)<now || disposableMarketRecord(row,now) || row.kind==='fetch-lease' && (row.payload as any).until<=now){
+      const confirmedEmpty=['implemented-dividends','announced-dividend-plans'].includes(row.kind) && row.source.startsWith('eastmoney:verified-empty:');
+      if(empty && !confirmedEmpty || ['input-failure','source-gate'].includes(row.kind) && Date.parse(row.refreshAfter)<now || disposableMarketRecord(row,now) || row.kind==='fetch-lease' && (row.payload as any).until<=now){
         if(await store.remove!(row.key,row.digest))removed++;
       }else if(digest!==row.digest){
         if(await store.write({...row,payload,digest},row.digest))trimmed++;

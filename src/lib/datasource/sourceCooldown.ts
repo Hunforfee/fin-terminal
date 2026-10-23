@@ -17,7 +17,7 @@ export class SourceCooldown {
     if(!defaults[status])return;
     const now=this.clock(),numeric=retryAfter?.trim()?Number(retryAfter):NaN;
     const requested=Number.isFinite(numeric)?numeric*1000:retryAfter?Date.parse(retryAfter)-now:NaN;
-    const duration=Number.isFinite(requested) && requested>0?Math.min(1800e3,Math.max(1000,requested)):defaults[status];
+    const duration=Number.isFinite(requested) && requested>0?Math.max(1000,requested):defaults[status];
     const host=new URL(url).hostname,prior=this.hosts.get(host);
     this.put(host,{until:Math.max(prior?.until??0,now+duration),status,failures:0});
   }

@@ -32,11 +32,9 @@ export async function runMarketUpdateTick() {
   const startedAt = Date.now();
   try {
     const coverage=await store.read<{status:string}>(coverageKey(task.symbol));
-    // New/partial stocks must initialize from website APIs even when added after
-    // deployment or submitted by the daily scheduler. No broker seed.
+    // Daily and financial work never initialize history, including empty stocks.
     const initialize=task.mode==='daily' || task.mode==='financial' ? false : task.initialize??(task.mode==='ten-year' || coverage?.payload.status!=='ready');
-    // 轻量模式：仅当日价格增量 + 最新财报/分红(phase 2) 与库内完整性校验(phase 12)；
-    // 完整历史复核由周日 recent 任务承担。未就绪标的仍走全量初始化。
+    // Daily: exact-date phase 19. Financial: phase 20. History runs separately.
     phases = collectionPhases(task.mode, initialize);
     const phase=phases[task.phase];
     if(phase===undefined)throw Error('后台任务阶段无效');
@@ -47,38 +45,59 @@ export async function runMarketUpdateTick() {
         await collectHistoryPhase(task.symbol,phase,abort.signal);
       }else{
       const n = normalizeStockCode(task.symbol)!;
+      const failures:string[]=[];
+      const collect=async(label:string,work:()=>Promise<unknown>)=>{
+        try{await work();}catch(e){failures.push(`${label}：${e instanceof Error?e.message:'采集失败'}`);}
+      };
       const start = new Date(Date.now() - 60 * 864e5).toISOString().slice(0, 10);
-      const prices = phase===20 ? null : await getKLine(n.symbol, 'day', 'none', 40, start, true);
-      if (prices && (prices.stale || prices.complete === false || prices.storage?.backend !== 'persistent')) throw Error('近期价格未确认完整入库');
+      let price:number|null=null;
+      if(phase!==20)await collect('近期行情',async()=>{
+        const prices=await getKLine(n.symbol, 'day', 'none', 40, start, true);
+        if(prices.stale || prices.complete === false || prices.storage?.backend !== 'persistent')throw Error('近期价格未确认完整入库');
+        price=prices.candles.at(-1)?.close??null;
+      });
       if (n.market === 'HK') {
-        const value = await getHkCurrentValuation(n.symbol, prices?.candles.at(-1)?.close ?? null);
+        await collect('港股财务与分红',async()=>{
+        const value = await getHkCurrentValuation(n.symbol, price);
         if (value.pb == null) throw Error('港股财务输入暂无法核验');
         for (const key of [`hk-main-currency-v4:${n.symbol}`, `hk-dividend-events-v4:${n.symbol}`]) {
           const row = await store.read(key);
           if (!row || Date.parse(row.refreshAfter) <= Date.now()) throw Error('港股财务或分红尚未确认入库');
         }
+        });
       } else {
         const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+        await collect('最新财报',async()=>{
         const reports = await fetchValueScreenReports(getValueScreenMeta().periods, today, [n.code]);
         if (!reports.main.length) throw Error('最新财报记录暂缺');
         const financial = await store.read(`screen-company-input:v1:${n.code}:eastmoney:CNY`);
         if (!financial || Date.parse(financial.refreshAfter) <= Date.now()) throw Error('最新财报未确认入库');
-        await getValuationPlans(n.code);
+        });
+        await collect('分红方案',()=>getValuationPlans(n.code));
+        await collect('已实施分红',async()=>{
         const events = await getValuationDividends(n.code);
         const previousYear = new Date(); previousYear.setUTCFullYear(previousYear.getUTCFullYear() - 1);
         if (events.some(e => e.cashConflict && e.exDate >= previousYear.toISOString().slice(0, 10))) throw Error('近期分红来源存在冲突，未按成功处理');
+        });
+        await collect('实际股本',async()=>{
         await cachedMarketInput(`shares-v3:${n.code}`, 'share-events', 'public-shares:10000shares', 1800e3, () => fetchShareHistory(n.code), rows => {
           validateDatedRows(rows as unknown as Record<string, unknown>[], 'date', ['sharesWan']);
           if (rows.some(r => !(r.sharesWan > 0))) throw Error('股本数值无效');
         },shareHistorySource);
+        });
         for (const key of [`dividend-plans-v2:${n.code}`, `implemented-dividends-v4:${n.code}`, `shares-v3:${n.code}`]) {
+          await collect('入库确认',async()=>{
           const row = await store.read(key);
           if (!row || Date.parse(row.refreshAfter) <= Date.now()) throw Error('分红记录尚未确认入库');
+          });
         }
       }
+      await collect('列表财务',async()=>{
       await getWatchlistFinancialInputs(n.symbol);
       const displayed = await store.read(`watchlist-financial-inputs:v1:${n.symbol}`);
       if (!displayed || Date.parse(displayed.refreshAfter) <= Date.now()) throw Error('列表财务尚未确认入库');
+      });
+      if(failures.length)throw Error(failures.join('；'));
       }
       if (budget.limited) throw Error('上游限流，更新已暂停');
       abort.signal.throwIfAborted();
@@ -105,6 +124,8 @@ export async function runMarketUpdateTick() {
   }
   // Pause unresolved collection after a limiter, while a successful alternate
   // source advances normally. One site's rejection is not a global outage.
-  const accepted = await queue.finish(task.symbol, task.lease, error, budget.limited || !!error && budget.rateLimited,nextPhase);
+  // A known source has its own persistent gate. Do not freeze healthy suppliers
+  // or the daily price queue because a financial supplier is cooling down.
+  const accepted = await queue.finish(task.symbol, task.lease, error, budget.limited,nextPhase);
   return { processed: true, accepted, symbol: task.symbol, ok: !error };
 }

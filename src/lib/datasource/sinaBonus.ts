@@ -16,6 +16,8 @@ import { fetchEastmoneyImplementedDividends } from './eastmoneyBonus';
 export const PROVIDER_NAME = 'sina-bonus';
 
 export interface DividendEvent {
+  /** Source facts are saved even when an independent proposal check is unavailable. */
+  reconciliationPending?: boolean;
   /** 除权除息日 YYYY-MM-DD */
   exDate: string;
   /** 每股现金分红（税前，元）＝ 每10股派息 ÷ 10 */
@@ -42,7 +44,6 @@ export async function fetchDividends(code: string): Promise<DividendEvent[]> {
   }catch(primary){
     try{
       const events=await fetchEastmoneyImplementedDividends(code);
-      if(!events.length)throw Error('东方财富未返回可核验的已实施分红');
       return events;
     }catch(backup){throw Error(`公网已实施分红均不可用（新浪：${primary instanceof Error?primary.message:'不可用'}；东方财富：${backup instanceof Error?backup.message:'不可用'}）`);}
   }

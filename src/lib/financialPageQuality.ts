@@ -8,6 +8,15 @@ const aliases:Record<QualityStatement,Record<string,string[]>>={
 };
 const normalize=(s:string)=>s.replace(/[\s()（）:：]/g,'');
 const populated=(v:unknown)=>v!==null && v!==undefined && String(v).trim()!=='' && Number.isFinite(Number(String(v).replaceAll(',','')));
+type IndicatorPage={dates:string[];rows:Map<string,unknown[]>|{$marketMap:[string,unknown[]][]}};
+/** A date header alone does not establish that its indicator column has data. */
+export function missingIndicatorReports(page:IndicatorPage|undefined|null,dates:string[]){
+ const rows=page?.rows instanceof Map?[...page.rows.values()]:page?.rows?.$marketMap?.map(([,values])=>values)??[];
+ return dates.filter(date=>{
+  const at=page?.dates?.indexOf(date)??-1;
+  return at<0 || !rows.some(values=>populated(values[at]));
+ });
+}
 export function financialPageGaps(page:Page|undefined|null,id:QualityStatement,dates:string[]) {
  return dates.flatMap(date=>{
   const index=page?.dates?.indexOf(date)??-1;

@@ -1,5 +1,5 @@
 /** Only completed, disclosed ex-date events. An announced proposal is not cash. */
-import { fetchDividendPlanRows } from './dividendPlans';
+import { fetchDividendPlanRows, parseDividendPlans } from './dividendPlans';
 import { numOrNull, normalizeStockCode } from './codes';
 import type { DividendEvent } from './sinaBonus';
 
@@ -62,5 +62,11 @@ export function parseEastmoneyImplementedDividends(rows:Row[],code:string,now=Da
   return [...byDate.values()].sort((a,b)=>a.exDate.localeCompare(b.exDate));
 }
 export async function fetchEastmoneyImplementedDividends(code:string){
-  return parseEastmoneyImplementedDividends(await fetchDividendPlanRows(code),code);
+  const rows=await fetchDividendPlanRows(code),events=parseEastmoneyImplementedDividends(rows,code);
+  if(!events.length && rows.length){
+    const plans=parseDividendPlans(rows);
+    if(plans.length!==rows.length || !plans.every(p=>p.perShare===0))
+      throw Error('分红记录存在但尚不能确认完整的已实施分红历史');
+  }
+  return events;
 }

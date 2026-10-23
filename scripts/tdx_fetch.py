@@ -5,10 +5,11 @@
 
 用法:
   python3 tdx_fetch.py --codes sh600415,sz000001,hk00700 --out bundle.json
-  python3 tdx_fetch.py --input hunforfee-codes.txt --out bundle.json --years 10
+  python3 tdx_fetch.py --input hunforfee-codes.txt --out bundle.json --years 12
 
 依赖: 仅标准库 (urllib)。tdx 端点为内网 HTTP MCP，无需额外鉴权。
 """
+import datetime as dt
 import json, sys, time as _time, urllib.request, urllib.error, argparse
 
 BASE = "http://tdx-connector.agent-gateway.auth-proxy.local/txmcp"
@@ -93,7 +94,7 @@ def parse_rows(text):
     out.sort(key=lambda x: x["date"])
     return out
 
-def fetch_symbol(mcp, symbol, years=10, per_page=1000, max_pages=12, delay=0.15):
+def fetch_symbol(mcp, symbol, years=12, per_page=1000, max_pages=12, delay=0.15):
     """分页拉取 symbol 的日线(不复权)全量。startxh 为倒序偏移。"""
     sym = symbol.lower()
     market = sym[:2]; code = sym[2:]
@@ -118,7 +119,7 @@ def fetch_symbol(mcp, symbol, years=10, per_page=1000, max_pages=12, delay=0.15)
     allrows.sort(key=lambda x: x["date"])
     # 仅保留近 years 年(宽一点, 由导入侧 cutoff 精确裁剪)
     if years:
-        cutoff = f"{2026 - years - 1}-01-01"
+        cutoff = f"{dt.datetime.now(dt.timezone(dt.timedelta(hours=8))).year - years - 1}-01-01"
         allrows = [r for r in allrows if r["date"] >= cutoff]
     return {"symbol": sym, "code": code, "market": market, "period": "day", "adjust": "none", "candles": allrows}
 
@@ -127,7 +128,7 @@ def main():
     ap.add_argument("--codes", help="逗号分隔代码, 如 sh600415,hk00700")
     ap.add_argument("--input", help="代码文件, 每行一个")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--years", type=int, default=10)
+    ap.add_argument("--years", type=int, default=12)
     ap.add_argument("--limit", type=int, default=0, help="仅抓取前 N 只(调试)")
     args = ap.parse_args()
 

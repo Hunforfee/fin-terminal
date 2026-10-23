@@ -19,7 +19,7 @@ async function requestUpdate(body?: unknown, method: 'GET' | 'POST' | 'DELETE' =
 }
 
 /**
- * 个股页图标：只把当前这只股票排入十年补齐队列（后台执行，可停止）。
+ * 个股页图标：只把当前这只股票排入十二年补齐队列（后台执行，可停止）。
  * 抓取失败的阶段会登记缺口，由 WorkBuddy 经 MCP 取数补齐后自动复核。
  */
 export default function StockFillButton({ code, name }: { code: string; name: string }) {
@@ -93,10 +93,10 @@ export default function StockFillButton({ code, name }: { code: string; name: st
   // 只把「本页面发起（或点击后并入）的任务」视为自己的进度；别处发起的分组任务不打扰个股页状态。
   const active = !!progress && !progress.finished && observed.current === progress.id;
   const label = busy ? '提交中…' : active ? `补齐中 ${progress!.done + progress!.skipped + progress!.failed}/${progress!.total}` : done ? '已补齐'
-    : error ? error.includes('已手动停止') ? '已停止' : progress && progress.done + progress.skipped > 0 ? '部分失败' : '补齐失败' : '补齐10年数据';
+    : error ? error.includes('已手动停止') ? '已停止' : progress && progress.done + progress.skipped > 0 ? '部分失败' : '补齐失败' : '补齐12年数据';
   const title = error ? error : active
     ? `正在补齐${name}：${collectionPhaseLabel(progress!.phase) || '排队中'}（${progress!.workerOnline ? '后台执行中' : '等待后台执行器'}）`
-    : `补齐${name}十年行情、财报及估值输入，已有有效数据复用`;
+    : `补齐${name}十二年行情、财报及估值输入，已有有效数据复用`;
   return (
     <div ref={root} className="relative inline-flex shrink-0">
       <button type="button" disabled={busy} aria-label={`${name}：${label}`} aria-expanded={details} onClick={() => {
@@ -111,7 +111,7 @@ export default function StockFillButton({ code, name }: { code: string; name: st
         {active && <><p className="mt-1">{collectionPhaseLabel(progress?.phase) || '任务已排队'}</p><p>{!progress?.workerOnline?'等待后台执行器':progress.pausedUntil>Date.now()?'来源限流，已自动暂停':'后台执行中，可关闭页面'}</p></>}
         {error && <p className="mt-1 break-words text-red-600">{error}</p>}
         {done && <p className="mt-1">本次数据补齐已完成。</p>}
-        <p className="mt-1 text-slate-400">补齐十年数据，已有有效数据复用。</p>
+        <p className="mt-1 text-slate-400">补齐十二年数据，已有有效数据复用。</p>
         {active && <button type="button" disabled={busy} onClick={()=>void stop()} className="mt-2 min-h-8 text-red-600 disabled:opacity-60">停止补齐</button>}
         {!active && error && <button type="button" disabled={busy} onClick={()=>void start()} className="mt-2 min-h-8 text-brand-600 disabled:opacity-60">重新补齐</button>}
       </div>}

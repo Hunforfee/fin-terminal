@@ -116,9 +116,9 @@ test('sub-percent raw price conflicts across sources are rejected before canonic
 });
 test('coverage cleared alone never hides a stale valuation cache',async()=>{
  for(const matched of [false,true]){
-  const s=memory();s.seed('disclosures-v3:600415:12','disclosure-dates',{$marketMap:[['2025-12-31','2026-04-20']]});
+  const s=memory();s.seed('disclosures-v3:600415:14','disclosure-dates',{$marketMap:[['2025-12-31','2026-04-20']]});
   const {job}=await jobs.submitImportJob(s,'owner','op',{idempotencyKey:'cache-check-'+matched,proof,items:[finance()],rebuild:true},now);
-  const resolve=async()=>{s.seed('valuation-input-version:v1:sh600415','valuation-input-version',{version:'v2'});s.seed('valuation-result:v1:sh600415:10:disclosure','valuation-result',{revision:matched?'v2':'v1',value:{history:[{date:'2026-10-22',pe:10,pb:2}]}});return [{symbol:'sh600415',cleared:true,status:'cleared'}];};
+  const resolve=async()=>{s.seed('valuation-input-version:v1:sh600415','valuation-input-version',{version:'v2'});s.seed('valuation-result:v1:sh600415:12:disclosure','valuation-result',{revision:matched?'v2':'v1',value:{history:[{date:'2026-10-22',pe:10,pb:2}]}});return [{symbol:'sh600415',cleared:true,status:'cleared'}];};
   await jobs.runMarketImportTick(s,{clock:()=>now,resolve});await jobs.runMarketImportTick(s,{clock:()=>now,resolve});
   const j=(await jobs.readImportJob(s,'owner',job.id,now)).payload;
   assert.equal(j.companies[0].validation.state,matched?'complete':'blocked');assert.equal(j.state,matched?'completed':'completed_with_issues');

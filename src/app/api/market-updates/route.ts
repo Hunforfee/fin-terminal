@@ -60,8 +60,8 @@ export async function POST(request: NextRequest) {
     if (single && codes.length !== 1) throw new UpdateQueueError('单只补齐只接受一只股票', 400);
     const identity = await updateIdentity(request, single ? undefined : body.groupId);
     if (!single && identity.allowed && codes.some(c => !identity.allowed!.includes(c))) throw new UpdateQueueError('只能更新当前已同步分组中的公司', 403);
-    // Manual actions always fill ten years; daily/recent are internal scheduler modes.
-    if(body.mode!==undefined && !['ten-year','five-year'].includes(body.mode))throw new UpdateQueueError('仅支持补齐十年数据',400);
+    // Manual actions always fill twelve years; daily/recent are internal scheduler modes.
+    if(body.mode!==undefined && !['ten-year','five-year'].includes(body.mode))throw new UpdateQueueError('仅支持补齐十二年数据',400);
     const data=await q.submit(identity.owner, codes, body.retry === true,'ten-year');
     // 个股补齐是一次性请求，不替换自动更新订阅；拒绝的提交也不得改变订阅。
     if (!single) {

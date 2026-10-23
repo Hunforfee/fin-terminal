@@ -1,3 +1,4 @@
+import { HISTORY_YEARS } from '../marketHistoryPlan';
 /**
  * 新浪财经-三大报表 Provider（资产负债表 / 利润表 / 现金流量表，全字段）。
  *
@@ -112,7 +113,7 @@ function parseStatementPage(html: string): { dates: string[]; rows: ParsedRow[];
 /** Shared source page: field catalogs, custom reports and valuation read the same rows. */
 export function fetchStatementSourcePage(code: string, id: StatementId, year: number, options: { forceRefresh?: boolean; requiredDates?: string[] } = {}) {
   if (!/^\d{6}$/.test(code) || !STATEMENT_META[id] || !Number.isInteger(year) || year < financialEarliestYear())
-    throw Error('财报范围超出十年保留期限');
+    throw Error('财报范围超出十二年历史输入准入期限');
   const validate=(value:StatementSourcePage)=>{
     if(!value.dates.length || !value.rows.some(r=>r.kind==='field' && r.vals.some(v=>v!=null && v.trim()!=='' && Number.isFinite(Number(v.replaceAll(',','')))))
       || value.dates.some(d=>!/^\d{4}-\d{2}-\d{2}$/.test(d))
@@ -245,7 +246,7 @@ export async function fetchStatementCatalog(code: string): Promise<StatementCata
 function yearListFor(years: number): number[] {
   const thisYear = new Date().getFullYear();
   const list: number[] = [];
-  const need = Math.min(10,Math.max(1,years)) + 1;
+  const need = Math.min(HISTORY_YEARS,Math.max(1,years)) + 1;
   for (let y = thisYear; list.length < need && y >= 1998; y--) list.push(y);
   return list;
 }

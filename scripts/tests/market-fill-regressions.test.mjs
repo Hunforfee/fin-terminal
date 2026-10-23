@@ -107,7 +107,7 @@ test('partial or all-null imported statements never satisfy the reader or readin
   const reader = compile('src/lib/datasource/hkFinance.ts', name => {
     if (name === '../marketStore') return { getMarketStore: () => s };
     if (name === '../marketReadPolicy') return { databaseOnly: () => true, marketDataMissing: () => Error('missing') };
-    if (name === '../marketRetention') return { retainedDate: () => true };
+    if (name === '../marketHistoryPlan') return plan;
     if (name === '../marketHkStatements') return statements;
     return {};
   });

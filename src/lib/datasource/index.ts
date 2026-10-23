@@ -1,3 +1,4 @@
+import { HISTORY_YEARS } from '../marketHistoryPlan';
 import { crossCheckMainlandRaw, MarketDataConflict } from '../klineCrossCheck';
 import { databaseOnly } from '../marketReadPolicy';
 import { withMarketReadStatus } from '../marketReadContext';
@@ -420,11 +421,11 @@ export async function getMinute(input: string): Promise<MinutePoint[]> {
  * 历史序列用**已披露定期报告**还原当期 TTM EPS 与 BPS（见 `lib/valuation.ts`），
  * 价格为不复权收盘价 —— 与前复权价倒推的旧口径相比，不会因除权而低估历史 PE。
  */
-export async function getValuation(input: string, years = 10, method: ValuationMethod = 'disclosure', options: ValuationCacheOptions = {}): Promise<Valuation> {
+export async function getValuation(input: string, years = HISTORY_YEARS, method: ValuationMethod = 'disclosure', options: ValuationCacheOptions = {}): Promise<Valuation> {
   if (remoteMarketDataEnabled()) return readRemoteMarketData<Valuation>('valuation', { code: input, years, method });
   const n=normalizeStockCode(input);
   if(!n || n.kind!=='stock')throw Error('真实财报估值仅支持 A 股 / 港股股票');
-  const span=Math.min(Math.max(years,1),10);
+  const span=Math.min(Math.max(years,1),HISTORY_YEARS);
   const value=await cachedValuationResult(n.symbol,span,method,()=>withMarketReadStatus(()=>calculateValuation(n.symbol,span,method)),options);
   if(n.market!=='HK' || !value.historyCache)return value;
   // Historical samples are durable, while HK current cards still use live prices.
@@ -440,11 +441,11 @@ export async function getValuation(input: string, years = 10, method: ValuationM
       stale:!quote || quote.stale};
   } catch {return {...value,stale:true,warnings:[...(value.warnings??[]),'当前港股估值刷新失败，保留已保存数据，请留意日期。']};}
 }
-async function calculateValuation(input: string, years = 10, method: ValuationMethod = 'disclosure'): Promise<Valuation> {
+async function calculateValuation(input: string, years = HISTORY_YEARS, method: ValuationMethod = 'disclosure'): Promise<Valuation> {
   const n = normalizeStockCode(input);
   if (!n || n.kind !== 'stock') throw new Error('真实财报估值仅支持 A 股 / 港股股票');
   if (n.market === 'HK') {
-    const span = Math.min(Math.max(years, 1), 10);
+    const span = Math.min(Math.max(years, 1), HISTORY_YEARS);
     const [q, points] = await Promise.all([
       getQuote(n.symbol),
         cached(`hk-indicators-currency-v3:${n.symbol}:${span}:${await valuationInputVersion(getMarketStore(),n.symbol)}`, 6 * 3600e3,
@@ -454,6 +455,7 @@ async function calculateValuation(input: string, years = 10, method: ValuationMe
     const current = await getHkCurrentValuation(n.symbol, q.stale ? null : q.price);
     const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
     const snapshot = hkFinance.summarizeHkSnapshot(points, n.code, q, date, span, current);
+    // Provider exposes only five/ten-year ratio presets; never invent an twelve-year query.
     const historySpan = span > 5 ? 10 : 5;
     const store = getMarketStore();
     const [pe, pb, prices, dividends] = await Promise.all([
@@ -465,7 +467,7 @@ async function calculateValuation(input: string, years = 10, method: ValuationMe
     const result = attachHkValuationHistory(snapshot, { pe, pb, prices: prices?.stale ? [] : prices?.candles, dividends });
     return { ...result, stale: q.stale };
   }
-  const span = Math.min(Math.max(years, 1), 10);
+  const span = Math.min(Math.max(years, 1), HISTORY_YEARS);
   return cached(`val-qfq-forward-dy-v3:${n.symbol}:${span}:${method}:${databaseOnly()}:${await valuationInputVersion(getMarketStore(),n.symbol)}`, databaseOnly()?0:defaultTtl(), async () => {
     const start = ymdYearsAgo(span);
     // 行情两条 3200 根分页链（raw/qfq）并行会触发上游限频，改为串行；
@@ -654,7 +656,7 @@ import * as sinaFinancial from './sinaFinancial';
  */
 export async function getFinancialCompare(
   codes: string[],
-  years = 10,
+  years = HISTORY_YEARS,
   granularity: sinaFinancial.Granularity = 'semi',
 ) {
   if (remoteMarketDataEnabled()) return readRemoteMarketData<{
@@ -771,7 +773,7 @@ function hkDefaultFields(catalog: { id: string; groups: { fields: { key: string 
 export async function getCustomFinancialCompare(
   codes: string[],
   fields: string[],
-  years = 10,
+  years = HISTORY_YEARS,
   granularity: sinaFinancial.Granularity = 'semi',
 ) {
   if (remoteMarketDataEnabled()) return readRemoteMarketData<{ companies: sinaStatements.CustomFinancials[] }>('finance-compare', {}, { codes, fields, years, granularity });

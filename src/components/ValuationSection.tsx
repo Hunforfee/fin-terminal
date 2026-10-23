@@ -369,7 +369,7 @@ function MetricChart({
 
 export default function ValuationSection({ code }: { code: string }) {
   const [selected, setSelected] = useState<Metric>('pe');
-  const [years, setYears] = useState<5 | 10>(10);
+  const [years, setYears] = useState<5 | 10 | 12>(12);
   const [data, setData] = useState<ValuationResp | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -489,7 +489,7 @@ export default function ValuationSection({ code }: { code: string }) {
           <h2 className="section-title">估值分析</h2>
         </div>
         <div className="segmented" role="group" aria-label="估值统计区间">
-          {([5, 10] as const).map((y) => (
+          {([5, 10, 12] as const).map((y) => (
             <button
               key={y}
               onClick={() => setYears(y)}

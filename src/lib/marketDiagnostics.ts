@@ -1,6 +1,6 @@
 import type { MarketStore } from './marketStore';
 import { normalizeStockCode } from './datasource/codes';
-import { financialEarliestYear, requiredFinancialReports, historyStart, coverageKey } from './marketHistoryPlan';
+import { financialEarliestYear, requiredFinancialReports, historyStart, coverageKey, HISTORY_YEARS } from './marketHistoryPlan';
 import { financialPageGaps } from './financialPageQuality';
 
 /** Pure DB inspection: no fetching, writes, cache warming or lease acquisition. */
@@ -19,7 +19,7 @@ export async function diagnoseMarketData(store:Pick<MarketStore,'read'>,symbol:s
   }
  }
  const revision=await store.read<{version:string}>(`valuation-input-version:v1:${n.symbol}`);
- const valuation=await store.read<{revision:string;value:{history?:{date:string;missingInputs?:string[]}[]}}>(`valuation-result:v1:${n.symbol}:10:disclosure`);
+ const valuation=await store.read<{revision:string;value:{history?:{date:string;missingInputs?:string[]}[]}}>(`valuation-result:v1:${n.symbol}:${HISTORY_YEARS}:disclosure`);
  const history=valuation?.payload.value.history??[];
  const prices=[];
  for(const source of ['canonical','tencent','sina','eastmoney']) {

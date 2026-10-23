@@ -83,9 +83,9 @@ export default function MarketUpdateButton({ codes, groupId, onComplete }: { cod
   return <div className="border-t border-slate-100 px-3 py-2 text-xs">
     <div className="flex flex-wrap items-center gap-2">
       <button type="button" disabled={busy || active || !eligible.length} onClick={()=>void start()}
-        title="补齐当前分组十年行情、财报及估值输入，已有有效数据复用"
+        title="补齐当前分组十二年行情、财报及估值输入，已有有效数据复用"
         className="min-h-8 rounded-md px-2 text-slate-700 hover:bg-slate-50 hover:text-brand-600 disabled:opacity-60">
-        {busy ? '提交中…' : active ? `补齐中 ${progress.done + progress.skipped + progress.failed}/${progress.total}` : '补齐10年'}
+        {busy ? '提交中…' : active ? `补齐中 ${progress.done + progress.skipped + progress.failed}/${progress.total}` : '补齐12年'}
       </button>
       {(progress || error) && <button type="button" aria-expanded={details} aria-label="查看补齐进度" onClick={() => setDetails(v => !v)}
         className="min-h-8 text-slate-500 hover:text-brand-600">{details?'收起进度':'查看进度'}</button>}
@@ -99,7 +99,7 @@ export default function MarketUpdateButton({ codes, groupId, onComplete }: { cod
       </button>
     </div>
     {details && <div role="status" className="mt-2 rounded-md bg-slate-50 p-2.5 leading-5 text-slate-600">
-      <p className="mb-1 font-medium text-slate-900">十年数据补齐</p>
+      <p className="mb-1 font-medium text-slate-900">十二年数据补齐</p>
       {error && <p className="mb-2 text-orange-700">{error}</p>}
       {progress && <>
         <p>已完成 {progress.done} · 已复用 {progress.skipped} · 失败 {progress.failed}</p>

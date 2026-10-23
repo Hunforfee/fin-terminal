@@ -1,22 +1,23 @@
-/** Rolling ten-calendar-year ceiling for PUBLIC market inputs, never personal data. */
+/** Rolling twelve-calendar-year ceiling for PUBLIC market inputs, never personal data. */
+export const MARKET_RETENTION_YEARS = 12;
 export function marketCutoff(now = Date.now()): string {
   const day = new Date(now + 8 * 3600e3).toISOString().slice(0, 10);
   const [year, month, date] = day.split('-').map(Number);
-  const last = new Date(Date.UTC(year - 10, month, 0)).getUTCDate();
-  return `${year - 10}-${String(month).padStart(2,'0')}-${String(Math.min(date,last)).padStart(2,'0')}`;
+  const last = new Date(Date.UTC(year - MARKET_RETENTION_YEARS, month, 0)).getUTCDate();
+  return `${year - MARKET_RETENTION_YEARS}-${String(month).padStart(2,'0')}-${String(Math.min(date,last)).padStart(2,'0')}`;
 }
 export const retainedDate = (date: unknown, now = Date.now()) => typeof date === 'string' && date.slice(0,10) >= marketCutoff(now);
 
 export function retainMarketPayload<T>(kind: string, payload: T, now = Date.now()): T {
   const today=new Date(now+8*3600e3).toISOString().slice(0,10);
-  // Ten-year valuations need prior-year reports, announcement dates, dividend
+  // Valuations need prior-year reports, announcement dates, dividend
   // evidence and share states at the left boundary. This buffer is input-only;
-  // charts stay ten years. Share events specifically must reach back past the
+  // display and storage support twelve years. Share events must reach past the
   // window start to the last report period before it: a boundary state dated at
   // the date-granularity cutoff (e.g. 2016-10-23) is too late for sharesAt on a
   // 2016-09-30 report, which would drop that report's valuation point entirely.
   const buffered = ['financial-history','disclosure-dates','source-sina-page','source-sina-indicators',
-    'implemented-dividends','announced-dividend-plans','share-events'].includes(kind);
+    'implemented-dividends','announced-dividend-plans','share-events','source-hk-indicators','source-hk-statement'].includes(kind);
   const boundary = new Date(marketCutoff(now)+'T00:00:00Z');
   if(buffered)boundary.setUTCFullYear(boundary.getUTCFullYear()-2);
   const cutoff=boundary.toISOString().slice(0,10);

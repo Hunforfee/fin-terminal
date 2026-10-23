@@ -1,6 +1,7 @@
+import { MARKET_RETENTION_YEARS } from './marketRetention';
 /** Shared collection range and stable phase IDs (also used by progress labels). */
-export const HISTORY_YEARS = 10;
-export const HISTORY_BAR_COUNT = 3000;
+export const HISTORY_YEARS = MARKET_RETENTION_YEARS;
+export const HISTORY_BAR_COUNT = Math.min(3200, HISTORY_YEARS * 280 + 60);
 export const FINANCIAL_LOOKBACK = HISTORY_YEARS + 1;
 export const coverageKey = (symbol: string) => `market-coverage:v1:${symbol}:${HISTORY_YEARS}`;
 export function historyStart(now = Date.now()) {
@@ -12,10 +13,10 @@ export function historyStart(now = Date.now()) {
 /**
  * 财报/财务指标等「输入数据」的准入下限。
  *
- * 图表窗口（historyStart）是日期粒度——十年前的今天；而覆盖检查（marketHistoryCollection）
+ * 图表窗口（historyStart）是日期粒度——十二年前的今天；而覆盖检查（marketHistoryCollection）
  * 按年份要求最近 FINANCIAL_LOOKBACK=HISTORY_YEARS+1 年的财报页。若输入准入也按日期粒度，
  * 窗口左边界之前最近一个已披露报告期（前一年年报、当年各季报）会被一并拒绝：
- * 2016-10-24 起算的十年窗口，其最早一批交易日只有 2016-09-30 三季报可作估值依据，
+ * 2014-10-24 起算的十二年窗口，其最早一批交易日只有 2014-09-30 三季报可作估值依据，
  * 而该日期早于日期粒度的截止点。故输入准入放宽一年、按年度粒度，
  * 与覆盖检查口径一致；保留层（source-sina-page 等多留 2 年）本就允许。
  */
@@ -33,10 +34,10 @@ export function requiredFinancialReports(year: number, listingDate?: string, now
 }
 // Keep IDs 10–13 stable for existing gap records and the independent resolve API.
 export function financialYearForPhase(phase: number, now = Date.now()): number | null {
-  const offset = phase >= 3 && phase <= 9 ? phase - 3 : phase >= 14 && phase <= 18 ? phase - 7 : null;
+  const offset = phase >= 3 && phase <= 9 ? phase - 3 : phase >= 14 && phase <= 18 ? phase - 7 : phase === 21 ? 12 : phase === 22 ? 13 : null;
   return offset === null ? null : new Date(now + 8 * 3600e3).getUTCFullYear() - offset;
 }
-export const FULL_HISTORY_PHASES = [0,1,2,3,4,5,6,7,8,9,14,15,16,17,18,10,11,13,12];
+export const FULL_HISTORY_PHASES = [0,1,2,3,4,5,6,7,8,9,14,15,16,17,18,21,22,10,11,13,12];
 export const RECENT_HISTORY_PHASES = [2,0,1,3,4,10,11,13,12];
 export function collectionPhases(mode: string, initialize: boolean) {
   return mode === 'daily' ? [19]

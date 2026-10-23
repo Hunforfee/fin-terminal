@@ -1,3 +1,4 @@
+import { FINANCIAL_LOOKBACK } from '../marketHistoryPlan';
 import { fetchShareHistory, sharesAt, shareHistorySource, type ShareChange } from './sinaFinance';
 /**
  * 新浪三大报表「全历史」解析（估值分母专用，单位：万元）。
@@ -173,10 +174,10 @@ export function statementPointsFromPages(plPage: StatementSourcePage | null, bsP
 }
 
 /** 并发抓取近 N 年（含当前年 +1 缓冲）的报表关键科目，按报告期去重合并 */
-export async function fetchStatementHistory(code: string, years = 12): Promise<FinStatementPoint[]> {
+export async function fetchStatementHistory(code: string, years = FINANCIAL_LOOKBACK): Promise<FinStatementPoint[]> {
   const thisYear = new Date().getFullYear();
   const yearList: number[] = [];
-  for (let y = thisYear; yearList.length < Math.min(11,Math.max(1,years)) + 1 && y >= 1998; y--) yearList.push(y);
+  for (let y = thisYear; yearList.length < Math.min(FINANCIAL_LOOKBACK,Math.max(1,years)) + 1 && y >= 1998; y--) yearList.push(y);
 
   const shareHistory = await cachedMarketInput(`shares-v3:${code}`,'share-events','public-shares:10000shares',1800e3,
     ()=>fetchShareHistory(code),rows=>validateDatedRows(rows as unknown as Record<string,unknown>[],'date',['sharesWan']),shareHistorySource);

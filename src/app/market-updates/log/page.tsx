@@ -6,7 +6,7 @@ import { fetchJson } from '@/lib/fetchJson';
 type Live = { active: boolean; date?: string; mode?: string; total: number; done: number; failed: number; running: number; waiting: number; finished: boolean; pausedUntil: number; workerOnline: boolean } | null;
 
 const MODE_LABEL: Record<string, string> = {
-  daily: '每日轻量', recent: '周日完整复核', 'ten-year': '十年补齐', 'five-year': '五年补齐（旧）',
+  daily: '每日轻量', recent: '周日完整复核', 'ten-year': '十二年补齐', 'five-year': '五年补齐（旧）',
 };
 function modeLabel(mode: string, owner: string) {
   if (owner.startsWith('system:close')) return MODE_LABEL[mode] ?? '定时更新';

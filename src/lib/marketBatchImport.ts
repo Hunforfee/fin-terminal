@@ -1,3 +1,4 @@
+import { HISTORY_YEARS } from './marketHistoryPlan';
 /** Bounded, network-free staging and bulk commit for public A-share imports. */
 import { marketDigest, marketRecord, type MarketRecord, type MarketStore } from './marketStore';
 import { normalizeStockCode } from './datasource/codes';
@@ -86,8 +87,8 @@ function keysFor(items:BatchItem[],symbol:string) {
       keys.add(`security-basics:v1:${/^6/.test(code)?'sh':/^[48]/.test(code)?'bj':'sz'}${code}`);
       for(const d of r.reportDates??[])if(typeof d==='string')keys.add(`source-sina-page:v1:${code}:${r.statement}:${d.slice(0,4)}`);
     } else if(it.type==='a-indicators')keys.add(`source-sina-indicators:v1:${code}:${r.year}`);
-    else if(it.type==='disclosure-dates')keys.add(`disclosures-v3:${code}:${r.years??12}`);
-    else if(it.type==='financial-history')for(let y=2;y<=12;y++)keys.add(`statements-v3:${code}:${y}`);
+    else if(it.type==='disclosure-dates')keys.add(`disclosures-v3:${code}:${r.years??HISTORY_YEARS+2}`);
+    else if(it.type==='financial-history')for(let y=2;y<=HISTORY_YEARS+2;y++)keys.add(`statements-v3:${code}:${y}`);
     else if(it.type==='share-history')keys.add(`shares-v3:${code}`);
     else if(it.type==='dividend-plans')keys.add(`dividend-plans-v2:${code}`);
     else if(it.type==='dividend-impl')keys.add(`implemented-dividends-v4:${code}`);

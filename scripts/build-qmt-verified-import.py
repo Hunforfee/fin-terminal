@@ -67,7 +67,7 @@ def main():
     upload.mkdir()
     report = {'range': [start, end], 'productionWritten': False, 'files': [], 'stocks': [],
         'sourceManifestSha256': digest(root / 'manifest.json'), 'limitations': [
-        '仅保留十年范围内报告期；2015年的原始预热数据留在离线导出中。',
+        '按输入清单声明的 range 保留报告期；旧十年导出包不会凭空扩展到十二年，需重新导出缺失年份。',
         'QMT当前修订版公告日未证明是首次披露日，不写入历史估值披露日缓存。',
         'QMT只导出已查询的关键财务科目，不能证明整站所有指标已齐备。',
         '没有实际上市日期时保留为空，不以首根K线推断上市。',

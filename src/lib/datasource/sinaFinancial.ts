@@ -1,3 +1,4 @@
+import { HISTORY_YEARS } from '../marketHistoryPlan';
 /**
  * 新浪财经-财务指标 Provider（真实三表衍生指标）。
  *
@@ -108,7 +109,7 @@ export async function fetchSinaFinancial(
 ): Promise<CompanyFinancials> {
   const thisYear = new Date().getFullYear();
   const yearList: number[] = [];
-  for (let y = thisYear; yearList.length < Math.min(10,Math.max(1,years))+1 && y >= 1998; y--) yearList.push(y);
+  for (let y = thisYear; yearList.length < Math.min(HISTORY_YEARS,Math.max(1,years))+1 && y >= 1998; y--) yearList.push(y);
 
   const pages = await Promise.all(
     yearList.map(async (y) => {

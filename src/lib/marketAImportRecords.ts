@@ -1,3 +1,4 @@
+import { HISTORY_YEARS } from './marketHistoryPlan';
 import { marketDigest, marketRecord, type MarketRecord, type MarketStore } from './marketStore';
 import { normalizeStockCode } from './datasource/codes';
 import { INDICATORS, type IndicatorDef } from './datasource/financeIndicators';
@@ -59,8 +60,8 @@ export interface DisclosureImportResult {
 export async function importDisclosureDates(store: MarketStore, input: { symbol?: unknown; code?: unknown; years?: unknown; items?: unknown; basis?: unknown }, now = Date.now()): Promise<DisclosureImportResult> {
   const n = normalizeStockCode(String(input.symbol ?? input.code ?? ''));
   if (!n || n.market === 'HK') throw Error('披露日期导入仅支持 A 股代码（如 sh600519 / 600519）');
-  const spanRaw = Number(input.years ?? 12);
-  if (!Number.isInteger(spanRaw) || spanRaw < 2 || spanRaw > 20) throw Error('years 必须是 2–20 的整数（键中的报告期范围，缺省 12 与估值读取器一致）');
+  const spanRaw = Number(input.years ?? HISTORY_YEARS+2);
+  if (!Number.isInteger(spanRaw) || spanRaw < 2 || spanRaw > 20) throw Error('years 必须是 2–20 的整数（键中的报告期范围，缺省 14，与十二年估值公告读取器一致）');
   const key = `disclosures-v3:${n.code}:${spanRaw}`;
   const items = Array.isArray(input.items) ? input.items as Item[] : [];
   if (!items.length) throw Error('items 为空：每项 {date: 报告期, published: 实际披露日}，可附 basis 来源依据');

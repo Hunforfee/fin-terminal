@@ -38,7 +38,7 @@ export async function collectHistoryPhase(symbol:string,phase:number,signal:Abor
     if(phase===0)try{await getSecurityBasics(symbol);}catch{await store.incident(symbol,'listing_date_unavailable');}
     const adjust=phase===0?'none':'qfq';
     const prices=await getKLine(symbol,'day',adjust,HISTORY_BAR_COUNT,historyStart());
-    if(prices.stale || prices.complete===false || prices.storage?.backend!=='persistent')throw Error('十年价格未确认完整入库');
+    if(prices.stale || prices.complete===false || prices.storage?.backend!=='persistent')throw Error('十二年价格未确认完整入库');
   }else if(financialYearForPhase(phase)!==null){
     if(n.market==='HK'){
       if(phase===3){
@@ -142,7 +142,7 @@ export async function collectHistoryPhase(symbol:string,phase:number,signal:Abor
         // Full three statements are required for annual/interim reports, not
         // an earnings-only quarterly trading update.
         const dates=points.filter(p=>p.date>=historyStart() && ['annual','semi'].includes(p.kind)).map(p=>p.date);
-        if(!dates.length)missingInputs.push('港股十年年报/中报指标');
+        if(!dates.length)missingInputs.push('港股十二年年报/中报指标');
         for(const date of dates)for(const id of ['balance','profit','cashflow'])required.push(`source-hk-statement:v1:${secucode}:${id}:${date}`);
         for(const key of required){
           const row = await store.read(key);

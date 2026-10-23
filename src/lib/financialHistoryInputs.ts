@@ -2,7 +2,7 @@ import { getMarketStore, marketDigest, marketRecord, type MarketStore } from './
 import { cachedMarketInput, validateDatedRows } from './marketInputs';
 import { databaseOnly } from './marketReadPolicy';
 import { withMarketRefresh } from './marketRefresh';
-import { reportCutoff, financialEarliestYear } from './marketHistoryPlan';
+import { reportCutoff, financialEarliestYear, HISTORY_YEARS } from './marketHistoryPlan';
 import { retainMarketPayload } from './marketRetention';
 import { fetchStatementHistory, statementPointsFromPages, type FinStatementPoint } from './datasource/sinaFinStatements';
 import type { StatementSourcePage } from './datasource/eastmoneyStatements';
@@ -23,7 +23,7 @@ export async function getFinancialHistoryInput(code: string, span: number): Prom
 
 export async function rebuildFinancialHistoryInput(code: string, span: number,
   store: MarketStore | null = getMarketStore(), now = Date.now()): Promise<FinStatementPoint[]> {
-  if (!/^\d{6}$/.test(code) || !Number.isInteger(span) || span < 2 || span > 12) throw Error('财务史范围无效');
+  if (!/^\d{6}$/.test(code) || !Number.isInteger(span) || span < 2 || span > HISTORY_YEARS + 2) throw Error('财务史范围无效');
   if (!store) return fetchStatementHistory(code, span);
   const key = `statements-v3:${code}:${span}`;
   return withMarketRefresh(store, key, async () => {
@@ -31,7 +31,7 @@ export async function rebuildFinancialHistoryInput(code: string, span: number,
     for (let year = new Date(now + 8 * 3600e3).getUTCFullYear(); year >= financialEarliestYear(now); year--)
       for (const id of ['profit', 'balance']) pageKeys.push(`source-sina-page:v1:${code}:${id}:${year}`);
     const sharesKey = `shares-v3:${code}`;
-    const historyKeys = [...new Set([key, `statements-v3:${code}:11`, `statements-v3:${code}:12`])];
+    const historyKeys = [...new Set([key, `statements-v3:${code}:11`, `statements-v3:${code}:12`, `statements-v3:${code}:13`, `statements-v3:${code}:${HISTORY_YEARS+1}`, `statements-v3:${code}:${HISTORY_YEARS+2}`])];
     const keys = [...pageKeys, sharesKey, ...historyKeys];
     const records = store.readInputs ? await store.readInputs(keys) : (await Promise.all(keys.map(k => store.read(k)))).filter(r => r !== null);
     const saved = new Map(records.map(r => [r.key, r]));

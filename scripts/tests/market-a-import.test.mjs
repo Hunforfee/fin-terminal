@@ -40,7 +40,7 @@ test('披露日期：正常导入、保留窗口、预约与未来日期排除',
   assert.match(r.missing[0].reason, /晚于今天/);
   assert.match(r.missing[1].reason, /预约/);
   const saved = await store.read(r.key);
-  assert.equal(saved.key, 'disclosures-v3:600519:12');
+  assert.equal(saved.key, 'disclosures-v3:600519:14');
   assert.equal(saved.kind, 'disclosure-dates');
   const map = new Map(saved.payload.$marketMap);
   assert.equal(map.get('2025-12-31'), '2026-04-17');

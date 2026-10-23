@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { marketRecord, type MarketStore } from './marketStore';
 import { normalizeStockCode } from './datasource/codes';
-import { collectionPhases, coverageKey } from './marketHistoryPlan';
+import { collectionPhases, coverageKey, HISTORY_YEARS } from './marketHistoryPlan';
 import { appendRunLog } from './marketUpdateRunLog';
 
 export const executionKey = (symbol:string, mode:UpdateMode='recent', targetDate?:string) => mode==='daily' ? `${symbol}@daily@${targetDate}` : mode==='financial' ? `${symbol}@financial` : symbol;
@@ -9,8 +9,9 @@ const KEY = 'market-update-queue:v1';
 const COOLDOWN = 10 * 60e3;
 const LEASE = 5 * 60e3;
 type State = 'queued' | 'running' | 'done' | 'failed';
+// 'ten-year' is the stable legacy API mode name; full fills now use HISTORY_YEARS=12.
 export type UpdateMode = 'recent' | 'ten-year' | 'daily' | 'financial' | 'five-year'; // five-year: stored legacy jobs only.
-interface Item { symbol: string; state: State; attempts: number; nextAt: number; targetDate?:string; mode?:UpdateMode; initialize?:boolean; phase?:number; phaseErrors?:Record<string,string>; doneAt?: number; error?: string; lease?: string; leaseUntil?: number }
+interface Item { historyYears?:number; symbol: string; state: State; attempts: number; nextAt: number; targetDate?:string; mode?:UpdateMode; initialize?:boolean; phase?:number; phaseErrors?:Record<string,string>; doneAt?: number; error?: string; lease?: string; leaseUntil?: number }
 interface Job { itemKeys?: Record<string,string>; id: string; owner: string; symbols: string[]; skipped: string[]; createdAt: number; mode?:UpdateMode; finishedAt?: number; result?: { done: number; failed: number; errors: { symbol: string; message: string }[] } }
 interface Queue { jobs: Job[]; items: Record<string, Item>; workerAt: number; pauseUntil: number }
 export interface UpdateProgress { reason?:'paused'|'worker-offline'|'running'|'waiting'|'finished'; id: string; mode?:UpdateMode; phase?:number; total: number; done: number; skipped: number; failed: number; running: number; waiting: number; finished: boolean; workerOnline: boolean; pausedUntil: number; errors: { symbol: string; message: string }[] }
@@ -36,8 +37,8 @@ export class MarketUpdateQueue {
         delete item.phaseErrors;delete item.error;delete item.lease;delete item.leaseUntil;
       }
       // Restart unfinished legacy fills under the new plan; old leases cannot finish them.
-      for (const item of Object.values(q.items)) if (item.mode === 'five-year' && ['queued','running'].includes(item.state)) {
-        Object.assign(item, { mode:'ten-year', initialize:true, state:'queued', phase:0, attempts:0, nextAt:now });
+      for (const item of Object.values(q.items)) if ((item.mode === 'five-year' || item.mode !== 'daily' && item.mode !== 'financial' && item.initialize !== false && item.historyYears !== HISTORY_YEARS || item.mode === 'ten-year' && item.historyYears !== HISTORY_YEARS) && ['queued','running'].includes(item.state)) {
+        Object.assign(item, { mode:item.mode === 'five-year' ? 'ten-year' : item.mode, historyYears:HISTORY_YEARS, initialize:true, state:'queued', phase:0, attempts:0, nextAt:now });
         delete item.phaseErrors; delete item.error; delete item.lease; delete item.leaseUntil;
       }
       for (const job of q.jobs) if (job.mode === 'five-year' && !job.result) job.mode = 'ten-year';
@@ -86,7 +87,7 @@ export class MarketUpdateQueue {
     return this.change((q, now) => {
       const previous = q.jobs.filter(j => j.owner === owner).at(-1);
       if (previous && previous.mode===mode && !this.progress(q, previous, now).finished) {
-        if(mode==='ten-year' && previous.mode!=='ten-year')throw new UpdateQueueError('当前任务进行中，请停止或完成后再补齐十年数据',409);
+        if(mode==='ten-year' && previous.mode!=='ten-year')throw new UpdateQueueError('当前任务进行中，请停止或完成后再补齐十二年数据',409);
         if(mode==='ten-year' && symbols.some(symbol=>!previous.symbols.includes(symbol)))throw new UpdateQueueError('已有其他范围的补齐任务进行中，请停止或完成后再提交',409);
         return this.progress(q, previous, now);
       }
@@ -102,15 +103,15 @@ export class MarketUpdateQueue {
       const skipped: string[] = [];
       for (const symbol of symbols) {
         const item = q.items[executionKey(symbol,mode,targetDate)];
-        if (item?.state === 'done' && now - (item.doneAt ?? 0) < COOLDOWN && (mode==='daily' || mode==='recent' && item.mode!=='daily' || item.mode==='ten-year')) { skipped.push(symbol); continue; }
+        if (item?.state === 'done' && now - (item.doneAt ?? 0) < COOLDOWN && (mode==='daily' || mode==='recent' && item.mode!=='daily' && (!item.initialize || item.historyYears===HISTORY_YEARS) || item.mode==='ten-year' && item.historyYears===HISTORY_YEARS)) { skipped.push(symbol); continue; }
         if (item && ['queued', 'running'].includes(item.state)) {
-          if(mode==='ten-year' && item.mode!=='ten-year')throw new UpdateQueueError('该股票正在更新，请完成后再补齐十年数据',409);
+          if(mode==='ten-year' && item.mode!=='ten-year')throw new UpdateQueueError('该股票正在更新，请完成后再补齐十二年数据',409);
           continue;
         }
         if (item?.state === 'failed' && now - (item.doneAt ?? 0) < 60e3) throw new UpdateQueueError('失败后请稍候再重试', 429);
-        const resume=retry && item?.mode===mode;
+        const resume=retry && item?.mode===mode && (!item.initialize || item.historyYears===HISTORY_YEARS);
         const phase=resume?Math.min(item.phase??0,...Object.keys(item.phaseErrors??{}).map(Number)):0;
-        q.items[executionKey(symbol,mode,targetDate)] = { symbol, targetDate, state: 'queued', attempts: 0, nextAt: now, mode,initialize:resume?item.initialize:initialization.get(symbol),phase,...(resume?{phaseErrors:item.phaseErrors}:{}) };
+        q.items[executionKey(symbol,mode,targetDate)] = { symbol, targetDate, state: 'queued', attempts: 0, nextAt: now, mode,historyYears:HISTORY_YEARS,initialize:resume?item.initialize:initialization.get(symbol),phase,...(resume?{phaseErrors:item.phaseErrors}:{}) };
       }
       const job: Job = { id: randomUUID(), owner, symbols, skipped, createdAt: now,mode,itemKeys:Object.fromEntries(symbols.map(s=>[s,executionKey(s,mode,targetDate)])) };
       q.jobs.push(job); return this.progress(q, job, now);

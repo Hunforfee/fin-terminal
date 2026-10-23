@@ -1,3 +1,4 @@
+import { HISTORY_YEARS } from './marketHistoryPlan';
 /** Persist source inputs, not derived PE/PB/yields. Expired inputs never silently become current. */
 import { getMarketStore, marketRecord, marketDigest, type MarketStore, type MarketRecord } from './marketStore';
 import { cached } from './datasource/cache';
@@ -61,8 +62,8 @@ async function availableInput(store: MarketStore, key: string, kind: string, now
   const match = /^(statements-v3|disclosures-v3):(\d{6}):(\d+)$/.exec(key);
   if (!match || kind !== (match[1] === 'statements-v3' ? 'financial-history' : 'disclosure-dates')) return null;
   const span = Number(match[3]);
-  if (!Number.isInteger(span) || span < 2 || span >= 12) return null;
-  const broader = Array.from({ length: 12 - span }, (_, i) => `${match[1]}:${match[2]}:${span + i + 1}`);
+  if (!Number.isInteger(span) || span < 2 || span >= HISTORY_YEARS+2) return null;
+  const broader = Array.from({ length: HISTORY_YEARS+2 - span }, (_, i) => `${match[1]}:${match[2]}:${span + i + 1}`);
   const records = store.readInputs ? await store.readInputs(broader) : await Promise.all(broader.map(k => store.read(k)));
   // Reuse the actual record and its freshness; do not duplicate its payload or
   // manufacture a new acquisition time just because the display range changed.

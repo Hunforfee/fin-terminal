@@ -1,3 +1,4 @@
+import { HISTORY_YEARS, reportCutoff } from '../marketHistoryPlan';
 /**
  * 东方财富 HKF10 Provider —— 港股财务数据源。
  *
@@ -17,7 +18,6 @@
 
 import { fetchJson } from './http';
 import { cachedMarketInput, validateDatedRows } from '../marketInputs';
-import { retainedDate } from '../marketRetention';
 import { getMarketStore, marketRecord } from '../marketStore';
 import { completeHkStatement, mergeHkStatementRows, type HkStatementRow } from '../marketHkStatements';
 import { withMarketRefresh } from '../marketRefresh';
@@ -96,8 +96,7 @@ async function fetchAllHkIndicatorPoints(secucode: string): Promise<IndicatorPoi
   });
   const rows = j.result?.data ?? [];
   const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
-  const cutoff = new Date();
-  cutoff.setUTCFullYear(cutoff.getUTCFullYear() - 10);
+  const cutoff = reportCutoff();
   const points = rows
     .map((r) => {
       const d = reportDate(r);
@@ -113,15 +112,15 @@ async function fetchAllHkIndicatorPoints(secucode: string): Promise<IndicatorPoi
       const label = type.replace('年年报','年报').replace('年中报','中报').replace('年一季报','Q1').replace('年三季报','Q3') || d;
       return { date: d, raw, currency: String(r.CURRENCY ?? ''), kind, label };
     })
-    .filter((p): p is IndicatorPoint => p !== null && new Date(`${p.date}T00:00:00Z`) >= cutoff)
+    .filter((p): p is IndicatorPoint => p !== null && p.date >= cutoff)
     .sort((a, b) => a.date.localeCompare(b.date));
   return points;
 }
 
-export async function fetchHkIndicatorPoints(secucode: string, years = 10): Promise<IndicatorPoint[]> {
+export async function fetchHkIndicatorPoints(secucode: string, years = HISTORY_YEARS): Promise<IndicatorPoint[]> {
   const points = await cachedMarketInput(`source-hk-indicators:v1:${secucode}`,'source-hk-indicators','hkf10:main:reported',1800e3,
     ()=>fetchAllHkIndicatorPoints(secucode),rows=>validateDatedRows(rows as unknown as Record<string,unknown>[],'date'));
-  const cutoff = new Date(); cutoff.setUTCFullYear(cutoff.getUTCFullYear()-Math.min(10,Math.max(1,years)));
+  const cutoff = new Date(); cutoff.setUTCFullYear(cutoff.getUTCFullYear()-Math.min(HISTORY_YEARS+1,Math.max(1,years)));
   return points.filter(p=>p.date>=cutoff.toISOString().slice(0,10));
 }
 
@@ -258,7 +257,7 @@ export async function fetchHkStatement(
   id: StatementId,
   dates: string[],
 ): Promise<HkStatementRow[]> {
-  const selected = [...new Set(dates)].filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d) && retainedDate(d)).sort();
+  const selected = [...new Set(dates)].filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d) && d >= reportCutoff() && d <= new Date(Date.now()+8*3600e3).toISOString().slice(0,10)).sort();
   if (!selected.length) return [];
   const fetchRows = async (missing: string[]) => {
     const query = `(SECUCODE="${secucode}")(REPORT_DATE in (${missing.map(d=>`'${d}'`).join(',')}))`;
@@ -344,7 +343,7 @@ export async function fetchHkCatalog(secucode: string): Promise<StatementCatalog
   };
   const prefixes: Record<StatementId, 'bs' | 'pl' | 'cf'> = { balance: 'bs', profit: 'pl', cashflow: 'cf' };
 
-  const allDates = (await fetchHkIndicatorPoints(secucode, 12)).map((p) => p.date);
+  const allDates = (await fetchHkIndicatorPoints(secucode, HISTORY_YEARS+1)).map((p) => p.date);
   const sampleDates = allDates.slice(-8);
   const catalogs = await Promise.all(
     ids.map(async (id) => {
@@ -508,7 +507,7 @@ export function summarizeHkSnapshot(
 export async function buildHkValuation(
   secucode: string, code: string, candles: Candle[],
   quote: { price: number | null; pe: number | null; pb?: number | null; ts?: string | null },
-  years = 10, current?: HkValuation,
+  years = HISTORY_YEARS, current?: HkValuation,
 ): Promise<Valuation> {
   const points = await fetchHkIndicatorPoints(secucode, years + 3);
   const date = quote.ts?.slice(0, 10) ?? candles.at(-1)?.date ??
@@ -523,6 +522,7 @@ export async function buildHkValuation(
     historicalDividends = dividends;
     shared = computeHkValuation(fundamental, dividends, quote.price, date);
   }
+  // This provider offers only five/ten-year presets; the snapshot retains the requested window.
   const span = years > 5 ? 10 : 5;
   const [pe, pb] = await Promise.all([
     fetchHkRatioHistory(`hk${code}`, 'pe', span).catch(() => null),

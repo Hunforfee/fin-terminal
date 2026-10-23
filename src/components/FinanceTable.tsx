@@ -57,7 +57,7 @@ const GRAN: {
   { key: 'semi', label: '中报', title: '半年报口径（H1 + H2）' },
   { key: 'quarter', label: '季报', title: '全部季度报告（Q1/Q2/Q3/年报）' },
 ];
-const RANGES = [2, 3, 5, 10] as const;
+const RANGES = [2, 3, 5, 10, 12] as const;
 
 const LS_FIELDS = 'fin.mergeTable.fields';
 
@@ -107,7 +107,7 @@ export default function FinanceTable({ code }: { code: string }) {
   const fieldsKey = financeStorageKey(LS_FIELDS, code);
   const [loadedFieldsKey, setLoadedFieldsKey] = useState('');
   const [granularity, setGranularity] = useState<'annual' | 'semi' | 'quarter'>('quarter');
-  const [years, setYears] = useState<number>(10);
+  const [years, setYears] = useState<number>(12);
   const [view, setView] = useState<'indicators' | 'pl' | 'bs' | 'cf'>('indicators');
   const [fields, setFields] = useState<string[]>(DEFAULT_FIELDS);
   const [showAll, setShowAll] = useState(false);

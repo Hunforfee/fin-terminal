@@ -13,21 +13,21 @@ async function fixture(run){
   const root=path.resolve('data');await fs.mkdir(root,{recursive:true});const directory=await fs.mkdtemp(path.join(root,'retention-test-'));
   try{await run(fileMarketStore(directory),directory);}finally{if(!directory.startsWith(root+path.sep))throw Error('Unsafe path');await fs.rm(directory,{recursive:true,force:true});}
 }
-test('ten-calendar-year cutoff handles leap days and prunes aligned financial columns',()=>{
-  assert.equal(marketCutoff(now),'2016-10-21');assert.equal(marketCutoff(Date.parse('2024-02-29T04:00Z')),'2014-02-28');
-  const page={dates:['2016-09-30','2016-12-31','2026-06-30'],rows:[{kind:'field',name:'收入',vals:['1','2','3']},{kind:'group',name:'现金流',vals:[]}],unit:'万元'};
+test('twelve-calendar-year cutoff handles leap days and prunes aligned financial columns',()=>{
+  assert.equal(marketCutoff(now),'2014-10-21');assert.equal(marketCutoff(Date.parse('2024-02-29T04:00Z')),'2012-02-29');
+  const page={dates:['2014-09-30','2014-12-31','2026-06-30'],rows:[{kind:'field',name:'收入',vals:['1','2','3']},{kind:'group',name:'现金流',vals:[]}],unit:'万元'};
   const kept=retainMarketPayload('source-sina-page',page,now);
-  assert.deepEqual(kept.dates,['2016-09-30','2016-12-31','2026-06-30']);assert.deepEqual(kept.rows[0].vals,['1','2','3']);assert.equal(kept.rows[1].kind,'group');
+  assert.deepEqual(kept.dates,['2014-09-30','2014-12-31','2026-06-30']);assert.deepEqual(kept.rows[0].vals,['1','2','3']);assert.equal(kept.rows[1].kind,'group');
   const series=retainMarketPayload('watchlist-financial-inputs',{periods:page.dates,periodLabels:['old','a','b'],series:{roe:[1,2,3]}},now);
   assert.deepEqual(series.series.roe,[2,3]);assert.deepEqual(series.periodLabels,['a','b']);
 });
 test('share boundary preserves a labelled opening state; personal notes and research are untouched',()=>{
-  // 股本输入的保留期与财报输入一致（截止日再前移 2 年）：十年窗口（2016-10-22 起）
+  // 十二年窗口另保留两年输入缓冲，并在缓冲边界携带有标签的股本期初状态。
   // 最早需要的报告点是 2016-09-30，日期粒度截止点（2016-10-21）上合成的基线状态
   // 晚于该报告点，sharesAt 取不到股本会整点丢弃；缓冲后 2015-05-13 的真实变更事件
   // 以原日期保留，窗口左边界即有生效股本。
   const shares=retainMarketPayload('share-events',[{date:'2010-01-01',sharesWan:100},{date:'2015-05-13',sharesWan:120},{date:'2025-01-01',sharesWan:130}],now);
-  assert.deepEqual(shares,[{date:'2014-10-21',sharesWan:100,baseline:true},{date:'2015-05-13',sharesWan:120},{date:'2025-01-01',sharesWan:130}]);
+  assert.deepEqual(shares,[{date:'2012-10-21',sharesWan:100,baseline:true},{date:'2015-05-13',sharesWan:120},{date:'2025-01-01',sharesWan:130}]);
   const noPrior=retainMarketPayload('share-events',[{date:'2015-05-13',sharesWan:120},{date:'2025-01-01',sharesWan:130}],now);
   assert.deepEqual(noPrior,[{date:'2015-05-13',sharesWan:120},{date:'2025-01-01',sharesWan:130}]);
   const note={date:'2000-01-01',text:'投资记录'};assert.equal(retainMarketPayload('personal-note',note,now),note);
@@ -35,7 +35,7 @@ test('share boundary preserves a labelled opening state; personal notes and rese
   assert.deepEqual([...map],[['2025-12-31','2026-03-01']]);
 });
 test('retention sweeps trim stored prices, remove abandoned snapshots, preserve current history and active queues',()=>fixture(async(store)=>{
-  const candles=[{date:'2010-01-01',open:1,close:1,high:1,low:1},{date:'2026-10-20',open:2,close:2,high:2,low:2}];
+  const candles=[{date:'2014-10-20',open:1,close:1,high:1,low:1},{date:'2014-10-21',open:1,close:1,high:1,low:1},{date:'2016-01-01',open:1,close:1,high:1,low:1},{date:'2026-10-20',open:2,close:2,high:2,low:2}];
   const payload={symbol:'sh600519',candles};
   const legacy={...marketRecord('legacy-price','kline','test',payload,1000,now),payload,digest:marketDigest(payload)};
   await store.write(legacy,null);
@@ -43,7 +43,7 @@ test('retention sweeps trim stored prices, remove abandoned snapshots, preserve 
   await store.write(marketRecord('queue','market-update-queue','internal',{state:'running'},1000,now-31*864e5),null);
   const result=await runMarketMaintenance(store,now,500);
   assert.equal(result.trimmed,1);assert.equal(result.removed,1);
-  const price=await store.read('legacy-price');assert.deepEqual(price.payload.candles.map(c=>c.date),['2026-10-20']);
+  const price=await store.read('legacy-price');assert.deepEqual(price.payload.candles.map(c=>c.date),['2014-10-21','2016-01-01','2026-10-20']);
   assert.equal(price.acquiredAt,legacy.acquiredAt);assert.equal(price.refreshAfter,legacy.refreshAfter);
   assert.equal(await store.read('abandoned-quote'),null);assert.ok(await store.read('queue'));
   assert.equal((await runMarketMaintenance(store,now+1000)).skipped,true);

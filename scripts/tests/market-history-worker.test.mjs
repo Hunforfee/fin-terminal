@@ -39,10 +39,10 @@ test('a recent job without initialized coverage also starts the full website col
 });
 
 test('readiness failure never advances the stock to an apparent success',async()=>{
- const w=worker({phase:18,failure:true});const result=await w.run();assert.equal(result.ok,false);assert.equal(w.finished[0][4],undefined);
+ const w=worker({phase:plan.FULL_HISTORY_PHASES.length-1,failure:true});const result=await w.run();assert.equal(result.ok,false);assert.equal(w.finished[0][4],undefined);
 });
 test('last history phase is the readiness check and only it finishes the stock',async()=>{
- const w=worker({phase:18});await w.run();assert.equal(w.calls[0][1],12);assert.equal(w.finished[0][4],undefined);
+ const w=worker({phase:plan.FULL_HISTORY_PHASES.length-1});await w.run();assert.equal(w.calls[0][1],12);assert.equal(w.finished[0][4],undefined);
 });
 
 test('recent failures classify the actual collection phase and historical phase errors',async()=>{

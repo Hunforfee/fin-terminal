@@ -23,7 +23,7 @@
  *   - 分红事件：parseHkDividends（仅 ASSIGN_PROGRESS 已实施的现金派息，dps 仅解析已披露港元额）
  *   - 三大报表带 overwrite:true：全量快照修正站点旧 _PC 接口落入的人民币折算口径污染；
  *     并逐报告期附 completeReports 完整项目清单声明（上传包即原始来源全量，非 partial 补丁）。
- * 保留期：与 marketCutoff 一致（今天-10年），超期报告期/除息日预过滤，与站点抓取行为对齐。
+ * 保留期：与 marketCutoff 一致（今天-12年），超期报告期/除息日预过滤，与站点抓取行为对齐。
  *
  * 导入会话：自签 fin_session（同 scripts/mcp-fill-gaps.mjs），Origin 用 APP_ORIGIN。
  */
@@ -41,12 +41,15 @@ const fail = (message) => { console.error(`✗ ${message}`); process.exit(1); };
 // 数据快照日：上传包 fetchedAt 最大值；分红统计截止到该日。默认取今天。
 const AS_OF = flag('--as-of', new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10));
 const TODAY = AS_OF;
-const cutoffOf = (today) => { // marketCutoff：今天-10 年（同月日，月末钳位）
+const HISTORY_YEARS = 12;
+const cutoffOf = (today) => { // marketCutoff：今天-12 年（同月日，月末钳位）
   const [y, m, d] = today.split('-').map(Number);
-  const last = new Date(Date.UTC(y - 10, m, 0)).getUTCDate();
-  return `${y - 10}-${String(m).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`;
+  const last = new Date(Date.UTC(y - HISTORY_YEARS, m, 0)).getUTCDate();
+  return `${y - HISTORY_YEARS}-${String(m).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`;
 };
 const CUTOFF = cutoffOf(TODAY);
+// Original report periods need the same prior-year admission buffer as the server.
+const REPORT_CUTOFF = `${Number(TODAY.slice(0,4))-HISTORY_YEARS-1}-01-01`;
 
 const summary = { asOf: AS_OF, cutoff: CUTOFF, types: {} };
 const skipped = { statementBeforeCutoff: 0, statementFuture: 0, statementNoRows: 0,
@@ -118,7 +121,7 @@ function convertStatements(dataDir, outDir, sub, statement) {
     const rows = [];
     for (const r of parseStatementRows(group)) {
       if (r.date > TODAY) { skipped.statementFuture++; continue; }
-      if (r.date < CUTOFF) { skipped.statementBeforeCutoff++; continue; }
+      if (r.date < REPORT_CUTOFF) { skipped.statementBeforeCutoff++; continue; }
       rows.push(r);
     }
     if (!rows.length) { empty++; continue; }
@@ -148,7 +151,7 @@ function convertIndicators(dataDir, outDir) {
       const d = iso10(r.REPORT_DATE);
       if (!d) continue;
       if (d > TODAY) { skipped.indicatorFuture++; continue; }
-      if (d < CUTOFF) { skipped.indicatorBeforeCutoff++; continue; }
+      if (d < REPORT_CUTOFF) { skipped.indicatorBeforeCutoff++; continue; }
       const raw = {};
       for (const [k, v] of Object.entries(r)) {
         if (typeof v === 'number' || (typeof v === 'string' && v !== '' && Number.isFinite(Number(v)))) raw[k] = Number(v);

@@ -1,3 +1,4 @@
+import { HISTORY_YEARS } from '../marketHistoryPlan';
 /**
  * 新浪财务指标页（`vFD_FinancialGuideLine`）——用于还原历史真实估值。
  *
@@ -167,7 +168,7 @@ export function sharesAt(history: ShareChange[], date: string): number | null {
  * 抓取多年报告期（按年分页并发抓取）。
  * @param years 需要回溯的年数（含当年）
  */
-export async function fetchFinancialPeriods(code: string, years = 11): Promise<PeriodFinancial[]> {
+export async function fetchFinancialPeriods(code: string, years = HISTORY_YEARS+2): Promise<PeriodFinancial[]> {
   const thisYear = new Date().getFullYear();
   const ys: number[] = [];
   for (let i = 0; i < years; i++) ys.push(thisYear - i);
@@ -233,7 +234,7 @@ export function parseProfitStatement(html: string): { date: string; netProfit: n
 }
 
 /** 抓取多年利润表 */
-export async function fetchProfitPeriods(code: string, years = 12): Promise<{ date: string; netProfit: number }[]> {
+export async function fetchProfitPeriods(code: string, years = HISTORY_YEARS+2): Promise<{ date: string; netProfit: number }[]> {
   const thisYear = new Date().getFullYear();
   const ys: number[] = [];
   for (let i = 0; i < years; i++) ys.push(thisYear - i);

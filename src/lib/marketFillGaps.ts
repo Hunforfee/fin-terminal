@@ -60,7 +60,7 @@ export function classifyMissingKey(key: string): { domain: string; mcp: boolean 
 /** coverage.gaps 文案 → 数据域。设计性缺口返回 null（不登记）。 */
 export function classifyGapText(text: string): { domains: string[]; mcp: boolean; note?: string } | null {
   if (text.includes('港股历史估值仍缺少可核验的公告与分红快照，不生成历史分位')) return null; // Legacy message only.
-  if (text.includes('历史起点覆盖不足')) return { domains: ['kline'], mcp: true, note: 'K 线历史起点不足十年或缺少已核实上市日期，可经 MCP 回补不复权日线' };
+  if (text.includes('历史起点覆盖不足')) return { domains: ['kline'], mcp: true, note: 'K 线历史起点不足十二年或缺少已核实上市日期，可经 MCP 回补不复权日线' };
   if (text.includes('部分交易日缺少已披露财报')) return { domains: ['statements-v3', 'shares-v3'], mcp: true, note: '部分交易日缺少财报/股本/复权数据，可经 MCP 全量导入财务史与股本史' };
   return { domains: [text], mcp: false };
 }

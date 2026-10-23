@@ -182,7 +182,7 @@ export async function POST(request: NextRequest) {
         for (const symbol of symbols) {
           const coverage = (await store.read<{ status?: string }>(coverageKey(symbol!)).catch(() => null))?.payload;
           if (coverage?.status !== 'ready')
-            warnings.push(`${symbol} 尚未完成初始化，${mode === 'ten-year' ? '十年' : 'recent'} 任务将按全量历史采集执行（耗时与请求量远高于增量更新）`);
+            warnings.push(`${symbol} 尚未完成初始化，${mode === 'ten-year' ? '十二年' : 'recent'} 任务将按全量历史采集执行（耗时与请求量远高于增量更新）`);
         }
       }
       await audit(store, identity, action, true, { codes: symbols, mode, targetDate, job: progress.id, warnings });

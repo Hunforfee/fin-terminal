@@ -198,8 +198,7 @@ export async function storedKLine(request: KLineRequest, fetcher: KLineFetcher,
           revision = changed.length > 0;
         }
       }
-      const cutoff = new Date(now + 8 * 3600e3); cutoff.setUTCFullYear(cutoff.getUTCFullYear() - 10);
-      candles = candles.filter(c => c.date >= cutoff.toISOString().slice(0, 10));
+      candles = candles.filter(c => c.date >= marketCutoff(now));
       const series: StoredSeries = { ...fetched, candles: candles.filter(c=>c.date>=marketCutoff(now)).map(({date, open, high, low, close}) => ({date, open, high, low, close})),
         lastFullAt: !matching || historicalReviewDue && fetched.complete !== false && fetched.candles[0].date <= matching.payload.candles[0].date
           ? now : matching.payload.lastFullAt,

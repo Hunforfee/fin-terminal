@@ -1,3 +1,4 @@
+import { HISTORY_YEARS } from '@/lib/marketHistoryPlan';
 import type { NextRequest } from 'next/server';
 import { marketOk, fail, sp } from '@/lib/api';
 import { getFinancialCompare, getCustomFinancialCompare } from '@/lib/datasource';
@@ -18,7 +19,7 @@ async function readComparison(p: URLSearchParams) {
   if (list.length === 0) return fail('codes 为空', 400);
   if (list.length > 4) return fail('最多支持四家公司对比', 400);
 
-  const years = Math.min(Math.max(Number(p.get('years') ?? 10) || 10, 1), 10);
+  const years = Math.min(Math.max(Number(p.get('years') ?? HISTORY_YEARS) || HISTORY_YEARS, 1), HISTORY_YEARS);
   const gRaw = p.get('granularity');
   const granularity: 'annual' | 'semi' | 'quarter' =
     gRaw === 'annual' ? 'annual' : gRaw === 'quarter' ? 'quarter' : 'semi';
@@ -49,6 +50,6 @@ export async function POST(request: NextRequest) {
     if (!body || typeof body !== 'object') return fail('请求体必须为 JSON 对象', 400);
     const join = (v: unknown) => Array.isArray(v) && v.every(x => typeof x === 'string') ? v.join(',') : typeof v === 'string' ? v : '';
     return readComparison(new URLSearchParams({ codes: join(body.codes), fields: join(body.fields),
-      years: String(body.years ?? 10), granularity: String(body.granularity ?? 'semi') }));
+      years: String(body.years ?? HISTORY_YEARS), granularity: String(body.granularity ?? 'semi') }));
   } catch { return fail('无效的 JSON 请求', 400); }
 }

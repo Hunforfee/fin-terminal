@@ -122,7 +122,7 @@ test('batch imports reject inconsistent overlaps and duplicates and survive ten-
   const key=bars.importedBarsKey('sh600415'),old=(await s.read(key)).digest;
   await assert.rejects(bars.importDailyPrices(s,{symbol:'sh600415',source:'qmt',mergeBatch:true,candles:[candle('2025-01-02',10.001)]},now),/冲突/);
   await assert.rejects(bars.importDailyPrices(s,{symbol:'sh600415',source:'qmt',mergeBatch:true,candles:[candle('2025-01-03'),candle('2025-01-03')]},now));
-  assert.equal((await s.read(key)).digest,old);assert.equal((await s.read(key)).payload.candles.length,2);
+  assert.equal((await s.read(key)).digest,old);assert.equal((await s.read(key)).payload.candles.length,3);
 });
 test('Hong Kong statement imports refuse amount conflicts unless an admin snapshot overwrite is requested',async()=>{
   const s=store(),key='source-hk-statement:v1:00639.HK:balance:2025-12-31';
@@ -154,7 +154,7 @@ test('Hong Kong indicator imports land on the site key, merge fields, and prune 
   await hkRecords.writeHkIndicators(s,{symbol:'hk00639',points:[{date:'2026-06-30',raw:{ROE_AVG:13},currency:'港元',kind:'semi',label:'中报'}]},now);
   const q=(await s.read(key)).payload[0].raw;
   assert.equal(q.BASIC_EPS,0.8);assert.equal(q.ROE_AVG,13);
-  await assert.rejects(hkRecords.writeHkIndicators(s,{symbol:'hk00639',points:[{date:'2014-06-30',raw:{ROE_AVG:1},currency:'港元',kind:'semi',label:'中报'}]},now),/超出保留期/);
+  await assert.rejects(hkRecords.writeHkIndicators(s,{symbol:'hk00639',points:[{date:'2012-06-30',raw:{ROE_AVG:1},currency:'港元',kind:'semi',label:'中报'}]},now),/超出保留期/);
   await assert.rejects(hkRecords.writeHkIndicators(s,{symbol:'hk00639',points:[{date:'2027-06-30',raw:{ROE_AVG:1},currency:'港元',kind:'semi',label:'中报'}]},now));
   await assert.rejects(hkRecords.writeHkIndicators(s,{symbol:'hk00639',points:[]},now));
   await assert.rejects(hkRecords.writeHkIndicators(s,{symbol:'600415',points:[{date:'2026-06-30',raw:{},currency:'CNY',kind:'semi',label:'中报'}]},now));
@@ -211,12 +211,12 @@ test('financial admission is year-granular: boundary reports of the ten-year win
   await records.writeFinanceStatements(s,{...input,reportDates:['2015-12-31']},now);
   assert.ok(await s.read('source-sina-page:v1:600415:profit:2015'));
   // 再早一年的年报仍须拒绝，保留边界不失控。
-  await assert.rejects(records.writeFinanceStatements(s,{...input,reportDates:['2014-12-31']},now),/超出十年保留期限/);
+  await assert.rejects(records.writeFinanceStatements(s,{...input,reportDates:['2012-12-31']},now),/超出十二年历史输入准入期限/);
   // 站点抓取入口同样按年度放行 2015（范围检查是同步抛错，用 throws）。
-  assert.throws(()=>datasource.fetchStatementSourcePage('600415','profit',2014),/超出十年保留期限/);
-  assert.equal(plan.financialEarliestYear(now),2015);
-  assert.equal(plan.reportCutoff(now),'2015-01-01');
-  assert.equal(retention.marketCutoff(now),'2016-10-21');
+  assert.throws(()=>datasource.fetchStatementSourcePage('600415','profit',2012),/超出十二年历史输入准入期限/);
+  assert.equal(plan.financialEarliestYear(now),2013);
+  assert.equal(plan.reportCutoff(now),'2013-01-01');
+  assert.equal(retention.marketCutoff(now),'2014-10-21');
 });
 
 test('financial history keeps the boundary-year row after the union write-back',async()=>{
@@ -232,5 +232,5 @@ test('Hong Kong statement admission uses the same year-granular cutoff',async()=
   const s=store();
   await hkRecords.writeHkStatements(s,{symbol:'hk00013',statement:'balance',rows:[{date:'2015-06-30',itemCode:'TOTAL_ASSETS',itemName:'资产总计',amount:100000000}]},now);
   assert.ok(await s.read('source-hk-statement:v1:00013.HK:balance:2015-06-30'));
-  await assert.rejects(hkRecords.writeHkStatements(s,{symbol:'hk00013',statement:'balance',rows:[{date:'2014-06-30',itemCode:'TOTAL_ASSETS',itemName:'资产总计',amount:100000000}]},now),/超出保留期/);
+  await assert.rejects(hkRecords.writeHkStatements(s,{symbol:'hk00013',statement:'balance',rows:[{date:'2012-06-30',itemCode:'TOTAL_ASSETS',itemName:'资产总计',amount:100000000}]},now),/超出保留期/);
 });

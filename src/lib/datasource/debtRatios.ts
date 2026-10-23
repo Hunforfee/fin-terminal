@@ -1,3 +1,4 @@
+import { HISTORY_YEARS } from '../marketHistoryPlan';
 import { fetchJson } from './http';
 import { cachedMarketInput } from '../marketInputs';
 import { numOrNull } from './codes';
@@ -28,7 +29,7 @@ export async function fetchDebtRatios(code: string, years: number): Promise<Map<
       const url = new URL('https://datacenter.eastmoney.com/securities/api/data/v1/get');
       url.search = new URLSearchParams({ reportName: 'RPT_F10_FINANCE_MAINFINADATA',
         columns: 'SECUCODE,REPORT_DATE,NOTICE_DATE,CURRENCY,INTEREST_DEBT_RATIO',
-        filter: `(SECUCODE="${secucode}")(REPORT_DATE>='${Number(today.slice(0, 4)) - 10}-01-01')`,
+        filter: `(SECUCODE="${secucode}")(REPORT_DATE>='${Number(today.slice(0, 4)) - HISTORY_YEARS}-01-01')`,
         pageSize: '100', pageNumber: String(page), sortColumns: 'REPORT_DATE', sortTypes: '-1' }).toString();
       const result = await fetchJson<{ success?: boolean; result?: { data?: Record<string, unknown>[]; pages?: number } | null }>(url.toString(), { timeoutMs: 15000 });
       if (result.success === false || !Array.isArray(result.result?.data)) throw Error('有息负债率数据暂不可用');
@@ -38,5 +39,5 @@ export async function fetchDebtRatios(code: string, years: number): Promise<Map<
     }
     return parseDebtRatios(rows, secucode, today);
   },value=>{if(!value.size)throw Error('有息负债率报告期缺失');});
-  return new Map([...all].filter(([date])=>Number(date.slice(0,4))>=Number(today.slice(0,4))-Math.min(10,Math.max(1,years))));
+  return new Map([...all].filter(([date])=>Number(date.slice(0,4))>=Number(today.slice(0,4))-Math.min(HISTORY_YEARS,Math.max(1,years))));
 }

@@ -8,18 +8,18 @@ const {marketRecord}=await load('marketStore');
 const {takePrioritized,readWatchlistDisplay,requestLimiter}=await load('watchlistDisplay');
 const now=Date.parse('2026-10-22T02:00:00Z');
 function memory(){const rows=new Map();return {rows,read:async key=>structuredClone(rows.get(key)??null),write:async(row,expected)=>{if((rows.get(row.key)?.digest??null)!==expected)return false;rows.set(row.key,structuredClone(row));return true;}};}
-test('ten-year plan covers all twelve statement years needed at the TTM boundary',()=>{
- assert.equal(plan.historyStart(now),'2016-10-22');assert.equal(plan.historyStart(Date.parse('2024-02-29T04:00Z')),'2014-02-28');
- assert.equal(plan.HISTORY_BAR_COUNT,3000);
+test('ten-year plan covers all fourteen statement years needed at the TTM boundary',()=>{
+ assert.equal(plan.historyStart(now),'2014-10-22');assert.equal(plan.historyStart(Date.parse('2024-02-29T04:00Z')),'2012-02-29');
+ assert.equal(plan.HISTORY_BAR_COUNT,3200);
  const years=plan.FULL_HISTORY_PHASES.map(p=>plan.financialYearForPhase(p,now)).filter(y=>y!==null);
- assert.deepEqual(years,Array.from({length:12},(_,i)=>2026-i));assert.equal(plan.FULL_HISTORY_PHASES.at(-1),12);
+ assert.deepEqual(years,Array.from({length:14},(_,i)=>2026-i));assert.equal(plan.FULL_HISTORY_PHASES.at(-1),12);
  assert.equal(plan.collectionPhaseLabel(12),'完整性检查');assert.equal(plan.collectionPhaseLabel(13),'公司资料');
 });
 test('five-year coverage does not expand a daily task into initialization',async()=>{
  const s=memory();await s.write(marketRecord('market-coverage:v1:sh600519:5','market-coverage','test',{status:'ready'},60000,now),null);
  const q=new MarketUpdateQueue(s,()=>now);await q.submit('daily',['600519'],false,'daily');
  assert.equal((await q.claim()).initialize,false);
- assert.equal(plan.coverageKey('sh600519'),'market-coverage:v1:sh600519:10');
+ assert.equal(plan.coverageKey('sh600519'),'market-coverage:v1:sh600519:12');
 });
 test('old unfinished five-year queue records restart under the ten-year plan with a new lease',async()=>{
  const s=memory();await s.write(marketRecord('market-update-queue:v1','market-update-queue','internal',{
@@ -42,7 +42,7 @@ test('manual ten-year fills run independently from daily tasks and cannot silent
 test('ten-year valuation inputs retain the pre-window financial evidence but display prices do not',()=>{
  const points=[{date:'2010-12-31'},{date:'2015-12-31'},{date:'2016-06-30'},{date:'2026-06-30'}];
  assert.deepEqual(retainMarketPayload('financial-history',points,now).map(p=>p.date),['2015-12-31','2016-06-30','2026-06-30']);
- assert.deepEqual(retainMarketPayload('kline',{candles:points},now).candles.map(p=>p.date),['2026-06-30']);
+ assert.deepEqual(retainMarketPayload('kline',{candles:points},now).candles.map(p=>p.date),['2015-12-31','2016-06-30','2026-06-30']);
 });
 test('page changes prioritize new visible stocks without restarting or duplicating the background queue',()=>{
  const pending=new Set(['a','b','c','d','e']);

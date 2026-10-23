@@ -1,3 +1,4 @@
+import { HISTORY_YEARS } from './marketHistoryPlan';
 /** Durable import queue, independent of daily/weekly collection and browser lifetimes. */
 import { randomUUID } from 'node:crypto';
 import { marketDigest, marketRecord, type MarketStore, type MarketRecord } from './marketStore';
@@ -107,10 +108,10 @@ export async function runMarketImportTick(store:MarketStore|null,options:{clock?
       const validate=job.rebuild?job.companies.find(c=>['imported','unchanged'].includes(c.state)&&!c.validation):undefined;
       if(validate){
         job.state='rebuilding';await save();
-        const code=validate.symbol.slice(2),disclosures=await store.read(`disclosures-v3:${code}:12`);
+        const code=validate.symbol.slice(2),disclosures=await store.read(`disclosures-v3:${code}:${HISTORY_YEARS+2}`);
         if(!disclosures)validate.validation={state:'blocked',reason:'缺少已核实的首次披露日期；财务已入库，历史估值尚不能完整重建'};
         else try{const resolve=options.resolve??(await import('./marketGapResolve')).resolveMarketGaps;const result=await resolve(store,[validate.symbol]);
-          const snapshots=await many(store,[`valuation-result:v1:${validate.symbol}:10:disclosure`,`valuation-input-version:v1:${validate.symbol}`]);
+          const snapshots=await many(store,[`valuation-result:v1:${validate.symbol}:${HISTORY_YEARS}:disclosure`,`valuation-input-version:v1:${validate.symbol}`]);
           const cached=snapshots.find(r=>r.key.startsWith('valuation-result:'))?.payload as any,revision=snapshots.find(r=>r.key.startsWith('valuation-input-version:'))?.payload as any;
           const history=cached?.value?.history??[],cache={revisionMatches:!!cached&&cached.revision===(revision?.version??'initial'),days:history.length,missingInputs:history.filter((p:any)=>p.missingInputs?.length).length};
           validate.validation={state:result[0]?.status==='error'?'error':result[0]?.cleared&&cache.revisionMatches&&cache.days>0&&!cache.missingInputs?'complete':'blocked',result:{coverage:result,cache}};}

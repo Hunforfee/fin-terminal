@@ -85,6 +85,7 @@ export function attachHkValuationHistory(snapshot: Valuation, inputs: {
       dy: null, close: byDate.get(r.date)?.close ?? null, rawClose: byDate.get(r.date)?.close,
     }));
     asOf[metric] = histories[metric].at(-1)?.date;
+    if ((snapshot.years ?? 5) > 10) reasons[metric] = '当前历史估值来源最多提供近十年样本；十二年窗口较早部分缺失，不回填推算值。';
     if (!histories[metric].some(r => r[metric] !== null)) reasons[metric] = `历史${labels[metric]}暂缺或有效样本不足；不影响其他指标。`;
     else if (asOf[metric]! < today && Date.parse(today) - Date.parse(asOf[metric]!) > 7 * 864e5)
       reasons[metric] = `历史${labels[metric]}仅更新至 ${asOf[metric]}，不代表当前估值。`;

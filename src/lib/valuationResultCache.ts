@@ -3,7 +3,7 @@ import { withMarketRefresh } from './marketRefresh';
 import type { Valuation } from './datasource/types';
 
 export type ValuationCacheOptions = { schedule?: (work: () => Promise<void>) => void; force?: boolean };
-const ALGORITHM = 'daily-share-amounts-v2';
+const ALGORITHM = 'daily-share-amounts-v3-twelve-year';
 type Saved = { algorithm?: string; revision: string; day: string; value: Valuation };
 const pending = new WeakMap<MarketStore,Map<string,Promise<Valuation>>>();
 export const valuationResultKey = (symbol:string,years:number,method:string) => `valuation-result:v1:${symbol}:${years}:${method}`;

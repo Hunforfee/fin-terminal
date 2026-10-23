@@ -1,3 +1,4 @@
+import { HISTORY_YEARS } from '../marketHistoryPlan';
 import { fetchJson } from './http';
 import { cachedMarketInput } from '../marketInputs';
 import { numOrNull } from './codes';
@@ -35,7 +36,7 @@ export function parseInterestExpenses(rows: Record<string, unknown>[]): Map<stri
 export async function fetchInterestExpenses(code: string, years: number) {
   const all=await cachedMarketInput(`source-interest-expenses:v1:${code}`,'source-interest-expenses','eastmoney:CNY:wan:explicit-interest-expense',1800e3,
     ()=>fetchAllInterestExpenses(code),value=>{if(!value.size)throw Error('利息费用报告期缺失');});
-  const from=`${new Date().getFullYear()-Math.min(10,Math.max(1,years))-1}-01-01`;
+  const from=`${new Date().getFullYear()-Math.min(HISTORY_YEARS,Math.max(1,years))-1}-01-01`;
   return new Map([...all].filter(([date])=>date>=from));
 }
 async function fetchAllInterestExpenses(code: string) {
@@ -45,7 +46,7 @@ async function fetchAllInterestExpenses(code: string) {
   for (let page=1; ; page++) {
     const url = new URL('https://datacenter.eastmoney.com/securities/api/data/v1/get');
     url.search = new URLSearchParams({reportName:'RPT_F10_FINANCE_GINCOME',columns:'SECUCODE,REPORT_DATE,TOTAL_PROFIT,FE_INTEREST_EXPENSE',
-      filter:`(SECUCODE="${secucode}")(REPORT_DATE>='${new Date().getFullYear()-10}-01-01')`,
+      filter:`(SECUCODE="${secucode}")(REPORT_DATE>='${new Date().getFullYear()-HISTORY_YEARS-1}-01-01')`,
       pageSize:'100',pageNumber:String(page),sortColumns:'REPORT_DATE',sortTypes:'-1'}).toString();
     const j = await fetchJson<{success?:boolean;result?:{data?:Record<string,unknown>[];pages?:number}|null}>(url.toString(),{timeoutMs:15000});
     if (j.success === false || !Array.isArray(j.result?.data)) throw new Error('真实利息费用数据不可用');

@@ -166,7 +166,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
   const [granularity, setGranularity] = useState<'annual' | 'semi' | 'quarter'>(
     'annual',
   );
-  const [years, setYears] = useState<5 | 10>(10);
+  const [years, setYears] = useState<5 | 10 | 12>(12);
   const [customData, setCustomData] = useState<CustomData | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -633,6 +633,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
             [
               [5, '近5年'],
               [10, '近10年'],
+              [12, '近12年'],
             ] as const
           ).map(([k, label]) => (
             <button

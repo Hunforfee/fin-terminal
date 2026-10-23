@@ -191,7 +191,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
     }
     const ctrl = new AbortController();
     const t = setTimeout(() => {
-      fetch(`/api/search?q=${encodeURIComponent(q)}`, { signal: ctrl.signal })
+      fetch(`/api/search?q=${encodeURIComponent(q)}`, { signal: AbortSignal.any([ctrl.signal,AbortSignal.timeout(5000)]) })
         .then((r) => r.json())
         .then((j) => {
           if (j.ok && Array.isArray(j.data))

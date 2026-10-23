@@ -328,9 +328,9 @@ function unescapeUnicode(s: string): string {
 }
 
 /** 搜索联想（支持拼音首字母，如 gzmt） */
-export async function fetchSearch(keyword: string): Promise<SearchHit[]> {
+export async function fetchSearch(keyword: string, signal?:AbortSignal): Promise<SearchHit[]> {
   const url = `${SMARTBOX_URL}?q=${encodeURIComponent(keyword)}&t=all`;
-  const text = await fetchText(url, { encoding: 'gbk', timeoutMs: 6000 });
+  const text = await fetchText(url, { encoding: 'gbk', timeoutMs: 1800, retries:0, signal });
   const hits: SearchHit[] = [];
   // 形如 v_hint="sh~600519~贵州茅台~gzmt~GP-A^sz~000001~平安银行~payh~GP-A"
   const m = text.match(/v_hint="([^"]*)"/);

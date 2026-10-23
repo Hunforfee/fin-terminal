@@ -1,5 +1,7 @@
 import { isMarketDataResource, marketDataMethodAllowed, type MarketDataResource } from './marketDataResources';
 import type { MarketRecord, MarketRecordMeta, MarketStore } from './marketStore';
+import { createHash } from 'node:crypto';
+import { cached } from './datasource/cache';
 
 export const remoteMarketDataEnabled = () => process.env.MARKET_DATA_MODE === 'remote';
 const MAX_RESPONSE = 32 * 1024 * 1024;
@@ -44,7 +46,7 @@ export async function readMarketBody(response: Response | Request, limit: number
 }
 
 /** No cookies, browser credentials, AI keys or user-provided destinations cross this boundary. */
-export async function requestMarketData(resource: MarketDataResource, params = new URLSearchParams(),
+async function requestMarketDataUncached(resource: MarketDataResource, params = new URLSearchParams(),
   options: { method?: 'GET' | 'POST'; body?: Uint8Array; signal?: AbortSignal; callerOrigin?: string } = {}): Promise<Response> {
   const { url, token } = connection();
   if (options.callerOrigin && url.origin === options.callerOrigin)
@@ -53,7 +55,7 @@ export async function requestMarketData(resource: MarketDataResource, params = n
   if (!isMarketDataResource(resource) || !marketDataMethodAllowed(resource, method)) throw new MarketDataApiError('不支持的数据接口或方法', 405);
   for (const [key, value] of params) if (!['resource', 'token', 'sql', 'api_key'].includes(key)) url.searchParams.append(key, value);
   url.searchParams.set('resource', resource);
-  const signals = [AbortSignal.timeout(90000), ...(options.signal ? [options.signal] : [])];
+  const signals = [AbortSignal.timeout(resource==='search'?3500:90000), ...(options.signal ? [options.signal] : [])];
   try {
     const response = await fetch(url, {
       method, headers: { Accept: 'application/json', 'x-fin-data-token': token,
@@ -80,6 +82,28 @@ export async function requestMarketData(resource: MarketDataResource, params = n
     if (error instanceof MarketDataApiError) throw error;
     throw new MarketDataApiError(options.signal?.aborted ? '数据请求已取消' : '远程市场数据服务连接失败，请稍后重试');
   }
+}
+
+/** Search repeats are served from the original API response, never local market
+ * snapshots. Coalesce bursts; a cancelled browser must not cancel other waiters. */
+export async function requestMarketData(resource: MarketDataResource, params = new URLSearchParams(),
+ options: {method?:'GET'|'POST';body?:Uint8Array;signal?:AbortSignal;callerOrigin?:string}={}):Promise<Response>{
+ if(resource!=='search' || options.method==='POST')return requestMarketDataUncached(resource,params,options);
+ options.signal?.throwIfAborted();
+ const {url,token}=connection();
+ if(options.callerOrigin===url.origin)throw new MarketDataApiError('远程数据接口不能指向当前网站自身',503);
+ const query=new URLSearchParams(params);query.set('q',(query.get('q')??'').trim().toLowerCase());
+ const identity=createHash('sha256').update(token).digest('hex');
+ const key=`remote-search:v1:${url.href}:${identity}:${query.toString()}`;
+ const value=await cached(key,300000,async()=>{
+  const response=await requestMarketDataUncached(resource,query,{...options,signal:undefined});
+  if(!response.ok){const error=await response.json();throw new MarketDataApiError(error.error??'搜索暂不可用',response.status);}
+  const text=await response.text(),json=JSON.parse(text);
+  if(!Array.isArray(json.data))throw new MarketDataApiError('远程搜索结果格式无效');
+  return {text,status:response.status,headers:[...response.headers.entries()]};
+ },{staleOnError:false});
+ options.signal?.throwIfAborted();
+ return new Response(value.text,{status:value.status,headers:value.headers});
 }
 
 /** Used by server-rendered pages as well as external server-side integrations. */

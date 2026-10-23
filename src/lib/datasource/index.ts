@@ -5,6 +5,7 @@ import { readStoredFinancialSummary } from '../storedFinancialSummary';
 import { readRemoteMarketData, remoteMarketDataEnabled } from '../marketDataClient';
 import { cachedValuationResult, valuationInputVersion, type ValuationCacheOptions } from '../valuationResultCache';
 import { sharedQuotes } from '../quoteInputs';
+import { searchSources } from '../searchSources';
 import { getValuationPlans, getValuationDividends } from '../valuationInputs';
 import { getFinancialHistoryInput } from '../financialHistoryInputs';
 import { fetchHkRatioHistory, attachHkValuationHistory } from './hkValuationHistory';
@@ -88,34 +89,12 @@ function ymdYearsAgo(years: number): string {
 /** 代码 / 名称 / 拼音搜索：东财联想 → 腾讯联想 → 本地池兜底 */
 export async function search(keyword: string): Promise<SearchHit[]> {
   if (remoteMarketDataEnabled()) return readRemoteMarketData<SearchHit[]>('search', { q: keyword });
-  const kw = keyword.trim();
+  const kw = keyword.trim().toLowerCase();
   if (!kw) return [];
-  return cached(`search-markets-v2:${kw}`, 5 * 60 * 1000, async () => {
-    const out: SearchHit[] = [];
-    const seen = new Set<string>();
-
-    const push = (hits: SearchHit[]) => {
-      for (const h of hits) {
-        const key = `${h.market}${h.code}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        out.push(h);
-      }
-    };
-
-    const tasks: Promise<SearchHit[]>[] = [
-      eastmoney.fetchSearch(kw).catch(() => []),
-      tencent.fetchSearch(kw).catch(() => []),
-    ];
-    const results = await Promise.all(tasks);
-    // 东财的代码/名称匹配质量更高，优先展示
-    push(results[0]);
-    push(results[1]);
-
-    // 本地池兜底 + 行业名搜索（如搜“银行”）
-    push(localSearch(kw));
-    return out.slice(0, 20);
-  });
+  return cached(`search-markets-v3:${kw}`, 5 * 60 * 1000, () => searchSources([
+    signal=>eastmoney.fetchSearch(kw,12,signal),
+    signal=>tencent.fetchSearch(kw,signal),
+  ],localSearch(kw)),{staleOnError:false});
 }
 
 function localSearch(kw: string): SearchHit[] {

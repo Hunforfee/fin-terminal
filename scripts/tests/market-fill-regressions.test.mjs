@@ -182,6 +182,7 @@ test('single-stock fill does not replace automatic subscriptions', async () => {
 function stockButton(fetch) {
   const state=[],effects=[],timers=new Map();let index=0,id=0;
   const router={refresh(){}};
+  const safeJson=compile('src/lib/fetchJson.ts',name=>{throw Error(name);},{fetch});
   const component=compile('src/components/StockFillButton.tsx',name=>{
     if(name==='react')return {
       useState(initial){const i=index++;if(!(i in state))state[i]=initial;return [state[i],v=>{state[i]=typeof v==='function'?v(state[i]):v;}];},
@@ -191,13 +192,14 @@ function stockButton(fetch) {
     if(name==='next/navigation')return {useRouter:()=>router};
     if(name==='@/lib/datasource/codes')return codes;
     if(name==='@/lib/marketHistoryPlan')return plan;
+    if(name==='@/lib/fetchJson')return safeJson;
     throw Error(name);
   },{fetch,setTimeout(fn,ms){const key=++id;timers.set(key,{fn,ms});return key;},clearTimeout(key){timers.delete(key);}});
   const render=()=>{index=0;return component.default({code:'hk00016',name:'新鸿基地产'});};
   return {render,effects,timers,label:()=>render().props.children[0].props['aria-label'],async tick(ms){const [key,timer]=[...timers].find(([,t])=>t.ms===ms)??[];assert.ok(timer,`missing timer ${ms}`);timers.delete(key);await timer.fn();}};
 }
 const progress=(id,finished,failed=0)=>({id,finished,total:1,done:finished&&!failed?1:0,failed,skipped:0,errors:failed?[{symbol:'hk00016',message:'数据缺失'}]:[]});
-const response=data=>({ok:true,json:async()=>({ok:true,data})});
+const response=data=>({ok:true,status:200,text:async()=>JSON.stringify({ok:true,data}),json:async()=>({ok:true,data})});
 test('the stock button never labels a failed result as completed',async()=>{
   const button=stockButton(async()=>response(progress('job',true,1)));
   button.render().props.children[0].props.onClick();await new Promise(r=>setImmediate(r));

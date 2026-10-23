@@ -73,6 +73,6 @@ export function retainMarketPayload<T>(kind: string, payload: T, now = Date.now(
 export function disposableMarketRecord(row: {kind: string; acquiredAt: string}, now: number): boolean {
   // Expiration means "refresh required", not "historical facts can be destroyed".
   const age = now - Date.parse(row.acquiredAt);
-  return ['latest-quote','latest-hk-financials','latest-company-financial-input','watchlist-financial-inputs','valuation-result','display-metric'].includes(row.kind)
+  return ['latest-quote','latest-hk-financials','latest-company-financial-input','watchlist-financial-inputs','valuation-result','display-metric','market-import-job','market-import-payload'].includes(row.kind)
     && age > 30 * 864e5;
 }

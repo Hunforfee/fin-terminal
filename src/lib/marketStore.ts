@@ -70,7 +70,11 @@ export function trackValuationChanges(store: MarketStore): MarketStore {
     ...(store.writeInputs?{async writeInputs(items: {record:MarketRecord;expected:string|null}[]) {
       const count=await store.writeInputs!(items);
       const changed=items.filter(i=>i.expected!==i.record.digest && valuationSymbol(i.record));
-      const saved=await Promise.all(changed.map(async i=>(await store.read(i.record.key))?.digest===i.record.digest?valuationSymbol(i.record):null));
+      const snapshots=store.readInputs && changed.every(i=>i.record.kind!=='kline')
+        ? await store.readInputs(changed.map(i=>i.record.key))
+        : (await Promise.all(changed.map(i=>store.read(i.record.key)))).filter((r):r is MarketRecord=>!!r);
+      const byKey=new Map(snapshots.map(r=>[r.key,r.digest]));
+      const saved=changed.map(i=>byKey.get(i.record.key)===i.record.digest?valuationSymbol(i.record):null);
       await invalidate(saved.filter((s):s is string=>!!s));
       return count;
     }}:{}),
@@ -316,6 +320,8 @@ export function postgresMarketStore(connectionString: string, poolFactory?: () =
           WHERE r.body->>'digest'=i->>'expected' AND r.body->>'digest'<>i->'record'->>'digest'`, [data]);
         const result = await client.query(`INSERT INTO fin_market_records(key,body)
           SELECT i->'record'->>'key',i->'record' FROM jsonb_array_elements($1::jsonb) i
+          WHERE i->>'expected' IS NULL OR EXISTS (SELECT 1 FROM fin_market_records r
+            WHERE r.key=i->'record'->>'key' AND r.body->>'digest'=i->>'expected')
           ON CONFLICT(key) DO UPDATE SET body=EXCLUDED.body WHERE fin_market_records.body->>'digest'=
           (SELECT i->>'expected' FROM jsonb_array_elements($1::jsonb) i WHERE i->'record'->>'key'=EXCLUDED.key) RETURNING key`, [data]);
         await client.query(`DELETE FROM fin_market_revisions WHERE id IN

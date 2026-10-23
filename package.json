@@ -8,6 +8,8 @@
     "build": "node scripts/build-market-importer.mjs && next build",
     "start": "next start -H 0.0.0.0",
     "market:worker": "node scripts/market-update-worker.mjs",
+    "market:import:worker": "node scripts/market-import-worker.mjs",
+    "market:import:batch": "node scripts/submit-market-import.mjs",
     "market:import:build": "node scripts/build-market-importer.mjs",
     "market:import": "node scripts/import-qmt-watchlist.mjs",
     "typecheck": "tsc --noEmit",

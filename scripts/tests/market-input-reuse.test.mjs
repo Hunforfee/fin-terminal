@@ -41,6 +41,9 @@ test('persistent freshness and later database writes are not hidden by a second 
       if(name==='./marketRefresh')return {withMarketRefresh:(_store,_key,work)=>work()};
       if(name==='./marketRetention')return {retainMarketPayload:(_kind,value)=>value};
       if(name==='./marketReadPolicy')return {databaseOnly:()=>false};
+      if(name==='./marketReadStatus')return {observeMarketValue:v=>v};
+      if(name==='./financialPageQuality')return {};
+      if(name==='./upstreamBudget')return {currentUpstreamBudget:()=>undefined};
       if(name==='./hkDividendEvents')return {};
       throw Error(name);
     },

@@ -1,5 +1,6 @@
 import { isShanghaiTradingTime, isHongKongTradingTime } from './tradingTime';
 import { databaseOnly } from '../marketReadPolicy';
+import { annotateMarketValue, observeMarketValue, savedMarketValue } from '../marketReadStatus';
 /**
  * 进程内 TTL 缓存。
  * 行情类接口上游有频率限制，且同一页面多个组件会重复请求同一标的，
@@ -9,6 +10,7 @@ import { databaseOnly } from '../marketReadPolicy';
 interface Entry<T> {
   value: T;
   expireAt: number;
+  storedAt: number;
 }
 
 const store = new Map<string, Entry<unknown>>();
@@ -16,7 +18,7 @@ const inflight = new Map<string, Promise<unknown>>();
 const MAX_ENTRIES = 1024;
 function remember<T>(key: string, value: T, ttlMs: number): void {
   store.delete(key);
-  store.set(key, { value, expireAt: Date.now() + ttlMs });
+  store.set(key, { value, expireAt: Date.now() + ttlMs, storedAt: Date.now() });
   while (store.size > MAX_ENTRIES) store.delete(store.keys().next().value!);
 }
 
@@ -35,18 +37,19 @@ export async function cached<T>(key: string, ttlMs: number, producer: () => Prom
   const hit = store.get(key);
   if (hit && hit.expireAt > now) {
     store.delete(key); store.set(key, hit);
-    return hit.value as T;
+    return observeMarketValue(hit.value as T);
   }
 
   // 防止并发击穿：同一 key 的并发请求共享一个 Promise
   const pending = inflight.get(key);
-  if (pending) return pending as Promise<T>;
+  if (pending) return (pending as Promise<T>).then(observeMarketValue);
 
   let p: Promise<T>;
   p = Promise.resolve().then(async () => {
     try {
-      const value = await producer();
-      if (inflight.get(key) === p && (ttlMs > 0 || options.staleOnError !== false)) remember(key, value, ttlMs);
+      const value = annotateMarketValue(await producer());
+      const savedInput = (value as {dataStatus?:{snapshots?:unknown[]}} | null)?.dataStatus?.snapshots?.length;
+      if (inflight.get(key) === p && (ttlMs > 0 || options.staleOnError !== false)) remember(key, value, savedInput ? Math.min(ttlMs,30000) : ttlMs);
       return value;
     } catch (e) {
       // 上游失败时，若有过期旧值则降级使用，避免整页报错
@@ -55,8 +58,9 @@ export async function cached<T>(key: string, ttlMs: number, producer: () => Prom
         const mark = (value: unknown): unknown => {
           if (!value || typeof value !== 'object' || !('stale' in value)) throw e;
           const item = value as { stale: boolean; warnings?: string[] };
-          return { ...item, stale: true,
-            ...(Array.isArray(item.warnings) ? { warnings: [...item.warnings, '更新失败，当前使用上次缓存的数据，请留意日期。'] } : {}) };
+          return savedMarketValue({ ...item, stale: true,
+            warnings: [...(item.warnings??[]), '更新失败，当前使用上次缓存的数据，请留意日期。'] },
+            {key:`cache:${key}`,source:'memory-cache',acquiredAt:new Date(stale.storedAt).toISOString(),reason:String(e)});
         };
         return (Array.isArray(stale.value) ? stale.value.map(mark) : mark(stale.value)) as T;
       }

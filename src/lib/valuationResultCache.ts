@@ -34,7 +34,7 @@ export async function cachedValuationResult(symbol:string,years:number,method:st
       // saved versions; never label a moving input set as a stable result.
       if(after!==version){version=after;value=await produce();after=await valuationInputVersion(store,symbol);}
       if(after!==version)throw Error('估值输入仍在更新，保留上次曲线');
-      if(value.stale || !value.history.length)return value;
+      if(value.stale || (value as Valuation & {dataStatus?:{persistenceFailed:string[]}}).dataStatus?.persistenceFailed.length || !value.history.length)return value;
       const saved=marketRecord(key,'valuation-result','derived',{algorithm:ALGORITHM,revision:version,day:day(),value},24*3600e3);
       if(!await store.write(saved,current?.digest??null))throw Error('估值结果保存冲突，请稍后重试');
       return annotate(value,saved,'fresh');

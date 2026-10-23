@@ -1,4 +1,5 @@
 'use client';
+import MarketDataNotice, { type MarketReadResult } from '@/components/MarketDataNotice';
 
 import { personalStorage } from '@/lib/personalStorage';
 import { useAccount } from './AccountProvider';
@@ -83,6 +84,7 @@ export default function ResearchDesk({
   const removeFromView = (symbol: string) => remove(symbol, group);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [otherAssets, setOtherAssets] = useState<Quote[]>([]);
+  const [readStatus,setReadStatus]=useState<MarketReadResult>({});
   const [financials, setFinancials] = useState<Financial[]>([]);
   /** 股息率 %：A股预期、港股完整财年静态；null 表示数据不可用。 */
   const [dividendYields, setDividendYields] = useState<
@@ -302,7 +304,7 @@ export default function ResearchDesk({
       ),
     );
     setError('');
-    setFinErrors([]);
+    setFinErrors([]);setReadStatus({});
     setLoading(!hasSnapshot.current);
     setFinLoading(false);
     async function load() {
@@ -355,6 +357,10 @@ export default function ResearchDesk({
                 });
                 if (!alive) return;
                 if (!j.ok) throw Error(j.error ?? '财报获取失败');
+                setReadStatus(prev=>({dataStatus:{snapshots:[...(prev.dataStatus?.snapshots??[]),...(j.data.dataStatus?.snapshots??[])],persistenceFailed:[...(prev.dataStatus?.persistenceFailed??[]),...(j.data.dataStatus?.persistenceFailed??[])]}}));
+                const failed=new Set((j.data.errors??[]).map((e:{code:string})=>e.code));
+                if(failed.size)setFinErrors(prev=>[...new Set([...prev,...batch.filter(r=>failed.has(normalizeCode(r.symbol)?.code??r.symbol)).map(r=>r.name)])]);
+                j.data.companies=j.data.companies.filter((c:Financial)=>!failed.has(c.code));
                 setFinancials((prev) => [
                   ...prev.filter(
                     (f) =>
@@ -567,6 +573,7 @@ export default function ResearchDesk({
     : UNGROUPED;
   return (
     <div className="space-y-3">
+      <MarketDataNotice value={readStatus} />
       <section
         id="research-stocks"
         tabIndex={-1}
@@ -1048,7 +1055,7 @@ export default function ResearchDesk({
           {finLoading && <span role="status">财报后台刷新中，优先处理当前页…</span>}
           {finErrors.length > 0 && (
             <span className="text-amber-700" title={finErrors.join('、')}>
-              财报暂不可用：{finErrors.length} 家公司
+              财报更新暂不可用，已显示的数值可能为上次结果：{finErrors.length} 家公司
             </span>
           )}
           {rows.length > pageSize ? (

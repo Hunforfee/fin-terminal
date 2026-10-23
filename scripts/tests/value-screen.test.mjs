@@ -352,7 +352,7 @@ test('screen route exposes metadata and validates POST while refusing legacy der
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const exports = {}, calls = [];
   vm.runInNewContext(compiled, { exports, require(name) {
-    if (name === '@/lib/api') return { ok: data => ({ status: 200, data }), fail: (error, status) => ({ status, error }), sp: request => new URL(request.url).searchParams };
+    if (name === '@/lib/api') return { marketOk: async work => ({ status:200,data:await work() }), ok: data => ({ status: 200, data }), fail: (error, status) => ({ status, error }), sp: request => new URL(request.url).searchParams };
     if (name === '@/lib/datasource') return { getScreenMeta: () => getValueScreenMeta(now), screen: async c => { calls.push(c); return { rows: [] }; } };
     if (name === '@/lib/valueScreen') return { readValueScreenCriteria: (raw, industries) => readValueScreenCriteria(raw, industries, now) };
     throw Error(name);

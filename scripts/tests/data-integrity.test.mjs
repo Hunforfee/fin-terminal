@@ -88,7 +88,7 @@ test('K-line API passes full multi-year counts and validates dates before fetchi
   const source=fs.readFileSync('src/app/api/kline/route.ts','utf8');
   const route={},calls=[];
   vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:route,require(name){
-    if(name==='@/lib/api')return {ok:data=>({status:200,data}),fail:(error,status)=>({error,status}),sp:r=>new URL(r.url).searchParams};
+    if(name==='@/lib/api')return {marketOk:async work=>({status:200,data:await work()}),ok:data=>({status:200,data}),fail:(error,status)=>({error,status}),sp:r=>new URL(r.url).searchParams};
     if(name==='@/lib/datasource')return {getKLine:async(...args)=>{calls.push(args);return {candles:[]};}};
     throw Error(name);
   }});

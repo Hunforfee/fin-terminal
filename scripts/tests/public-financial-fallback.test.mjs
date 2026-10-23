@@ -114,15 +114,15 @@ for(const status of [403,429])test(`Sina HTTP ${status} does not prevent all fou
   assert.equal(calls.filter(u=>u.hostname==='datacenter.eastmoney.com').length,4);
   assert.equal(budget.limited,false);assert.equal(budget.rateLimited,true);
 },status));
-test('partial cross-provider refresh retains cells with their actual source, including explicit zero',async()=>{
+test('partial cross-provider refresh preserves conflicting cells and keeps their original provenance',async()=>{
   const store=memory(),key='source-sina-page:v1:600519:balance:2025';
   const prior={dates:['2025-03-31'],unit:'wan',rows:[{kind:'field',name:'资产总计',vals:['100']},{kind:'field',name:'短期借款',vals:['5']}]};
   await store.write(marketRecord(key,'source-sina-page','qmt',prior,1,now),null);
   const next=em.parseEastmoneyStatement([{...row(),TOTAL_ASSETS:null,SHORT_LOAN:0}],'600519','balance',2025,now);
   const value=await storedMarketInput(key,'source-sina-page','public',1000,async()=>next,()=>{},store,now+1000,em.financialPageSource);
   assert.equal(value.rows.find(r=>r.name==='资产总计').vals[0],'100');
-  assert.equal(value.rows.find(r=>r.name==='短期借款').vals[0],'0');
-  assert.equal(value.fieldSources['资产总计'][0],'qmt');assert.match(value.fieldSources['短期借款'][0],/^eastmoney:/);
+  assert.equal(value.rows.find(r=>r.name==='短期借款').vals[0],'5');
+  assert.equal(value.fieldSources['资产总计'][0],'qmt');assert.equal(value.fieldSources['短期借款'][0],'qmt');
   assert.match((await store.read(key)).source,/eastmoney:.* \+ qmt/);
 });
 test('indicator fallback matrix retains existing ROE and is readable with zero network in database mode',async()=>{

@@ -1,4 +1,5 @@
 'use client';
+import MarketDataNotice from '@/components/MarketDataNotice';
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { StockLink } from '@/components/StockLink';
@@ -214,7 +215,8 @@ function ScreenerContent() {
         </div>
       </div>
     </form>
-    {error && <div role="alert" className="flex shrink-0 items-center justify-between gap-2 border-b border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800"><span>{error}{result ? '，保留上次结果' : ''}</span><button type="button" onClick={() => meta ? void performScreen(draft) : window.location.reload()} className="shrink-0 underline">重试</button></div>}
+    <MarketDataNotice value={result} />
+      {error && <div role="alert" className="flex shrink-0 items-center justify-between gap-2 border-b border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800"><span>{error}{result ? '，保留上次结果' : ''}</span><button type="button" onClick={() => meta ? void performScreen(draft) : window.location.reload()} className="shrink-0 underline">重试</button></div>}
     <div className="flex min-h-10 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-slate-100 px-3 py-1.5 text-xs">
       <div className="flex flex-wrap items-center gap-2 text-slate-500">
         <strong className="font-semibold text-slate-800">{result ? `匹配 ${result.total.toLocaleString()} 家` : loading ? '读取财报与行情…' : '尚未筛选'}</strong>

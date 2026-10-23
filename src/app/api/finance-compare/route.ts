@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import { ok, fail, sp } from '@/lib/api';
+import { marketOk, fail, sp } from '@/lib/api';
 import { getFinancialCompare, getCustomFinancialCompare } from '@/lib/datasource';
 
 export const runtime = 'nodejs';
@@ -32,9 +32,9 @@ async function readComparison(p: URLSearchParams) {
 
   try {
     if (fields.length > 0) {
-      return ok(await getCustomFinancialCompare(list, fields, years, granularity));
+      return await marketOk(() => getCustomFinancialCompare(list, fields, years, granularity));
     }
-    return ok(await getFinancialCompare(list, years, granularity));
+    return await marketOk(() => getFinancialCompare(list, years, granularity));
   } catch (e) {
     return fail(e instanceof Error ? e.message : '财务对比数据获取失败', 502, e);
   }

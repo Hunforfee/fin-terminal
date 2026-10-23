@@ -3,13 +3,17 @@ import { getMarketStore, marketRecord, marketDigest, type MarketStore, type Mark
 import { cached } from './datasource/cache';
 import { withMarketRefresh } from './marketRefresh';
 import { retainMarketPayload } from './marketRetention';
-import { databaseOnly, marketDataMissing } from './marketReadPolicy';
+import { databaseOnly, marketDataMissing, allowSavedMarketFallback } from './marketReadPolicy';
+import { savedMarketValue, observeMarketValue, marketPersistenceFailed } from './marketReadStatus';
+import { financialPageGaps, missingIndicatorReports } from './financialPageQuality';
 import { dividendIdentity, mergeHkDividendEvents } from './hkDividendEvents';
+import { currentUpstreamBudget } from './upstreamBudget';
 
 export function cachedMarketInput<T>(key: string, kind: string, source: string, ttl: number,
   producer: () => Promise<T>, validate: (value: T) => void, sourceOf?: (value: T) => string,
   options: { forceRefresh?: boolean } = {}): Promise<T> {
   const store = getMarketStore();
+  if (!currentUpstreamBudget() && /^(source-sina-page|source-sina-indicators)$/.test(kind)) ttl = Math.max(ttl, 6 * 3600e3);
   // The persistent record owns freshness. A second full TTL on a nearly expired
   // record would hide later writes and extend its effective lifetime.
   if (store || databaseOnly() || options.forceRefresh) return storedMarketInput(key, kind, source, ttl, producer, validate, store, Date.now(), sourceOf, options);
@@ -26,6 +30,30 @@ const wire = (v: unknown): unknown => JSON.parse(JSON.stringify(v, (_key, value)
 }));
 const decode = <T>(v: unknown): T => JSON.parse(JSON.stringify(v), (_key, value) =>
   value && typeof value === 'object' && Array.isArray(value.$marketMap) ? new Map(value.$marketMap) : value);
+function observeStoredInput<T>(value:T,row:MarketRecord):T {
+  const issue=(value as {retainedSourceConflicts?:{source:string;acquiredAt:string}}|null)?.retainedSourceConflicts;
+  return issue?savedMarketValue(value,{key:row.key,source:issue.source,acquiredAt:issue.acquiredAt,
+    reason:'新旧披露数值冲突，已保留原值，待复核'}):value;
+}
+
+/** Complete old source years are immutable on ordinary reads; explicit force refresh still checks revisions. */
+function completeHistoricalInput(key: string, kind: string, value: any, now: number): boolean {
+  const match = /^source-sina-(page|indicators):v1:\d{6}:(?:(profit|balance|cashflow):)?(\d{4})$/.exec(key);
+  if (!match || Number(match[3]) >= new Date(now + 8 * 3600e3).getUTCFullYear() - 1) return false;
+  const dates = ['03-31','06-30','09-30','12-31'].map(d => `${match[3]}-${d}`);
+  return kind === 'source-sina-page' && !!match[2]
+    ? financialPageGaps(value, match[2] as 'profit'|'balance'|'cashflow', dates).length === 0
+    : kind === 'source-sina-indicators' && missingIndicatorReports(value, dates).length === 0;
+}
+function savedFallback<T>(old: MarketRecord | null | undefined, kind: string, now: number,
+  validate: (value: T) => void, reason: unknown): T | undefined {
+  if (!old || !allowSavedMarketFallback()) return undefined;
+  try {
+    const value = retainMarketPayload(kind, decode<T>(old.payload), now); validate(value);
+    return savedMarketValue(value, { key: old.key, source: old.source, acquiredAt: old.acquiredAt,
+      reason: (reason instanceof Error ? reason.message : String(reason)).slice(0, 300) });
+  } catch { return undefined; }
+}
 
 async function availableInput(store: MarketStore, key: string, kind: string, now: number): Promise<MarketRecord | null> {
   const primary = await store.read(key);
@@ -45,7 +73,8 @@ async function availableInput(store: MarketStore, key: string, kind: string, now
 
 // Source pages are a date x field matrix. A shorter reply must not erase fields
 // supplied by an import, and a missing cell is not evidence that its value is zero.
-function mergeSourcePage(prior: any, next: any, priorSource: string, nextSource: string): any {
+function mergeSourcePage(prior: any, next: any, priorSource: string, nextSource: string,
+  conflict: (detail: unknown) => void = () => {}): any {
   const unit = (v: unknown) => ['wan', '万元', '人民币万元'].includes(String(v)) ? 'wan' : v;
   if (prior.unit && next.unit && unit(prior.unit) !== unit(next.unit)) throw Error('财报来源单位发生变化，未混合历史金额');
   const dates = [...new Set<string>([...prior.dates, ...next.dates])].sort().reverse();
@@ -60,7 +89,11 @@ function mergeSourcePage(prior: any, next: any, priorSource: string, nextSource:
   const rows = template.map(row => row.kind !== 'field' ? row : { ...row, vals: dates.map((d,i) => {
     const oi = oldIndex.get(d), ni = newIndex.get(d);
     const value = ni === undefined ? null : incoming.get(row.name)?.vals[ni];
-    const fresh=populated(value), previous=oi===undefined?'--':row.vals[oi]??'--';
+    const previous=oi===undefined?'--':row.vals[oi]??'--';
+    const different=populated(value) && populated(previous) && Math.abs(Number(String(value).replaceAll(',',''))-Number(String(previous).replaceAll(',','')))>
+      Math.max(1e-9,Math.abs(Number(String(previous).replaceAll(',','')))*1e-9);
+    if(different) conflict({date:d,field:row.name,stored:previous,incoming:value,storedSource:priorSource,incomingSource:nextSource});
+    const fresh=populated(value) && !different;
     (fieldSources[row.name]??=Array(dates.length).fill(''))[i]=fresh
       ? next.fieldSources?.[row.name]?.[ni!] || nextSource
       : populated(previous) ? prior.fieldSources?.[row.name]?.[oi!] || priorSource : '';
@@ -83,15 +116,15 @@ export async function storedMarketInput<T>(key: string, kind: string, source: st
   if (!pending) { pending = new Map(); pendingInputs.set(owner, pending); }
   const identity = JSON.stringify([key, kind, source, ttl, databaseOnly(), !!options.forceRefresh]);
   const existing = pending.get(identity);
-  if (existing) { const value = await existing as T; validate(value); return value; }
+  if (existing) { const value = await existing as T; validate(value); return observeMarketValue(value); }
   const work = (async()=>{
     if (store) {
       const row = await availableInput(store, key, kind, now).catch(error => {
         if (databaseOnly()) throw Error(`数据库读取或校验失败：${error instanceof Error ? error.message : String(error)}`);
         return null;
       });
-      if (row && (!options.forceRefresh && Date.parse(row.refreshAfter)>now || databaseOnly())) {
-        try { const value=retainMarketPayload(kind,decode<T>(row.payload),now);validate(value);return value; }
+      if (row && (!options.forceRefresh && (Date.parse(row.refreshAfter)>now || completeHistoricalInput(key,kind,decode(row.payload),now)) || databaseOnly())) {
+        try { const value=retainMarketPayload(kind,decode<T>(row.payload),now);validate(value);return observeStoredInput(value,row); }
         catch (error) { if (databaseOnly()) throw Error(`数据库输入未通过校验：${error instanceof Error ? error.message : String(error)}`); }
       }
     }
@@ -100,7 +133,7 @@ export async function storedMarketInput<T>(key: string, kind: string, source: st
   })()
     .finally(() => pending!.delete(identity));
   pending.set(identity, work);
-  return work;
+  return work.then(observeMarketValue);
 }
 async function readOrFetchInput<T>(key: string, kind: string, source: string, ttl: number,
   producer: () => Promise<T>, validate: (value: T) => void,
@@ -110,8 +143,8 @@ async function readOrFetchInput<T>(key: string, kind: string, source: string, tt
   if (store) {
     try {
       old = await store.read(key);
-      if (old && (!options.forceRefresh && Date.parse(old.refreshAfter) > now || databaseOnly())) {
-        const value = retainMarketPayload(kind, decode<T>(old.payload),now); validate(value); return value;
+      if (old && (!options.forceRefresh && (Date.parse(old.refreshAfter) > now || completeHistoricalInput(key,kind,decode(old.payload),now)) || databaseOnly())) {
+        const value = retainMarketPayload(kind, decode<T>(old.payload),now); validate(value); return observeStoredInput(value,old);
       }
     } catch { /* Store outage must not prevent source access. */ }
   }
@@ -119,11 +152,18 @@ async function readOrFetchInput<T>(key: string, kind: string, source: string, tt
   const failureKey=`market-input-failure:v1:${marketDigest(key)}`;
   if(store && !options.forceRefresh){
     const failed=await store.read<{until:number;message:string}>(failureKey);
-    if(failed && failed.payload.until>now)throw Error(`该输入暂不可用，重试时间 ${new Date(failed.payload.until).toISOString()}：${failed.payload.message}`);
+    if(failed && failed.payload.until>now){
+      const reason = `该输入暂不可用，重试时间 ${new Date(failed.payload.until).toISOString()}：${failed.payload.message}`;
+      const saved = savedFallback(old,kind,now,validate,reason); if (saved !== undefined) return saved;
+      throw Error(reason);
+    }
   }
   let value: T;
+  let produced = false;
+  const conflicts: unknown[]=[];
   try {
-    value = retainMarketPayload(kind, await producer(),now); validate(value);
+    const incoming = await producer(); produced = true;
+    value = retainMarketPayload(kind, incoming,now); validate(value);
     if (old) {
       const prior = retainMarketPayload(kind,decode<any>(old.payload),now), next = value as any;
       if (Array.isArray(prior) && Array.isArray(next) && prior.length && prior.every(r => r && typeof r.date === 'string')) {
@@ -170,10 +210,10 @@ async function readOrFetchInput<T>(key: string, kind: string, source: string, tt
       }
       // Same rule for disclosure maps: a thinner upstream reply must not erase
       // publication dates that are already verified and stored.
-      if (kind === 'source-sina-page') value = mergeSourcePage(prior, next, old.source, sourceOf?.(value)??source);
+      if (kind === 'source-sina-page') value = mergeSourcePage(prior, next, old.source, sourceOf?.(value)??source,detail=>conflicts.push(detail));
       if (kind === 'source-sina-indicators' && prior.rows instanceof Map && next.rows instanceof Map) {
         const matrix=(p:any)=>({...p,rows:[...p.rows].map(([name,vals])=>({kind:'field',name,vals}))});
-        const merged=mergeSourcePage(matrix(prior),matrix(next),old.source,sourceOf?.(value)??source);
+        const merged=mergeSourcePage(matrix(prior),matrix(next),old.source,sourceOf?.(value)??source,detail=>conflicts.push(detail));
         value={...merged,rows:new Map(merged.rows.map((r:any)=>[r.name,r.vals.map((v:unknown)=>v==='--'?null:v)]))};
       }
       if (prior instanceof Map && next instanceof Map) {
@@ -199,16 +239,27 @@ async function readOrFetchInput<T>(key: string, kind: string, source: string, tt
       await store.write(marketRecord(failureKey,'input-failure','internal',{key,until:now+delay,message:(e instanceof Error?e.message:String(e)).slice(0,300)},delay,now),oldFailure?.digest??null);
     }catch{}
     try { await store?.incident(key, 'source_input_failed', { message: e instanceof Error ? e.message : String(e) }); } catch {}
-    // Intentionally no stale fallback: callers must not combine expired inputs
-    // with current prices and publish an apparently current valuation.
+    // Only a failed source read may use a previously validated snapshot. Conflicting
+    // or invalid new amounts still fail; collectors never count fallback as success.
+    const saved = !produced ? savedFallback(old,kind,now,validate,e) : undefined;
+    if (saved !== undefined) return saved;
     if (kind === 'financial-history') throw Error(`财报数据不可用：${e instanceof Error ? e.message : String(e)}`);
     throw e;
   }
   if (store) {
+    if(conflicts.length) {
+      try { await store.incident(key,'financial_values_conflict',{priorDigest:old?.digest,conflicts}); } catch { marketPersistenceFailed(key+':conflict-evidence'); }
+      if(old) {
+        const origin=(old.payload as {retainedSourceConflicts?:{source:string;acquiredAt:string}})?.retainedSourceConflicts??{source:old.source,acquiredAt:old.acquiredAt};
+        (value as Record<string,unknown>).retainedSourceConflicts={...origin,count:conflicts.length};
+        savedMarketValue(value,{key,...origin,reason:'新旧披露数值冲突，保留原值并记录候选值，待复核'});
+      }
+    }
     const failure=await store.read(failureKey).catch(()=>null);
     if(failure && store.remove)await store.remove(failureKey,failure.digest).catch(()=>false);
-    try { await store.write(marketRecord(key, kind, sourceOf?.(value)??source, wire(value), ttl, now), old?.digest ?? null); }
-    catch { /* Valid current source values remain usable if writing fails. */ }
+    try {
+      if (!await store.write(marketRecord(key, kind, sourceOf?.(value)??source, wire(value), ttl, now), old?.digest ?? null)) marketPersistenceFailed(key);
+    } catch { marketPersistenceFailed(key); }
   }
   return value;
 }

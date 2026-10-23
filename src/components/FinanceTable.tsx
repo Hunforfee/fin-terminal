@@ -1,4 +1,5 @@
 'use client';
+import MarketDataNotice, { type MarketReadResult } from '@/components/MarketDataNotice';
 
 import { personalStorage } from '@/lib/personalStorage';
 
@@ -26,7 +27,7 @@ interface CompanyFinancials {
   series: Record<string, (number | null)[]>;
   source: string;
 }
-type CustomData = { companies: CompanyFinancials[] };
+type CustomData = MarketReadResult & { companies: CompanyFinancials[] };
 
 /** 默认指标（理杏仁合并报表常用行；key 以新浪披露科目为准） */
 const DEFAULT_FIELDS = [
@@ -451,6 +452,7 @@ export default function FinanceTable({ code }: { code: string }) {
 
   return (
     <div className="space-y-3">
+      <MarketDataNotice value={data} />
       <div className="card overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-1.5">
           <div className="flex max-w-full gap-1 overflow-x-auto" role="group" aria-label="报表视图">

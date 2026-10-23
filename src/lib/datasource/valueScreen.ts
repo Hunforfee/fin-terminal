@@ -160,7 +160,8 @@ export async function fetchValueScreenReports(periods: string[], today: string, 
   if (!store) return fetchFreshValueScreenReports(periods, today, codes);
   const targets = codes ?? universe.map(row => row.code);
   return storedScreenFinancials(targets, periods, async missing => {
-    const reports = await fetchFreshValueScreenReports(periods, today, !codes && missing.length === targets.length ? undefined : missing);
+    // A mostly cold all-market query uses paginated bulk reports, not dozens of 200-code calls.
+    const reports = await fetchFreshValueScreenReports(periods, today, !codes && missing.length > REPORT_CODE_BATCH ? undefined : missing);
     const identities = new Set(missing), allowed = new Set(periods);
     const accept = (row: RawRow) => identities.has(String(row.SECURITY_CODE)) && validReport(row, allowed, today);
     return { main: reports.main.filter(accept), income: reports.income.filter(accept) };

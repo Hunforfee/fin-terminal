@@ -30,13 +30,12 @@ async function readStored(store: MarketStore, key: string, field?: string): Prom
   return { row, map };
 }
 
-/** 公共收尾：CAS 写入（3 次重试）+ 返回摘要。 */
-async function casWrite(store: MarketStore, key: string, kind: string, source: string, payload: Record<string, unknown>, ttl: number, now: number): Promise<string> {
-  for (let i = 0; i < 3; i++) {
-    const old = await store.read(key).catch(() => null);
-    const record = marketRecord(key, kind, source, payload, ttl, now);
-    if (await store.write(record, old?.digest ?? null)) return record.digest;
-  }
+/** 公共收尾：对合并所依据的版本进行 CAS 写入，冲突交由调用方重新读取合并。 */
+async function casWrite(store: MarketStore, key: string, kind: string, source: string, payload: Record<string, unknown>, ttl: number, now: number, expected: string | null): Promise<string> {
+  // CAS must compare the version used to build payload. Re-reading only the digest
+  // would authorize a stale payload to erase another importer/worker's new cells.
+  const record = marketRecord(key, kind, source, payload, ttl, now);
+  if (await store.write(record, expected)) return record.digest;
   throw Error('版本冲突：写入期间记录被并发修改，请重试');
 }
 
@@ -98,7 +97,7 @@ export async function importDisclosureDates(store: MarketStore, input: { symbol?
       digest: stored?.row?.digest ?? marketDigest(Object.fromEntries(merged)) };
   }
   const digest = await casWrite(store, key, 'disclosure-dates', `import:actual-disclosure${basis ? ':' + basis.slice(0, 60) : ''}`,
-    { $marketMap: [...merged.entries()].sort(([a], [b]) => b.localeCompare(a)) }, 1800e3, now);
+    { $marketMap: [...merged.entries()].sort(([a], [b]) => b.localeCompare(a)) }, 1800e3, now, stored?.row?.digest ?? null);
   return { key, saved: savedPeriods.length, skipped: false, savedPeriods: [...new Set(savedPeriods)].sort(), conflicts, missing, digest };
 }
 
@@ -183,7 +182,7 @@ export async function importAIndicators(store: MarketStore, input: { symbol?: un
       conflicts, missing, digest: stored?.row?.digest ?? marketDigest({}) };
   }
   const digest = await casWrite(store, key, 'source-sina-indicators', `import:maintain-indicators${basis ? ':' + basis.slice(0, 60) : ''}`,
-    { dates: payloadDates, rows: { $marketMap: [...cells.entries()].map(([name, byDate]) => [name, payloadDates.map((d) => byDate.get(d) ?? null)]) } }, 1800e3, now);
+    { dates: payloadDates, rows: { $marketMap: [...cells.entries()].map(([name, byDate]) => [name, payloadDates.map((d) => byDate.get(d) ?? null)]) } }, 1800e3, now, stored?.row?.digest ?? null);
   return { key, saved: savedIndicators.size, skipped: false, savedPeriods: [...savedPeriods].sort(), indicators: [...savedIndicators].sort(),
     conflicts, missing, digest };
 }

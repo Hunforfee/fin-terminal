@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import {load} from './load-modules.mjs';
 const {storedMarketInput,validateDatedRows}=await load('marketInputs');
+const {withMarketReadStatus}=await load('marketReadContext');
 const source=ts.transpileModule(fs.readFileSync('src/lib/watchlistFinancialInputs.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 function fixture(){
  let now=Date.now(),record=null,calls=0,value=12,fails=false;
@@ -27,8 +28,9 @@ test('background update and table share one durable financial record, not an ext
  f.advance();f.set(15);assert.equal((await f.get('600519')).series.roe.at(-1),15);
  assert.equal((await f.get('600519')).series.roe.at(-1),15);assert.equal(f.calls(),2);
 });
-test('expired table inputs do not fall back to older values on source outage',async()=>{
- const f=fixture();await f.get('600519');f.advance();f.fail();await assert.rejects(f.get('600519'),/source down/);
+test('expired table inputs fall back with explicit provenance on source outage',async()=>{
+ const f=fixture();await f.get('600519');f.advance();f.fail();const value=await withMarketReadStatus(()=>f.get('600519'));
+ assert.equal(value.series.roe.at(-1),12);assert.equal(value.stale,true);assert.match(value.dataStatus.snapshots[0].reason,/source down/);
 });
 test('a populated old period cannot hide missing latest table metrics',async()=>{
  const f=fixture();f.set(null);await assert.rejects(f.get('600519'),/最新列表财务指标暂缺/);

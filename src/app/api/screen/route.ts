@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import { ok, fail, sp } from '@/lib/api';
+import { marketOk, ok, fail, sp } from '@/lib/api';
 import { getScreenMeta, screen } from '@/lib/datasource';
 import { readValueScreenCriteria } from '@/lib/valueScreen';
 import type { ValueScreenCriteria } from '@/lib/valueScreen';
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return fail(error instanceof Error ? error.message : '筛选条件无效', 400);
   }
-  try { return ok(await screen(criteria)); }
+  try { return await marketOk(() => screen(criteria)); }
   catch (error) {
     return fail(error instanceof Error ? error.message : '财报筛选暂不可用', 502);
   }

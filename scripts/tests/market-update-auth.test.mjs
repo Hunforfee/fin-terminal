@@ -63,6 +63,7 @@ test('route rejects foreign group symbols, cross-site creation and oversized bod
     exports:exported,TextDecoder,process:{env:{MARKET_UPDATE_WORKER_ENABLED:'1',MARKET_UPDATE_WORKER_TOKEN:'x'.repeat(40),MARKET_DATABASE_URL:'configured'}},
     require(name){
       if(name==='next/server')return {NextResponse:{json:(body,options)=>({body,status:options?.status??200})}};
+      if(name==='@/lib/marketImportAuth')return {denyReason:()=>null};
       if(name==='@/lib/marketStore')return {getMarketStore:()=>({})};
       if(name==='@/lib/marketCollection')return {registerCollection:async()=>{}};
       if(name==='@/lib/marketUpdateAuth')return {localUpdatePreview:()=>false,updateIdentity:async()=>({owner:'real',allowed:['sh600519']})};
@@ -85,6 +86,7 @@ test('single-stock fill needs no group sync and DELETE stops only the caller',as
     exports:exported,TextDecoder,process:{env:{MARKET_UPDATE_WORKER_ENABLED:'1',MARKET_UPDATE_WORKER_TOKEN:'x'.repeat(40),MARKET_DATABASE_URL:'configured'}},
     require(name){
       if(name==='next/server')return {NextResponse:{json:(body,options)=>({body,status:options?.status??200})}};
+      if(name==='@/lib/marketImportAuth')return {denyReason:()=>null};
       if(name==='@/lib/marketStore')return {getMarketStore:()=>({})};
       if(name==='@/lib/marketCollection')return {registerCollection:async()=>{}};
       if(name==='@/lib/marketUpdateAuth')return {localUpdatePreview:()=>false,updateIdentity:async()=>({owner:'real',allowed:['sh600519']})};
@@ -122,11 +124,12 @@ test('GET falls back to owner-only identity when the watchlist is not synced',as
     exports:exported,TextDecoder,process:{env:{MARKET_UPDATE_WORKER_ENABLED:'1',MARKET_UPDATE_WORKER_TOKEN:'x'.repeat(40),MARKET_DATABASE_URL:'configured'}},
     require(name){
       if(name==='next/server')return {NextResponse:{json:(body,options)=>({body,status:options?.status??200})}};
+      if(name==='@/lib/marketImportAuth')return {denyReason:()=>null};
       if(name==='@/lib/marketStore')return {getMarketStore:()=>({})};
       if(name==='@/lib/marketCollection')return {registerCollection:async(...args)=>{registered.push(args);}};
       if(name==='@/lib/marketUpdateAuth')return {localUpdatePreview:()=>false,updateIdentity:identity};
       if(name==='@/lib/auth/session')return {sameOriginMutation:r=>r.safe};
-      if(name==='@/lib/marketUpdateQueue')return {UpdateQueueError:Err,updateSymbols:v=>v,MarketUpdateQueue:class{async status(owner){return {owner,jobs:[]};}}};
+      if(name==='@/lib/marketUpdateQueue')return {UpdateQueueError:Err,updateSymbols:v=>v,MarketUpdateQueue:class{async workerPausedUntil(){return null;}async status(owner){return {owner,jobs:[]};}}};
       throw Error(name);
     },
   });
@@ -151,11 +154,12 @@ test('GET surfaces auth failures without the owner-only fallback',async()=>{
     exports:exported,TextDecoder,process:{env:{MARKET_UPDATE_WORKER_ENABLED:'1',MARKET_UPDATE_WORKER_TOKEN:'x'.repeat(40),MARKET_DATABASE_URL:'configured'}},
     require(name){
       if(name==='next/server')return {NextResponse:{json:(body,options)=>({body,status:options?.status??200})}};
+      if(name==='@/lib/marketImportAuth')return {denyReason:()=>null};
       if(name==='@/lib/marketStore')return {getMarketStore:()=>({})};
       if(name==='@/lib/marketCollection')return {registerCollection:async()=>{throw Error('不应注册');}};
       if(name==='@/lib/marketUpdateAuth')return {localUpdatePreview:()=>false,updateIdentity:async()=>{throw new Err('登录状态已失效，请重新登录',401);}};
       if(name==='@/lib/auth/session')return {sameOriginMutation:r=>r.safe};
-      if(name==='@/lib/marketUpdateQueue')return {UpdateQueueError:Err,updateSymbols:v=>v,MarketUpdateQueue:class{async status(){return {};}}};
+      if(name==='@/lib/marketUpdateQueue')return {UpdateQueueError:Err,updateSymbols:v=>v,MarketUpdateQueue:class{async workerPausedUntil(){return null;}async status(){return {};}}};
       throw Error(name);
     },
   });

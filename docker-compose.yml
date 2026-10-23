@@ -10,6 +10,7 @@ services:
       # 上游超时（毫秒）
       UPSTREAM_TIMEOUT_MS: '8000'
       TZ: 'Asia/Shanghai'
+      MARKET_READ_MODE: '${MARKET_READ_MODE:-hybrid}'
       # 接入同花顺 iFinD 后取消注释，即可把财务摘要切换为真实财报口径
       # IFIND_BASE_URL: 'https://your-ifind-gateway/v1'
       # IFIND_TOKEN: 'your-token'

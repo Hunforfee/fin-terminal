@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { withMarketReadStatus } from './marketReadContext';
+
+export async function marketOk<T>(read: () => Promise<T>) { return ok(await withMarketReadStatus(read)); }
 
 /** 统一成功响应 */
 export function ok<T>(data: T, init?: { cacheSeconds?: number }) {

@@ -100,12 +100,16 @@ test('a damaged persistent record is not mistaken for valid or silently overwrit
   await assert.rejects(store.read('damaged'));
   await assert.rejects(store.write(record,null));
 }));
-test('financial maps persist; expired financials never silently substitute for current inputs',()=>fixture(async(store,dir)=>{
+test('financial maps persist; expired values carry provenance instead of a new acquisition date',()=>fixture(async(store,dir)=>{
   const validate=v=>{assert.ok(v instanceof Map);};
   const value=await storedMarketInput('dates','disclosures','source',1000,async()=>new Map([['2025-12-31','2026-04-01']]),validate,store,now);
   assert.equal(value.size,1);
   const hit=await storedMarketInput('dates','disclosures','source',1000,async()=>{throw Error('must not fetch');},validate,fileMarketStore(dir),now+1);assert.equal(hit.size,1);
-  await assert.rejects(storedMarketInput('dates','disclosures','source',1000,async()=>{throw Error('source down');},validate,store,now+2000),/source down/);
+  const {withMarketReadStatus}=await load('marketReadContext');
+  const prior=await store.read('dates');
+  const fallback=await withMarketReadStatus(async()=>({dates:[...await storedMarketInput('dates','disclosures','source',1000,async()=>{throw Error('source down');},validate,store,now+2000)]}));
+  assert.equal(fallback.stale,true);assert.equal(fallback.dataStatus.snapshots[0].acquiredAt,prior.acquiredAt);
+  assert.equal((await store.read('dates')).acquiredAt,prior.acquiredAt);
 }));
 test('partial financial histories never discard previously covered dates',()=>fixture(async store=>{
   const validate=v=>validateDatedRows(v,'date',['npParent']);

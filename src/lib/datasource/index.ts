@@ -1,5 +1,6 @@
 import { crossCheckMainlandRaw, MarketDataConflict } from '../klineCrossCheck';
 import { databaseOnly } from '../marketReadPolicy';
+import { withMarketReadStatus } from '../marketReadContext';
 import { getMarketStore, getMarketReadStore } from '../marketStore';
 import { readStoredFinancialSummary } from '../storedFinancialSummary';
 import { readRemoteMarketData, remoteMarketDataEnabled } from '../marketDataClient';
@@ -124,6 +125,9 @@ function localSearch(kw: string): SearchHit[] {
 
 /** 单标的实时行情 */
 export async function getQuote(input: string): Promise<Quote | null> {
+  return withMarketReadStatus(()=>getQuoteData(input));
+}
+async function getQuoteData(input: string): Promise<Quote | null> {
   if (remoteMarketDataEnabled()) return readRemoteMarketData<Quote>('quote', { code: input });
   const n = normalizeCode(input);
   if (!n) return null;
@@ -151,6 +155,9 @@ export async function getQuote(input: string): Promise<Quote | null> {
 
 /** 批量行情：分块并发 + 逐块降级 */
 export async function getQuotes(inputs: string[]): Promise<Quote[]> {
+  return withMarketReadStatus(()=>getQuotesData(inputs));
+}
+async function getQuotesData(inputs: string[]): Promise<Quote[]> {
   if (remoteMarketDataEnabled()) {
     const rows: Quote[] = [];
     for (let at = 0; at < inputs.length; at += 200)
@@ -418,7 +425,7 @@ export async function getValuation(input: string, years = 10, method: ValuationM
   const n=normalizeStockCode(input);
   if(!n || n.kind!=='stock')throw Error('真实财报估值仅支持 A 股 / 港股股票');
   const span=Math.min(Math.max(years,1),10);
-  const value=await cachedValuationResult(n.symbol,span,method,()=>calculateValuation(n.symbol,span,method),options);
+  const value=await cachedValuationResult(n.symbol,span,method,()=>withMarketReadStatus(()=>calculateValuation(n.symbol,span,method)),options);
   if(n.market!=='HK' || !value.historyCache)return value;
   // Historical samples are durable, while HK current cards still use live prices.
   try {
@@ -543,25 +550,40 @@ async function calculateValuation(input: string, years = 10, method: ValuationMe
 }
 
 export async function getFinancial(input: string): Promise<FinancialSummary> {
+  return withMarketReadStatus(()=>getFinancialData(input));
+}
+async function getFinancialData(input: string): Promise<FinancialSummary> {
   if (remoteMarketDataEnabled()) return readRemoteMarketData<FinancialSummary>('financial', { code: input });
   const n = normalizeStockCode(input);
   if (!n) throw new Error(`无法解析代码 ${input}`);
   return cached(`fin:${n.code}`, 30 * 60 * 1000, async () => {
     if(n.market!=='HK' && n.kind==='stock'){
-      const reported=await readStoredFinancialSummary(getMarketReadStore(),n.code);
-      if(reported)return reported;
+      const transient=new Map<string,import('./eastmoneyStatements').StatementSourcePage>();
+      if (!databaseOnly()) {
+        const year=new Date(Date.now()+8*3600e3).getUTCFullYear();
+        await Promise.allSettled([year,year-1].flatMap(y=>['profit','balance'].map(async id=>{
+          const page=await sinaStatements.fetchStatementSourcePage(n.code,id as 'profit'|'balance',y);
+          transient.set(`source-sina-page:v1:${n.code}:${id}:${y}`,page);
+        })));
+      }
+      const persisted=getMarketReadStore();
+      const readStore=transient.size ? {read:async<T>(key:string)=>transient.has(key)
+        ? {payload:transient.get(key)} as import('../marketStore').MarketRecord<T>
+        : persisted?.read<T>(key).catch(()=>null)??null} : persisted;
+      const reported=await readStoredFinancialSummary(readStore,n.code);
+      if(reported)return {...reported,stale:false};
     }
     const q = await getQuote(n.symbol);
     if (!q) throw new Error('行情获取失败');
     // 优先走 iFinD 真实三表；未启用则降级为恒等式派生
     if (ifind.isEnabled()) {
       try {
-        return await ifind.fetchFinancial(n.code);
+        return {...await ifind.fetchFinancial(n.code),stale:false};
       } catch {
         /* 降级 */
       }
     }
-    return buildFinancialSummary(q);
+    return {...buildFinancialSummary(q),stale:q.stale};
   });
 }
 
@@ -754,39 +776,23 @@ export async function getCustomFinancialCompare(
 ) {
   if (remoteMarketDataEnabled()) return readRemoteMarketData<{ companies: sinaStatements.CustomFinancials[] }>('finance-compare', {}, { codes, fields, years, granularity });
   const list = codes.slice(0, 4);
-  if (years === 2 && granularity === 'quarter' && fields.length === WATCHLIST_FINANCIAL_FIELDS.length && WATCHLIST_FINANCIAL_FIELDS.every(f => fields.includes(f))) {
-    return { companies: await Promise.all(list.map(async code => {
-      const n = normalizeStockCode(code); if (!n) throw Error('无效股票代码');
-      const result = await getWatchlistFinancialInputs(n.symbol);
-      const q = await getQuote(n.symbol).catch(() => null);
-      return { ...result, name: q?.name ?? result.name };
-    })) };
-  }
-  return (async () => {
-    const results = await Promise.all(
-      list.map(async (c) => {
-        const n = normalizeStockCode(c);
-        if (!n) throw new Error(`无法解析代码 ${c}`);
-        const q = await getQuote(n.symbol).catch(() => null);
-        if (n.market === 'HK') {
-          return hkFinance.filterHkPeriods(
-            await hkFinance.fetchHkCustomFinancials(`${n.code}.HK`, n.code, fields, years, q?.name),
-            granularity,
-          );
-        }
-        let f: sinaStatements.CustomFinancials;
-        try {
-          f = await sinaStatements.fetchCustomFinancials(n.code, fields, years, q?.name);
-        } catch (e) {
-          // 保留底层缺失明细（哪些字段/报表未入库），而非笼统报“获取失败”
-          const detail = e instanceof Error ? e.message : '未知错误';
-          throw new Error(`无法获取 ${q?.name ?? n.code} 的财报数据：${detail}`);
-        }
-        return filterCustom(f, granularity);
-      }),
-    );
-    return { companies: results };
-  })();
+  if (list.some(c=>!normalizeStockCode(c))) throw Error('无效股票代码');
+  const watchlist = years === 2 && granularity === 'quarter' && fields.length === WATCHLIST_FINANCIAL_FIELDS.length && WATCHLIST_FINANCIAL_FIELDS.every(f => fields.includes(f));
+  const companies = await Promise.all(list.map(async c => {
+    const n = normalizeStockCode(c)!;
+    const q = await getQuote(n.symbol).catch(() => null);
+    try {
+      if (watchlist) return { ...await getWatchlistFinancialInputs(n.symbol), name:q?.name??n.code };
+      if (n.market==='HK') return hkFinance.filterHkPeriods(
+        await hkFinance.fetchHkCustomFinancials(`${n.code}.HK`,n.code,fields,years,q?.name),granularity);
+      return filterCustom(await sinaStatements.fetchCustomFinancials(n.code,fields,years,q?.name),granularity);
+    } catch(error) {
+      return {code:n.code,name:q?.name??n.code,periods:[],periodLabels:[],
+        series:Object.fromEntries(fields.map(field=>[field,[]])),source:'unavailable',missingFields:fields,
+        missing:error instanceof Error?error.message:'财务数据暂不可用'};
+    }
+  }));
+  return { companies, errors:companies.filter(c=>'missing' in c && c.missing).map(c=>({code:c.code,error:(c as {missing:string}).missing})) };
 }
 
 /** 粒度筛选（A 股 / 港股共用逻辑） */

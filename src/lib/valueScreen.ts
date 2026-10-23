@@ -1,3 +1,4 @@
+import type { MarketReadStatus } from './marketReadStatus';
 import { industryStockSymbol } from './industryResearch';
 import { normalizeStockCode } from './datasource/codes';
 import { SCREEN_AUTO_PERIOD as VALUE_SCREEN_AUTO_PERIOD } from './screenerPreferences';
@@ -56,6 +57,7 @@ export interface ValueScreenRow {
 }
 
 export interface ValueScreenResult {
+  dataStatus?: MarketReadStatus;
   rows: ValueScreenRow[];
   total: number;
   /** Candidates after scope and industry selection, before financial conditions. */

@@ -24,7 +24,7 @@ function harness() {
   const cacheExports = {};
   vm.runInNewContext(cacheCode, {
     exports: cacheExports, Date: { now: () => now },
-    require: name => name==='../marketReadPolicy' ? {databaseOnly:()=>false} : ({ isShanghaiTradingTime: () => true }),
+    require: name => name==='../marketReadStatus' ? {annotateMarketValue:v=>v,observeMarketValue:v=>v,savedMarketValue:v=>v} : name==='../marketReadPolicy' ? {databaseOnly:()=>false} : ({ isShanghaiTradingTime: () => true }),
   });
   const providerExports={};
   vm.runInNewContext(providerCode,{

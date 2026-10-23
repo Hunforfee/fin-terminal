@@ -2,7 +2,8 @@ import type { Candle, KLineSeries, Period, Adjust } from './datasource/types';
 import { getMarketStore, marketDigest, marketRecord, type MarketStore, type MarketRecord } from './marketStore';
 import { marketCutoff, retainMarketPayload } from './marketRetention';
 import { withMarketRefresh } from './marketRefresh';
-import { databaseOnly, marketDataMissing } from './marketReadPolicy';
+import { databaseOnly, marketDataMissing, allowSavedMarketFallback } from './marketReadPolicy';
+import { savedMarketValue } from './marketReadStatus';
 import { importedBarsKey, extendImportedPrices, completedDate, type ImportedBars } from './marketImportedBars';
 
 export interface KLineRequest { symbol: string; period: Period; adjust: Adjust; count: number; start?: string; recentOnly?: boolean }
@@ -107,7 +108,7 @@ export async function storedKLine(request: KLineRequest, fetcher: KLineFetcher,
         const expected=request.start && old.listingDate && old.listingDate>request.start ? old.listingDate : request.start;
         const covers=expected ? Date.parse(old.candles[0].date)-Date.parse(expected)<=14*864e5 : old.candles.length>=request.count;
         if(covers || request.recentOnly){
-          if(Date.parse(imported.refreshAfter)>now)return {...take(old,request),storage:{backend:'persistent',acquiredAt:imported.acquiredAt,validation:'structural'}};
+          if(Date.parse(imported.refreshAfter)>now || old.candles.at(-1)!.date>=completedDate(now))return {...take(old,request),storage:{backend:'persistent',acquiredAt:imported.acquiredAt,validation:'structural'}};
           const overlap=old.candles[Math.max(0,old.candles.length-8)].date;
           const gap=Math.max(0,Math.ceil((now-Date.parse(overlap))/864e5));
           const tail=await fetcher({...request,start:overlap,count:Math.min(3200,Math.max(16,gap+10))});
@@ -213,10 +214,18 @@ export async function storedKLine(request: KLineRequest, fetcher: KLineFetcher,
         storage: { backend: written ? 'persistent' : 'upstream', acquiredAt: new Date(now).toISOString(), validation: 'structural' } };
     } catch (e) {
       await incident('refresh_failed', { message: e instanceof Error ? e.message : String(e) });
-      if (saved) return { ...take(saved.payload, request), stale: true, warnings: ['更新或校验失败，当前使用上次存储的数据；请留意实际覆盖日期。'],
-        storage: { backend: 'persistent', acquiredAt: saved.acquiredAt, validation: 'structural' } };
+      if (saved && allowSavedMarketFallback()) return savedMarketValue({ ...take(saved.payload, request), stale: true, warnings: ['更新或校验失败，当前使用上次存储的数据；请留意实际覆盖日期。'],
+        storage: { backend: 'persistent' as const, acquiredAt: saved.acquiredAt, validation: 'structural' as const } },
+        {key:saved.key,source:saved.source,acquiredAt:saved.acquiredAt,reason:String(e)});
       throw e;
     }
+  }).catch(async error=>{
+    if(!allowSavedMarketFallback())throw error;
+    // Also covers imported canonical tails and lease failures, which precede the mirror refresh block.
+    const saved=await readDatabaseKLine(request,store,now).catch(()=>null);
+    if(!saved)throw error;
+    return savedMarketValue({...saved,stale:true,warnings:[...(saved.warnings??[]),'联网更新失败，使用已保存的行情。']},
+      {key:`kline:${request.symbol}:${request.adjust}`,source:saved.source,acquiredAt:saved.storage!.acquiredAt,reason:String(error)});
   });
   active.set(lock, work);
   try { return await work; } finally { if (active.get(lock) === work) active.delete(lock); }

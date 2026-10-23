@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import { ok, fail, sp } from '@/lib/api';
+import { marketOk, fail, sp } from '@/lib/api';
 import { getKLine } from '@/lib/datasource';
 import type { Period, Adjust } from '@/lib/datasource/types';
 
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
   if (!['none', 'qfq', 'hfq'].includes(adjust)) return fail('adjust 只能是 none/qfq/hfq', 400);
 
   try {
-    return ok(await getKLine(code, period, adjust, count, startDate));
+    return await marketOk(() => getKLine(code, period, adjust, count, startDate));
   } catch (e) {
     return fail(e instanceof Error ? e.message : 'K 线获取失败', 502, e);
   }

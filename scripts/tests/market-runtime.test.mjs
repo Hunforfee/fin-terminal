@@ -27,14 +27,14 @@ test('complete canonical history reads once, ignores newer mirror tails, and con
  assert.equal((await storedKLine(req,async()=>{},store,now)).candles.at(-1).close,11,'A later import must be immediately visible');
 }));
 
-test('raw source-page refresh preserves imported fields and missing dates while accepting explicit zero',async()=>{
+test('raw source-page refresh preserves imported fields/dates and queues conflicting zero for review',async()=>{
  const store=memory(),key='source-sina-page:v1:600415:balance:2025';
  const before={unit:'wan',dates:['2025-12-31','2025-09-30'],announceDates:['2026-04-01','2025-10-20'],rows:[{kind:'field',name:'资产总计',vals:['100','90']},{kind:'field',name:'短期借款',vals:['20','10']}]};
  await store.write(marketRecord(key,'source-sina-page','qmt',before,1,now),null);
  const next={unit:'万元',dates:['2025-12-31'],rows:[{kind:'field',name:'资产总计',vals:['--']},{kind:'field',name:'短期借款',vals:['0']},{kind:'field',name:'长期借款',vals:['3']}]};
  const result=await storedMarketInput(key,'source-sina-page','sina',1000,async()=>next,v=>assert.equal(new Set(v.dates).size,v.dates.length),store,now+1000);
  assert.deepEqual(result.dates,before.dates);assert.deepEqual(result.rows.find(r=>r.name==='资产总计').vals,['100','90']);
- assert.deepEqual(result.rows.find(r=>r.name==='短期借款').vals,['0','10']);assert.deepEqual(result.rows.find(r=>r.name==='长期借款').vals,['3','--']);assert.deepEqual(result.announceDates,before.announceDates);
+ assert.deepEqual(result.rows.find(r=>r.name==='短期借款').vals,['20','10']);assert.deepEqual(result.rows.find(r=>r.name==='长期借款').vals,['3','--']);assert.deepEqual(result.announceDates,before.announceDates);
  const old=await store.read(key);await assert.rejects(storedMarketInput(key,'source-sina-page','sina',1,async()=>({...next,unit:'元'}),()=>{},store,now+3000),/单位/);assert.equal((await store.read(key)).digest,old.digest);
 });
 

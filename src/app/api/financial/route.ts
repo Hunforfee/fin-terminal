@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import { ok, fail, sp } from '@/lib/api';
+import { marketOk, fail, sp } from '@/lib/api';
 import { getFinancial } from '@/lib/datasource';
 
 export const runtime = 'nodejs';
@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   const code = sp(request).get('code');
   if (!code) return fail('缺少 code 参数', 400);
   try {
-    return ok(await getFinancial(code));
+    return await marketOk(() => getFinancial(code));
   } catch (e) {
     return fail(e instanceof Error ? e.message : '财务数据获取失败', 502, e);
   }

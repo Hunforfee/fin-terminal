@@ -1,4 +1,5 @@
 'use client';
+import MarketDataNotice, { type MarketReadResult } from '@/components/MarketDataNotice';
 
 import { personalStorage } from '@/lib/personalStorage';
 
@@ -44,7 +45,7 @@ interface CompanyFinancials {
   source: string;
 }
 
-type CustomData = { companies: CompanyFinancials[] };
+type CustomData = MarketReadResult & { companies: CompanyFinancials[] };
 
 /** 分析模块：名称可自定义，fields 顺序即展示顺序 */
 interface Module {
@@ -513,6 +514,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
 
   return (
     <div className="space-y-3">
+      <MarketDataNotice value={data} />
       {/* 顶栏：主/对比公司 + 报告期粒度（紧凑） */}
       <div className="card flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2">
         <div className="flex items-center gap-1.5 text-sm">

@@ -17,6 +17,7 @@ const gaps = await load('marketFillGaps');
 const plan = await load('marketHistoryPlan');
 const corrections = await load('marketCorrections');
 const auth = await load('marketMaintainAuth');
+const aImport = await load('marketAImportRecords');
 const { MarketUpdateQueue, UpdateQueueError } = await load('marketUpdateQueue');
 const now = Date.parse('2026-10-23T02:00:00Z');
 
@@ -52,6 +53,8 @@ function compileRoute(store, overrides = {}) {
       if (name === '@/lib/auth/limits') return { allowAttempt: (_k, max) => ++rateCalls <= max };
       if (name === '@/lib/marketStore') return { getMarketStore: () => store, marketRecord: market.marketRecord, valuationRevisionKey: s => `valuation-input-version:v1:${s}` };
       if (name === '@/lib/marketMaintainAuth') return auth;
+      if (name === '@/lib/marketAImportRecords') return aImport;
+      if (name === '@/lib/marketAImportRecords') return aImport;
       if (name === '@/lib/marketCorrections') return corrections;
       if (name === '@/lib/marketDataResources') return resources;
       if (name === '@/lib/marketFillGaps') return gaps;
@@ -275,6 +278,8 @@ test('the existing import route accepts the maintain token as a machine admin an
       if (name === '@/lib/marketImportedBars') return { importDailyPrices: async (_s, input) => ({ symbol: input.symbol, from: input.candles[0]?.date, to: input.candles.at(-1)?.date, count: input.candles.length, skipped: false }) };
       if (name === '@/lib/marketImportAuth') return { denyReason: () => '请先登录', importAdminIds: () => [], readImportIdentity: () => null };
       if (name === '@/lib/marketMaintainAuth') return auth;
+      if (name === '@/lib/marketAImportRecords') return aImport;
+      if (name === '@/lib/marketAImportRecords') return aImport;
       if (name === '@/lib/marketHkImportRecords') return { writeHkStatements: async () => ({ status: 'inserted' }), writeHkIndicators: async () => ({ saved: 1 }), writeHkDividendEvents: async () => ({ saved: 1 }) };
       if (name === '@/lib/marketImportRecords') return { klineCrossConflicts: async () => [], writeFinanceStatements: async () => ({ status: 'inserted' }), writeFinancialHistory: async () => ({ status: 'inserted' }), writeShareHistory: async () => ({ status: 'inserted' }), writeDividendPlans: async () => ({ saved: 1 }), writeDividendImplemented: async () => ({ saved: 1 }) };
       throw Error(name);

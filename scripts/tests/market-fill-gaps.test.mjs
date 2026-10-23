@@ -10,6 +10,7 @@ const bars = await load('marketImportedBars');
 const market = await load('marketStore');
 const auth = await load('marketImportAuth');
 const maintainAuth = await load('marketMaintainAuth');
+const aImport = await load('marketAImportRecords');
 const session = await load('auth/session');
 const records = await load('marketImportRecords');
 const now = Date.parse('2026-10-21T13:00:00Z');
@@ -163,6 +164,7 @@ function importRoute(s) {
       if (name === '@/lib/marketImportRecords') return records;
       if (name === '@/lib/marketHkImportRecords') return hk;
       if (name === '@/lib/marketImportAuth') return auth;
+      if (name === '@/lib/marketAImportRecords') return aImport;
       if (name === '@/lib/marketMaintainAuth') return maintainAuth;
       throw Error(name);
     },

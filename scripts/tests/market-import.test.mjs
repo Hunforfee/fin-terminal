@@ -10,6 +10,7 @@ const bars = await load('marketImportedBars');
 const market = await load('marketStore');
 const auth = await load('marketImportAuth');
 const maintainAuth = await load('marketMaintainAuth');
+const aImport = await load('marketAImportRecords');
 const session = await load('auth/session');
 const retention = await load('marketRetention');
 const datasource = await load('datasource/sinaStatements');
@@ -74,6 +75,7 @@ function route(s) {
       if(name==='@/lib/marketImportRecords')return records;
       if(name==='@/lib/marketHkImportRecords')return hkRecords;
       if(name==='@/lib/marketImportAuth')return auth;
+      if(name==='@/lib/marketAImportRecords')return aImport;
       if(name==='@/lib/marketMaintainAuth')return maintainAuth;
       throw Error(name);
     },

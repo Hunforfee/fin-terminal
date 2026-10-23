@@ -5,6 +5,7 @@ import { denyReason, importAdminIds, readImportIdentity } from '@/lib/marketImpo
 import { maintainToken, readMaintainIdentity } from '@/lib/marketMaintainAuth';
 import { writeHkDividendEvents, writeHkIndicators, writeHkStatements } from '@/lib/marketHkImportRecords';
 import { klineCrossConflicts, writeDividendImplemented, writeDividendPlans, writeFinancialHistory, writeFinanceStatements, writeShareHistory } from '@/lib/marketImportRecords';
+import { importAIndicators, importDisclosureDates } from '@/lib/marketAImportRecords';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
   });
 }
 
-/** POST /api/market/import —— 分类型导入：kline / finance / financial-history / share-history / dividend-plans / dividend-impl / hk-statements / hk-indicators / hk-dividend-events */
+/** POST /api/market/import —— 分类型导入：kline / finance / financial-history / share-history / dividend-plans / dividend-impl / disclosure-dates / a-indicators / hk-statements / hk-indicators / hk-dividend-events */
 export async function POST(request: NextRequest) {
   const auth = authorizeImport(request);
   if ('denied' in auth) return json({ ok: false, error: auth.denied }, auth.status);
@@ -122,6 +123,10 @@ export async function POST(request: NextRequest) {
         completeReports: rec.completeReports as never }, Date.now(), { overwrite: rec.overwrite === true }) as unknown as Record<string, unknown>;
     } else if (body.type === 'hk-indicators') {
       result = await writeHkIndicators(store, { symbol: String(rec.symbol ?? ''), points: (rec.points ?? []) as never }) as unknown as Record<string, unknown>;
+    } else if (body.type === 'disclosure-dates') {
+      result = await importDisclosureDates(store, rec) as unknown as Record<string, unknown>;
+    } else if (body.type === 'a-indicators') {
+      result = await importAIndicators(store, rec) as unknown as Record<string, unknown>;
     } else if (body.type === 'hk-dividend-events') {
       result = await writeHkDividendEvents(store, { symbol: String(rec.symbol ?? ''), rows: (rec.rows ?? []) as never }) as unknown as Record<string, unknown>;
     } else {

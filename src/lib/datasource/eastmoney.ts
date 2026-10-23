@@ -40,9 +40,9 @@ function stripJsonp(text: string): string {
 }
 
 /** 代码 / 名称 / 拼音联想；拿不到有效结构时返回空数组而非抛错 */
-export async function fetchSearch(keyword: string, count = 12): Promise<SearchHit[]> {
+export async function fetchSearch(keyword: string, count = 12, signal?:AbortSignal): Promise<SearchHit[]> {
   const url = `${SUGGEST_URL}?input=${encodeURIComponent(keyword)}&type=14&token=${TOKEN}&count=${count}`;
-  const text = await fetchText(url, { timeoutMs: 6000 });
+  const text = await fetchText(url, { timeoutMs: 1800, retries:0, signal });
   const json = JSON.parse(stripJsonp(text)) as {
     QuotationCodeTable?: { Data?: SuggestItem[] };
   };

@@ -30,6 +30,32 @@ async function fixture(run) {
 }
 const response = (value, status = 200, headers = {}) => Response.json(value, { status, headers: { 'X-Fin-Data-Version': '1', ...headers } });
 
+test('remote search coalesces repeated queries, isolates credentials and keeps failed queries retryable', () => fixture(async () => {
+ let calls=0;
+ globalThis.fetch=async url=>{calls++;assert.equal(url.searchParams.get('q'),'hngj-cache-test');return response({ok:true,data:[{code:'600011',market:'A',kind:'stock'}]});};
+ const query=q=>new Request('https://consumer.test/api/search?q='+encodeURIComponent(q));
+ const [a,b]=await Promise.all([client.proxyRemoteMarketRequest(query(' HNGJ-cache-test ')),client.proxyRemoteMarketRequest(query('hngj-cache-test'))]);
+ assert.deepEqual(await a.json(),await b.json());assert.equal(calls,1);
+ await client.proxyRemoteMarketRequest(query('hngj-cache-test'));assert.equal(calls,1);
+ process.env.MARKET_DATA_API_ACCESS_TOKEN=TOKEN+'-rotated';
+ await client.proxyRemoteMarketRequest(query('hngj-cache-test'));assert.equal(calls,2);
+ globalThis.fetch=async()=>{calls++;return response({ok:false},503);};
+ assert.equal((await client.proxyRemoteMarketRequest(query('failed-then-retried'))).status,502);
+ globalThis.fetch=async()=>{calls++;return response({ok:true,data:[]});};
+ assert.equal((await client.proxyRemoteMarketRequest(query('failed-then-retried'))).status,200);assert.equal(calls,4);
+}));
+
+test('cancelling one remote search waiter preserves the shared result for other callers', () => fixture(async () => {
+ let finish,calls=0;
+ globalThis.fetch=async()=>{calls++;return new Promise(resolve=>{finish=()=>resolve(response({ok:true,data:[{code:'600011'}]}));});};
+ const params=new URLSearchParams({q:'shared-cancellation'}),controller=new AbortController();
+ const a=client.requestMarketData('search',params,{signal:controller.signal});
+ const b=client.requestMarketData('search',params);
+ await new Promise(resolve=>setImmediate(resolve));controller.abort();finish();
+ await assert.rejects(a,{name:'AbortError'});
+ assert.equal((await (await b).json()).data[0].code,'600011');assert.equal(calls,1);
+}));
+
 test('consumer API forwards only explicit public queries and the server credential, preserving source metadata', () => fixture(async () => {
   let calls = 0;
   globalThis.fetch = async (url, init) => {

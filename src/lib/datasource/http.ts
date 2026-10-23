@@ -10,6 +10,8 @@ const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 export interface FetchOpts {
+  /** Caller cancellation (autocomplete deadlines / superseded searches). */
+  signal?: AbortSignal;
   timeoutMs?: number;
   retries?: number;
   headers?: Record<string, string>;
@@ -40,6 +42,7 @@ export async function fetchText(url: string, opts: FetchOpts = {}): Promise<stri
   let lastErr: unknown;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
+    opts.signal?.throwIfAborted();
     const budget = currentUpstreamBudget();
     budget?.signal.throwIfAborted();
     const unavailable=()=>{
@@ -56,11 +59,13 @@ export async function fetchText(url: string, opts: FetchOpts = {}): Promise<stri
     let received=false;
     let slot:Awaited<ReturnType<typeof acquireSharedSourceSlot>>;
     try {
-      slot=await acquireSharedSourceSlot(url,budget?.signal);
+      const signals=[ctrl.signal,...(budget?[budget.signal]:[]),...(opts.signal?[opts.signal]:[])];
+      const signal=AbortSignal.any(signals);
+      slot=await acquireSharedSourceSlot(url,signal);
       unavailable(); // A queued request may have waited behind a failing request.
       timer=setTimeout(() => ctrl.abort(),timeoutMs);
       const res = await fetch(url, {
-        signal: budget ? AbortSignal.any([ctrl.signal, budget.signal]) : ctrl.signal,
+        signal,
         headers: {
           'User-Agent': UA,
           Accept: '*/*',
@@ -87,8 +92,8 @@ export async function fetchText(url: string, opts: FetchOpts = {}): Promise<stri
       if (e instanceof Error && e.name === 'AbortError') {
         lastErr = new UpstreamError(`timeout ${timeoutMs}ms`, url, 'timeout');
       }
-      if(!received && !budget?.signal.aborted)marketSourceCooldown.failed(url);
-      if(marketSourceCooldown.active(url) || budget?.signal.aborted)break;
+      if(!received && !budget?.signal.aborted && !opts.signal?.aborted)marketSourceCooldown.failed(url);
+      if(marketSourceCooldown.active(url) || budget?.signal.aborted || opts.signal?.aborted)break;
       // 最后一次尝试不再等待
       if (attempt < retries) await sleep(backoffMs * (attempt + 1));
     } finally {

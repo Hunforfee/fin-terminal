@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SearchHit } from '@/lib/datasource/types';
 import { searchResultPath as pathOf } from '@/lib/searchRouting';
 import { normalizeCode } from '@/lib/datasource/codes';
+import { fetchSearchSuggestions } from '@/lib/searchSuggestions';
 import {
   pushHistory,
   readHistory,
@@ -37,6 +38,7 @@ export default function SearchBox({
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
   const [queryRevision, setQueryRevision] = useState(0);
   const boxRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -54,6 +56,7 @@ export default function SearchBox({
     const q = kw.trim();
     const mySeq = ++seqRef.current;
     requestRef.current?.abort();
+    setSearchError('');
     if (!q) {
       setHits([]);
       setLoading(false);
@@ -66,17 +69,15 @@ export default function SearchBox({
       const controller = new AbortController();
       requestRef.current = controller;
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`, {
-          signal: controller.signal,
-        });
-        const json = await res.json();
+        const list = await fetchSearchSuggestions(q,controller.signal);
         if (mySeq !== seqRef.current) return; // 丢弃过期响应
-        const list: SearchHit[] = json.ok ? json.data : [];
         setHits(list);
         setActive(0);
         setOpen(list.length > 0 && document.activeElement === inputRef.current);
-      } catch {
-        if (mySeq === seqRef.current) setHits([]);
+      } catch (error) {
+        if (mySeq === seqRef.current && !controller.signal.aborted) {
+          setHits([]);setSearchError(error instanceof Error?error.message:'搜索失败，请重试');
+        }
       } finally {
         if (mySeq === seqRef.current) setLoading(false);
       }
@@ -197,22 +198,20 @@ export default function SearchBox({
         const query = kw.trim();
         setLoading(true);
         try {
-          const res = await fetch(
-            `/api/search?q=${encodeURIComponent(query)}`,
-            { signal: controller.signal },
-          );
-          const json = await res.json();
+          setSearchError('');
+          const results = await fetchSearchSuggestions(query,controller.signal);
           if (
             request !== seqRef.current ||
             inputRef.current?.value.trim() !== query
           )
             return;
-          if (json.ok && json.data?.length) go(json.data[0]);
+          if (results.length) go(results[0]);
           else {
             const n = normalizeCode(query);
             if (n) window.open(pathOf(n), '_blank', 'noopener,noreferrer');
           }
-        } catch {
+        } catch (error) {
+          if(request===seqRef.current && !controller.signal.aborted)setSearchError(error instanceof Error?error.message:'搜索失败，请重试');
           const n = normalizeCode(query);
           if (
             request === seqRef.current &&
@@ -268,6 +267,13 @@ export default function SearchBox({
           {loading ? '搜索中…' : '⌕'}
         </span>
       </div>
+
+      {searchError && !loading && (
+        <button type="button" className="mt-1 text-xs text-amber-700" role="status"
+          onClick={()=>{inputRef.current?.focus();setQueryRevision(r=>r+1);}}>
+          {searchError} · 点击重试
+        </button>
+      )}
 
       {/* 搜索历史：聚焦空输入框时直接展示，方便一键填入 */}
       {showingHistory && (

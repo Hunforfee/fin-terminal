@@ -684,7 +684,7 @@ export async function getFinancialCompare(
           try {
             f = await sinaFinancial.fetchSinaFinancial(n.code, years, q?.name);
           } catch {
-            // 财务页抓取失败时返回空骨架，前端提示而非白屏
+            // 财务页抓取失败时返回空骨架并明确标注缺失，前端提示而非白屏
             f = {
               code: n.code,
               name: q?.name ?? n.code,
@@ -692,6 +692,7 @@ export async function getFinancialCompare(
               periodLabels: [],
               series: {},
               source: sinaFinancial.PROVIDER_NAME,
+              missing: '财务指标序列未入库且公网抓取失败（请通过维护端补齐后重试）',
             };
           }
         }
@@ -732,15 +733,21 @@ export async function getFinanceFieldsCatalog(code: string) {
       defaultFields: hkDefaultFields(catalog),
     };
   }
-  const catalog = await cached(`fincatalog:${n.code}`, 24 * 60 * 60 * 1000, () =>
+  // 缓存 1h：字段目录模板稳定，但部分表缺失时需在维护端补齐后较快恢复完整目录
+  const catalog = await cached(`fincatalog:${n.code}`, 60 * 60 * 1000, () =>
     sinaStatements.fetchStatementCatalog(n.code),
   );
+  // 部分报表源页未入库时正常返回已有表，缺失项明确标注
+  const missing = (Object.keys(sinaStatements.STATEMENT_META) as sinaStatements.StatementId[])
+    .filter((id) => !catalog.some((c) => c.id === id))
+    .map((id) => `${sinaStatements.STATEMENT_META[id].label}字段目录未入库（需先通过维护端补齐现金流量表源页）`);
   return {
     code: n.code,
     name: q?.name ?? n.code,
     statements: catalog,
     indicators: sinaFinancial.INDICATORS,
     indicatorGroups: sinaFinancial.GROUP_META,
+    ...(missing.length ? { missing } : {}),
   };
 }
 
@@ -791,8 +798,10 @@ export async function getCustomFinancialCompare(
         let f: sinaStatements.CustomFinancials;
         try {
           f = await sinaStatements.fetchCustomFinancials(n.code, fields, years, q?.name);
-        } catch {
-          throw new Error(`无法获取 ${q?.name ?? n.code} 的财报数据，请稍后重试`);
+        } catch (e) {
+          // 保留底层缺失明细（哪些字段/报表未入库），而非笼统报“获取失败”
+          const detail = e instanceof Error ? e.message : '未知错误';
+          throw new Error(`无法获取 ${q?.name ?? n.code} 的财报数据：${detail}`);
         }
         return filterCustom(f, granularity);
       }),

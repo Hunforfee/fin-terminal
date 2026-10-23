@@ -202,38 +202,37 @@ export function catalogFromPage(id: StatementId, parsed: { rows: ParsedRow[]; un
 }
 
 /**
- * 抓取字段目录（以最近一个有数据的年度页面为准）。
- * 目录跨公司基本一致（新浪统一模板），按 code 缓存 24h。
+ * 抓取字段目录。目录跨公司基本一致（新浪统一模板），按 code 缓存 24h。
+ * 单表当年页面不可用时逐年回退（目录模板跨年一致，任一年页面即可生成目录）；
+ * 数据库已有部分报表时返回可用表而非整体失败，缺失表由调用方标注。
  */
 export async function fetchStatementCatalog(code: string): Promise<StatementCatalog[]> {
   const hit = catalogCache.get(code);
   if (hit && Date.now() - hit.at < CATALOG_TTL) return hit.catalog;
 
   const thisYear = new Date().getFullYear();
-  const candidates = [thisYear, thisYear - 1];
-
-  for (const y of candidates) {
-    const pages = await Promise.all(
-      (Object.keys(STATEMENT_META) as StatementId[]).map(async (id) => {
-        const url = STATEMENT_META[id].url.replace('{code}', code).replace('{year}', String(y));
+  const earliest = Math.max(financialEarliestYear(), thisYear - 3);
+  const ids = Object.keys(STATEMENT_META) as StatementId[];
+  const pages = await Promise.all(
+    ids.map(async (id) => {
+      for (let y = thisYear; y >= earliest; y--) {
         try {
-          const parsed = await fetchStatementSourcePage(code,id,y);
-          return { id, parsed };
-        } catch {
-          return { id, parsed: null };
-        }
-      }),
-    );
-    const catalog = pages
-      .map((p) => catalogFromPage(p.id, p.parsed))
-      .filter((c): c is StatementCatalog => c !== null);
-    if (catalog.length === 3) {
-      const enriched = withInterestFields(catalog);
-      catalogCache.set(code, { at: Date.now(), catalog: enriched });
-      return enriched;
-    }
+          return { id, parsed: await fetchStatementSourcePage(code, id, y) };
+        } catch { /* 逐年回退：数据库已有任一年页面即可生成目录 */ }
+      }
+      return { id, parsed: null };
+    }),
+  );
+  const catalog = pages
+    .map((p) => catalogFromPage(p.id, p.parsed))
+    .filter((c): c is StatementCatalog => c !== null);
+  if (catalog.length === 0) {
+    throw new Error(`新浪三大报表：${code} 字段目录获取失败（三大报表均无可用数据）`);
   }
-  throw new Error(`新浪三大报表：${code} 字段目录获取失败`);
+  const enriched = withInterestFields(catalog);
+  // 仅三表齐全才长缓存；部分缺失时不缓存，待维护端补齐后下次即可取到完整目录
+  if (catalog.length === ids.length) catalogCache.set(code, { at: Date.now(), catalog: enriched });
+  return enriched;
 }
 
 /* ------------------------------------------------------- 序列抓取 */
@@ -324,6 +323,8 @@ export interface CustomFinancials {
   /** 字段 key（bs_x / pl_x / cf_x 或指标 key）→ 各期数值 */
   series: Record<string, (number | null)[]>;
   source: string;
+  /** 请求字段中在所有报告期均无数据的 key（数据库缺对应源页），供调用方明确标注缺失项 */
+  missingFields?: string[];
 }
 
 /**
@@ -401,7 +402,12 @@ export async function fetchCustomFinancials(
   await Promise.all(tasks);
 
   const periods = Array.from(byDate.keys()).sort();
-  if (periods.length === 0) throw new Error(`新浪三大报表：${code} 未取得任何报告期数据`);
+  if (periods.length === 0) {
+    const missing = fields.join(', ');
+    throw new Error(`${code} 未取得任何报告期数据（缺失字段：${missing}；对应财报源页未入库，请先通过维护端补齐）`);
+  }
+  // 数据库已有部分报表时正常返回：全字段皆空的 key 视为缺失项，明确标注而非整体报错
+  const missingFields = fields.filter((key) => periods.every((d) => byDate.get(d)?.get(key) == null));
 
   const series: Record<string, (number | null)[]> = {};
   for (const key of fields) {
@@ -416,6 +422,7 @@ export async function fetchCustomFinancials(
       periodLabels: periods.map((d) => periodLabel(d, 'half')),
       series,
       source: [...sources].sort().join(' + ') || 'public-financials',
+      ...(missingFields.length ? { missingFields } : {}),
     },
     years,
   );

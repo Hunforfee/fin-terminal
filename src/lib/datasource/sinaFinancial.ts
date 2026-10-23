@@ -93,6 +93,8 @@ export interface CompanyFinancials {
   /** 指标 key → 各期数值（与 periods 对齐） */
   series: Record<string, (number | null)[]>;
   source: string;
+  /** 数据不可用时的缺失说明（如指标页未入库），供调用方明确标注而非静默返回空序列 */
+  missing?: string;
 }
 
 /**

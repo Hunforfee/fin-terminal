@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { fetchJson } from '@/lib/fetchJson';
 import { StockLink } from '@/components/StockLink';
 import Modal from './Modal';
 import type { PreAnalysis, ViewPoint } from '@/data/analyses';
@@ -209,13 +210,12 @@ export default function AiAnalysisPanel({
     setLoading(true);
     setErr(null);
     setReport(null);
-    fetch(
+    fetchJson(
       `/api/analysis?code=${encodeURIComponent(code)}&name=${encodeURIComponent(
         name,
       )}&market=${market}`,
       { signal: controller.signal },
     )
-      .then((r) => r.json())
       .then((d) => {
         if (controller.signal.aborted || id !== nonce.current) return;
         if (d?.error) setErr(d.error);

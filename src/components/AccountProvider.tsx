@@ -9,6 +9,7 @@ import {
   useState,
 } from 'react';
 import { useRouter } from 'next/navigation';
+import { fetchJson, FetchJsonError } from '@/lib/fetchJson';
 import type { AccountUser } from '@/lib/auth/session';
 import {
   applySnapshot,
@@ -96,10 +97,10 @@ export default function AccountProvider({
     const version = authVersion.current;
     const request = ++sessionRequest.current;
     try {
-      const json = await fetch('/api/auth/session', {
+      const json = await fetchJson('/api/auth/session', {
         cache: 'no-store',
         signal: AbortSignal.timeout(12000),
-      }).then((r) => r.json());
+      });
       if (
         authPending.current ||
         version !== authVersion.current ||
@@ -119,18 +120,22 @@ export default function AccountProvider({
   }
   async function loadCloud(id: string, signal?: AbortSignal) {
     try {
-      const response = await fetch('/api/account/data', {
-        cache: 'no-store',
-        signal: signal ?? AbortSignal.timeout(12000),
-      });
-      const json = await response.json();
-      if (signal?.aborted || userRef.current?.id !== id) return;
-      if (response.status === 401) {
-        await refreshSession();
-        return;
+      let json: any;
+      try {
+        json = await fetchJson('/api/account/data', {
+          cache: 'no-store',
+          signal: signal ?? AbortSignal.timeout(12000),
+        });
+      } catch (e) {
+        if (e instanceof FetchJsonError && e.status === 401) {
+          await refreshSession();
+          return;
+        }
+        throw e;
       }
+      if (signal?.aborted || userRef.current?.id !== id) return;
       const remote = checkRemote(json.data);
-      if (!response.ok || !json.ok || !remote) throw new Error('同步不可用');
+      if (!json.ok || !remote) throw new Error('同步不可用');
       let previous: Remote | null = null;
       try {
         previous = checkRemote(
@@ -210,12 +215,18 @@ export default function AccountProvider({
         body: JSON.stringify({ revision: meta.current.revision, data }),
         signal: AbortSignal.timeout(12000),
       });
-      const json = await response.json();
+      let json: any = null;
+      try {
+        json = await response.json();
+      } catch {
+        json = null;
+      }
       if (userRef.current?.id !== id) return;
       if (response.status === 401) {
         await refreshSession();
         return;
       }
+      if (userRef.current?.id !== id) return;
       const remote = checkRemote(json.data);
       if (response.status === 409 && remote) {
         const merged = mergeSnapshots(
@@ -310,8 +321,13 @@ export default function AccountProvider({
         body: JSON.stringify({ username, password }),
         signal: AbortSignal.timeout(12000),
       });
-      const json = await response.json();
-      if (!response.ok || !json.ok) throw new Error(json.error ?? '登录失败');
+      let json: any = null;
+      try {
+        json = await response.json();
+      } catch {
+        json = null;
+      }
+      if (!response.ok || !json?.ok) throw new Error(json?.error ?? '登录失败');
       if (version !== authVersion.current) return;
       changeUser(json.data.user);
       announceAuth();

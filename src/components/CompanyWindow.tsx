@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { fetchJson } from '@/lib/fetchJson';
 import Modal from './Modal';
 import HeaderToolButton from './HeaderToolButton';
 import { personalStorage } from '@/lib/personalStorage';
@@ -89,10 +90,9 @@ export default function CompanyWindow({
     const controller = new AbortController();
     requestController.current = controller;
     setEntries(null);
-    fetch(`/api/company-window?codes=${encodeURIComponent(codesKey)}`, {
+    fetchJson(`/api/company-window?codes=${encodeURIComponent(codesKey)}`, {
       signal: controller.signal,
     })
-      .then((r) => r.json())
       .then((j) => {
         if (request !== requestRef.current) return;
         if (j?.ok && Array.isArray(j.data)) setEntries(j.data as Entry[]);
@@ -295,8 +295,7 @@ function ArticleBody({ artCode }: { artCode: string }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let alive = true;
-    fetch(`/api/announcement-content?artCode=${encodeURIComponent(artCode)}`)
-      .then((r) => r.json())
+    fetchJson(`/api/announcement-content?artCode=${encodeURIComponent(artCode)}`)
       .then((j) => {
         if (!alive) return;
         if (j?.ok) setText(String(j.data ?? ''));

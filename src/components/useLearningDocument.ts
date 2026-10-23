@@ -1,5 +1,6 @@
 'use client';
 import {useEffect,useState} from 'react';
+import {fetchJson} from '@/lib/fetchJson';
 
 export default function useLearningDocument<T>(symbol:string,date:string,view:'brief'|'full',enabled=true){
   const key=`${symbol}|${date}|${view}`;
@@ -8,8 +9,8 @@ export default function useLearningDocument<T>(symbol:string,date:string,view:'b
   useEffect(()=>{
     if(!enabled||!symbol||!date)return;
     const controller=new AbortController();setState({key,data:null,loading:true,error:''});
-    fetch(`/api/company-learning?code=${encodeURIComponent(symbol)}&view=${view}`,{signal:controller.signal})
-      .then(async response=>{const j=await response.json();if(!response.ok||!j.ok||j.data?.symbol!==symbol)throw Error(j.error||'公司资料暂不可用');if(!controller.signal.aborted)setState({key,data:j.data,loading:false,error:''});})
+    fetchJson(`/api/company-learning?code=${encodeURIComponent(symbol)}&view=${view}`,{signal:controller.signal})
+      .then((j)=>{if(!j.ok||j.data?.symbol!==symbol)throw Error(j.error||'公司资料暂不可用');if(!controller.signal.aborted)setState({key,data:j.data,loading:false,error:''});})
       .catch(()=>{if(!controller.signal.aborted)setState({key,data:null,loading:false,error:'公司资料暂不可用，请重试或换一家公司'});});
     return()=>controller.abort();
   },[key,symbol,date,view,enabled,revision]);

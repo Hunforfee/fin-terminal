@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { fetchJson } from '@/lib/fetchJson';
 import EChart from './EChart';
 
 import type {
@@ -392,8 +393,7 @@ export default function ValuationSection({ code }: { code: string }) {
     setData(previous);
     setErr(null);
     const load = (attempt: number, refreshes=0) => {
-      fetch(`/api/valuation?code=${encodeURIComponent(code)}&years=${years}`,{signal:controller.signal,cache:'no-store'})
-        .then((r) => r.json())
+      fetchJson(`/api/valuation?code=${encodeURIComponent(code)}&years=${years}`,{signal:controller.signal,cache:'no-store'})
         .then((j) => {
           if (!alive) return;
           if (j.ok) {

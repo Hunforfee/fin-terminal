@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { fetchJson } from '@/lib/fetchJson';
 import Link from 'next/link';
 import { StockLink } from '@/components/StockLink';
 import Modal from './Modal';
@@ -101,10 +102,9 @@ function AnnouncementPreview({ entry, onClose }: { entry: WindowEntry; onClose: 
   useEffect(() => {
     const controller = new AbortController();
     setSummary(null); setError('');
-    fetch(`/api/announcement-content?artCode=${encodeURIComponent(entry.artCode)}`, { signal: controller.signal })
-      .then(async (response) => {
-        const json = await response.json();
-        if (!response.ok || !json.ok || typeof json.data !== 'string') throw Error('公告摘要暂不可用');
+    fetchJson(`/api/announcement-content?artCode=${encodeURIComponent(entry.artCode)}`, { signal: controller.signal })
+      .then((json) => {
+        if (!json.ok || typeof json.data !== 'string') throw Error('公告摘要暂不可用');
         if (!controller.signal.aborted) setSummary(json.data);
       })
       .catch(() => { if (!controller.signal.aborted) setError('公告摘要暂不可用'); });
@@ -207,10 +207,9 @@ export default function ResearchHome() {
     }
     const controller = new AbortController();
     setFeed({ key: requestKey, entries: [], loading: true, error: '' });
-    fetch(`/api/company-window?codes=${encodeURIComponent(batchSymbols.join(','))}`, { signal: controller.signal })
-      .then(async (response) => {
-        const json = await response.json();
-        if (!response.ok || !json.ok) throw Error('公司动态暂不可用');
+    fetchJson(`/api/company-window?codes=${encodeURIComponent(batchSymbols.join(','))}`, { signal: controller.signal })
+      .then((json) => {
+        if (!json.ok) throw Error('公司动态暂不可用');
         const next = readEntries(json.data, batchSymbols);
         if (!controller.signal.aborted) setFeed({ key: requestKey, entries: next, loading: false, error: '' });
       })

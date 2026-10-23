@@ -1,5 +1,6 @@
 'use client';
 import { memo, useEffect, useId, useState } from 'react';
+import { fetchJson } from '@/lib/fetchJson';
 import { createPortal } from 'react-dom';
 import { StockLink } from './StockLink';
 import { industryOf } from '@/lib/universe';
@@ -10,10 +11,9 @@ const industryRequests = new Map<string, Promise<string | null>>();
 function requestIndustry(symbol: string) {
   let request = industryRequests.get(symbol);
   if (!request) {
-    request = fetch(`/api/company-profile?code=${encodeURIComponent(symbol)}`)
-      .then(async (response) => {
-        const json = await response.json();
-        if (!response.ok || !json.ok) throw new Error('公司资料暂不可用');
+    request = fetchJson(`/api/company-profile?code=${encodeURIComponent(symbol)}`)
+      .then((json) => {
+        if (!json.ok) throw new Error('公司资料暂不可用');
         return typeof json.data?.industry === 'string'
           ? json.data.industry
           : null;

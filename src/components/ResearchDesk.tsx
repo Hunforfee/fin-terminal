@@ -1,5 +1,6 @@
 'use client';
 import MarketDataNotice, { type MarketReadResult } from '@/components/MarketDataNotice';
+import { fetchJson } from '@/lib/fetchJson';
 
 import { personalStorage } from '@/lib/personalStorage';
 import { useAccount } from './AccountProvider';
@@ -503,7 +504,7 @@ export default function ResearchDesk({
     if (!updateVersion || !visibleSignature) return;
     const controller = new AbortController();
     const symbols = visibleSignature.split(',');
-    const read = (url: string, init?: RequestInit) => fetch(url, { ...init, signal: controller.signal }).then(r => r.json());
+    const read = (url: string, init?: RequestInit) => fetchJson(url, { ...init, signal: controller.signal });
     // Completion refreshes only the visible page. Do not restart the full
     // watchlist loader or interrupt its existing sequential requests.
     void (async () => {

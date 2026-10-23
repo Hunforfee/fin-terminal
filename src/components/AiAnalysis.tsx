@@ -1,6 +1,7 @@
 'use client';
 
 import { personalStorage } from '@/lib/personalStorage';
+import { fetchJson } from '@/lib/fetchJson';
 
 /**
  * AI 深度分析面板（个股页）：
@@ -160,13 +161,12 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
       if (apiKey) headers['x-ai-key'] = apiKey;
       if (apiUrl) headers['x-ai-url'] = apiUrl;
       if (apiModel) headers['x-ai-model'] = apiModel;
-      const r = await fetch('/api/ai-analyze', {
+      const j = await fetchJson('/api/ai-analyze', {
         method: 'POST',
         headers,
         body: JSON.stringify({ code, name, prompt }),
       });
-      const j = await r.json();
-      if (!j.ok) throw new Error(j.error || `请求失败（${r.status}）`);
+      if (!j.ok) throw new Error(j.error || '请求失败');
       const v: Version = { ts: Date.now(), prompt, content: j.data.content, model: j.data.model, sources: j.data.sources };
       setVersions((vs) => [v, ...vs].slice(0, 30));
       setActive(0);
@@ -201,11 +201,10 @@ export default function AiAnalysis({ code, name }: { code: string; name: string 
     setModelsLoading(true);
     setModelsErr(null);
     try {
-      const r = await fetch('/api/ai-models', {
+      const j = await fetchJson('/api/ai-models', {
         headers: { 'x-ai-key': apiKey, 'x-ai-url': apiUrl },
       });
-      const j = await r.json();
-      if (!j.ok) throw new Error(j.error || `请求失败（${r.status}）`);
+      if (!j.ok) throw new Error(j.error || '请求失败');
       const list: string[] = j.data.models ?? [];
       setModels(list);
       try {

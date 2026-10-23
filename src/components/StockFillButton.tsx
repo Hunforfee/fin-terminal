@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { fetchJson } from '@/lib/fetchJson';
 import { useRouter } from 'next/navigation';
 import { normalizeStockCode } from '@/lib/datasource/codes';
 import type { UpdateProgress } from '@/lib/marketUpdateQueue';
@@ -7,14 +8,13 @@ import { collectionPhaseLabel } from '@/lib/marketHistoryPlan';
 
 /** 与自选分组更新共用同一队列通道；single 模式不要求自选云同步。 */
 async function requestUpdate(body?: unknown, method: 'GET' | 'POST' | 'DELETE' = body ? 'POST' : 'GET') {
-  const response = await fetch('/api/market-updates', {
+  const result = await fetchJson('/api/market-updates', {
     method, cache: 'no-store',
     credentials: 'same-origin',
     headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(method === 'GET' ? {} : { 'x-fin-csrf': '1' }) },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
-  const result = await response.json();
-  if (!response.ok || !result.ok) throw Error(result.error ?? '更新服务暂不可用');
+  if (!result.ok) throw Error(result.error ?? '更新服务暂不可用');
   return result.data as UpdateProgress | null;
 }
 

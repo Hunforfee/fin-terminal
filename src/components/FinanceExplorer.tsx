@@ -295,8 +295,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
   useEffect(() => {
     setCatalog(null);
     let alive = true;
-    fetch(`/api/finance-fields?code=${code}`)
-      .then((r) => r.json())
+    fetchJson(`/api/finance-fields?code=${code}`)
       .then((j) => {
         if (alive && j.ok) setCatalog(j.data as PickerCatalog);
       })
@@ -364,7 +363,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
     setErr(null);
     setCustomData(null);
     const codes = compareCode ? `${code},${compareCode}` : code;
-    fetch('/api/finance-compare', {
+    fetchJson('/api/finance-compare', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -374,7 +373,6 @@ export default function FinanceExplorer({ code }: { code: string }) {
         fields: fieldsSig.split(','),
       }),
     })
-      .then((r) => r.json())
       .then((j) => {
         if (!alive) return;
         if (j.ok) setCustomData(j.data as CustomData);

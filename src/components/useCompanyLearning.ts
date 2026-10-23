@@ -1,5 +1,6 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
+import {fetchJson} from '@/lib/fetchJson';
 import {getStorageAccount,personalStorage,storageKey,PERSONAL_CHANGE} from '@/lib/personalStorage';
 import {COMPANY_LEARNING_KEY,emptyLearningState,readLearningState,chooseLearningCompany,setLearningDay,toggleLearned,type LearningCandidate,type LearningState} from '@/lib/companyLearning';
 
@@ -35,8 +36,8 @@ export default function useCompanyLearning(codes:string[],watchReady:boolean,tod
   useEffect(()=>{
     if(!watchReady)return;
     const controller=new AbortController();setPoolLoading(true);setPoolError('');
-    fetch('/api/company-learning',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'pool',codes:codesKey?codesKey.split(','):[]}),signal:controller.signal})
-      .then(async r=>{const j=await r.json();if(!r.ok||!j.ok||!Array.isArray(j.data)||!j.data.length)throw Error('候选公司暂不可用');if(!controller.signal.aborted)setPool(j.data);})
+    fetchJson('/api/company-learning',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'pool',codes:codesKey?codesKey.split(','):[]}),signal:controller.signal})
+      .then((j)=>{if(!j.ok||!Array.isArray(j.data)||!j.data.length)throw Error('候选公司暂不可用');if(!controller.signal.aborted)setPool(j.data);})
       .catch(()=>{if(!controller.signal.aborted)setPoolError('候选公司暂不可用，请重试');})
       .finally(()=>{if(!controller.signal.aborted)setPoolLoading(false);});
     return()=>controller.abort();

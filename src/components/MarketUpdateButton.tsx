@@ -1,19 +1,19 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { fetchJson } from '@/lib/fetchJson';
 import { useAccount } from './AccountProvider';
 import { normalizeStockCode } from '@/lib/datasource/codes';
 import type { UpdateProgress } from '@/lib/marketUpdateQueue';
 import { collectionPhaseLabel } from '@/lib/marketHistoryPlan';
 
 async function requestUpdate(body?: unknown, method: 'GET' | 'POST' | 'PUT' | 'DELETE' = body ? 'POST' : 'GET') {
-  const response = await fetch('/api/market-updates', {
+  const result = await fetchJson('/api/market-updates', {
     method, cache: 'no-store',
     credentials: 'same-origin',
     headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(method === 'GET' ? {} : { 'x-fin-csrf': '1' }) },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
-  const result = await response.json();
-  if (!response.ok || !result.ok) throw Error(result.error ?? '更新服务暂不可用');
+  if (!result.ok) throw Error(result.error ?? '更新服务暂不可用');
   return result;
 }
 export default function MarketUpdateButton({ codes, groupId, onComplete }: { codes: string[]; groupId: string; onComplete: () => void }) {

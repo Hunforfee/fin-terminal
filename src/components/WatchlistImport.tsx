@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { fetchJson } from '@/lib/fetchJson';
 import Modal from './Modal';
 import { useWatchlist } from './WatchlistProvider';
 import { groupNameError, UNGROUPED } from '@/lib/watchlist';
@@ -82,13 +83,12 @@ export default function WatchlistImport({
         );
         const batch = parsed.candidates.slice(i, i + 100);
         try {
-          const response = await fetch(
+          const json = await fetchJson(
             `/api/quote?codes=${encodeURIComponent(batch.map((row) => row.symbol).join(','))}`,
             { signal: controller.signal },
           );
-          const json = await response.json();
           if (id !== job.current) return;
-          if (!response.ok || !json.ok || !Array.isArray(json.data))
+          if (!json.ok || !Array.isArray(json.data))
             throw new Error('行情核对失败');
           const quotes = new Map<
             string,

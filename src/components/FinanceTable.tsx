@@ -192,8 +192,7 @@ export default function FinanceTable({ code }: { code: string }) {
   useEffect(() => {
     let alive = true;
     setCatalog(null);
-    fetch(`/api/finance-fields?code=${code}`)
-      .then((r) => r.json())
+    fetchJson(`/api/finance-fields?code=${code}`)
       .then((j) => alive && j.ok && setCatalog(j.data as PickerCatalog))
       .catch(() => {});
     return () => {
@@ -291,10 +290,9 @@ export default function FinanceTable({ code }: { code: string }) {
     if (!canLookupOriginals) return;
     const controller = new AbortController();
     setOriginals({ key: originalKey, items: [], failed: false });
-    fetch(`/api/financial-reports?${new URLSearchParams({ code, calendarYear: isHk && calendarYear ? '1' : '0' })}`, { signal: controller.signal })
-      .then(async response => {
-        const result = await response.json();
-        if (!response.ok || !result.ok || !Array.isArray(result.data)) throw Error('原文目录加载失败');
+    fetchJson(`/api/financial-reports?${new URLSearchParams({ code, calendarYear: isHk && calendarYear ? '1' : '0' })}`, { signal: controller.signal })
+      .then((result) => {
+        if (!result.ok || !Array.isArray(result.data)) throw Error('原文目录加载失败');
         if (!controller.signal.aborted) setOriginals({ key: originalKey, items: result.data, failed: false });
       })
       .catch(() => {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { fetchJson } from '@/lib/fetchJson';
 import Link from 'next/link';
 import { StockLink } from '@/components/StockLink';
 import AiAnalysisPanel from '@/components/AiAnalysisPanel';
@@ -72,8 +73,7 @@ export default function QuoteHeader({ quote }: { quote: Quote }) {
     setProfile(null);
     if (!isStock) return;
     let alive = true;
-    fetch(`/api/company-profile?code=${encodeURIComponent(quote.symbol)}`)
-      .then((r) => r.json())
+    fetchJson(`/api/company-profile?code=${encodeURIComponent(quote.symbol)}`)
       .then((j) => {
         if (alive && j?.data) setProfile(j.data as Profile);
       })

@@ -2,6 +2,7 @@
 import MarketDataNotice, { type MarketReadResult } from '@/components/MarketDataNotice';
 
 import { personalStorage } from '@/lib/personalStorage';
+import { fetchJson } from '@/lib/fetchJson';
 
 /** 单公司财报：自选指标与完整三表，支持报告期切换、搜索和 CSV 导出。 */
 
@@ -254,7 +255,7 @@ export default function FinanceTable({ code }: { code: string }) {
     setLoading(true);
     setErr(null);
     setData(null);
-    fetch('/api/finance-compare', {
+    fetchJson('/api/finance-compare', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -264,7 +265,6 @@ export default function FinanceTable({ code }: { code: string }) {
         fields: fieldsSig.split(','),
       }),
     })
-      .then((r) => r.json())
       .then((j) => {
         if (!alive) return;
         if (j.ok) setData(j.data as CustomData);

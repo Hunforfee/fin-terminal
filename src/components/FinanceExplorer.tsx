@@ -2,6 +2,7 @@
 import MarketDataNotice, { type MarketReadResult } from '@/components/MarketDataNotice';
 
 import { personalStorage } from '@/lib/personalStorage';
+import { fetchJson } from '@/lib/fetchJson';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import FinanceCompareChart, {
@@ -192,8 +193,7 @@ export default function FinanceExplorer({ code }: { code: string }) {
     }
     const ctrl = new AbortController();
     const t = setTimeout(() => {
-      fetch(`/api/search?q=${encodeURIComponent(q)}`, { signal: AbortSignal.any([ctrl.signal,AbortSignal.timeout(5000)]) })
-        .then((r) => r.json())
+      fetchJson(`/api/search?q=${encodeURIComponent(q)}`, { signal: AbortSignal.any([ctrl.signal,AbortSignal.timeout(5000)]) })
         .then((j) => {
           if (j.ok && Array.isArray(j.data))
             setCompareHits(j.data.filter((h: SearchHit) => h.kind === 'stock').slice(0, 8));

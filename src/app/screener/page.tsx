@@ -10,6 +10,7 @@ import StockScopeFilter from '@/components/StockScopeFilter';
 import IndustryMultiSelect from '@/components/IndustryMultiSelect';
 import { useWatchlist } from '@/components/WatchlistProvider';
 import { normalizeStockCode } from '@/lib/datasource/codes';
+import { fetchJson } from '@/lib/fetchJson';
 import { industryStockSymbol } from '@/lib/industryResearch';
 import ScreenerGroupImport from '@/components/ScreenerGroupImport';
 import { personalStorage, AUTH_CHANGE } from '@/lib/personalStorage';
@@ -98,7 +99,7 @@ function ScreenerContent() {
     requestRef.current?.abort(); const controller = new AbortController(); requestRef.current = controller;
     setLoading(true); setGroupImportOpen(false); setError(''); setStatus('');
     try {
-      const response = await fetch('/api/screen', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: controller.signal }); const json = await response.json();
+      const json = await fetchJson('/api/screen', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: controller.signal });
       if (!json.ok) throw Error(json.error ?? '筛选失败'); if (controller.signal.aborted) return;
       setResult(json.data); setApplied({ ...next }); setAppliedScopeKey(scopeKey); setSelected([]); setPage(1); setJump('');
     } catch (issue) { if (!controller.signal.aborted) setError(issue instanceof Error ? issue.message : '筛选失败'); }
@@ -117,7 +118,7 @@ function ScreenerContent() {
   useEffect(() => { if (preferencesReady) { try { personalStorage.setItem(SCREEN_PREFERENCES_KEY, JSON.stringify(preferences)); } catch {} } }, [preferences, preferencesReady]);
   useEffect(() => {
     const controller = new AbortController();
-    fetch('/api/screen?meta=1', { signal: controller.signal }).then(response => response.json()).then(json => {
+    fetchJson('/api/screen?meta=1', { signal: controller.signal }).then(json => {
       if (!json.ok) throw Error(json.error ?? '选股目录加载失败'); if (controller.signal.aborted) return;
       const nextMeta = json.data as ValueScreenMeta; setMeta(nextMeta); metaRef.current = nextMeta;
       const requested = initialIndustry.current;

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { calendarRangeStart } from '@/lib/marketDataIntegrity';
+import { fetchJson } from '@/lib/fetchJson';
 import KLineChart from '@/components/KLineChart';
 import MinuteChart from '@/components/MinuteChart';
 import type { Candle, MinutePoint, Period, Adjust } from '@/lib/datasource/types';
@@ -55,8 +56,7 @@ export default function KLineSection({ code, isIndex = false, prevClose = null }
     const adj = isIndex ? 'none' : adjust;
     const count = period === 'day' ? range.months * 31 + 10 : period === 'week' ? Math.ceil(range.months * 4.5) + 2 : range.months + 2;
     const load = (attempt: number) => {
-      fetch(`/api/kline?code=${encodeURIComponent(code)}&period=${period}&adjust=${adj}&count=${count}&start=${calendarRangeStart(range.months)}`)
-        .then((r) => r.json())
+      fetchJson(`/api/kline?code=${encodeURIComponent(code)}&period=${period}&adjust=${adj}&count=${count}&start=${calendarRangeStart(range.months)}`)
         .then((j) => {
           if (!alive) return;
           if (j.ok) {
@@ -90,8 +90,7 @@ export default function KLineSection({ code, isIndex = false, prevClose = null }
   useEffect(() => {
     if (!showMinute || minute.length > 0) return;
     let alive = true;
-    fetch(`/api/minute?code=${code}`)
-      .then((r) => r.json())
+    fetchJson(`/api/minute?code=${code}`)
       .then((j) => alive && j.ok && setMinute((j.data ?? []) as MinutePoint[]))
       .catch(() => undefined);
     return () => {

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useWatchlist } from '@/components/WatchlistProvider';
 import { pct, price, signedPct, toneClass, yi } from '@/lib/format';
+import { fetchJson } from '@/lib/fetchJson';
 import type { Quote } from '@/lib/datasource/types';
 import DeepDiveIcon from './DeepDiveIcon';
 
@@ -42,8 +43,7 @@ export default function QuoteTable({
     }
     let alive = true;
     setLoading(true);
-    fetch(`/api/quote?codes=${codes.join(',')}`)
-      .then((r) => r.json())
+    fetchJson(`/api/quote?codes=${codes.join(',')}`)
       .then((j) => {
         if (!alive) return;
         if (j.ok) {

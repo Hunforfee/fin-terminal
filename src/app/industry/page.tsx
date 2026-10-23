@@ -10,6 +10,7 @@ import Modal from '@/components/Modal';
 import WatchlistButton from '@/components/WatchlistButton';
 import DeepDiveIcon from '@/components/DeepDiveIcon';
 import { useWatchlist } from '@/components/WatchlistProvider';
+import { fetchJson } from '@/lib/fetchJson';
 import { UNGROUPED } from '@/lib/watchlist';
 import { personalStorage, AUTH_CHANGE } from '@/lib/personalStorage';
 import { compareResearchValues } from '@/lib/researchColumns';
@@ -137,7 +138,7 @@ function IndustryContent({ market }: { market: 'A' | 'HK' }) {
   }, []);
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`${endpoint}?tree=1`, { signal: controller.signal }).then(r => r.json()).then(j => {
+    fetchJson(`${endpoint}?tree=1`, { signal: controller.signal }).then(j => {
       if (!j.ok) throw Error(j.error ?? '行业目录加载失败');
       if (controller.signal.aborted) return;
       const result = j.data as TreeResponse;
@@ -156,7 +157,7 @@ function IndustryContent({ market }: { market: 'A' | 'HK' }) {
     setLoading(true); setError(''); setData(null); setSelected([]); setActionStatus('');
     const search = new URLSearchParams({ node: nameOf(selection), level: String(levelOf(selection)), l1: selection.l1 });
     if (selection.l2) search.set('l2', selection.l2);
-    fetch(`${endpoint}?${search}`, { signal: controller.signal }).then(r => r.json()).then(j => {
+    fetchJson(`${endpoint}?${search}`, { signal: controller.signal }).then(j => {
       if (!j.ok) throw Error(j.error ?? '行业数据获取失败'); if (!controller.signal.aborted) setData(j.data);
     }).catch(e => { if (!controller.signal.aborted) setError(String(e.message ?? e)); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     if (tableRef.current) tableRef.current.scrollTop = 0;

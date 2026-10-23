@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { fetchJson } from '@/lib/fetchJson';
 
 type LogRow = { at: string; action: string; userId?: string; detail?: unknown };
 type Status = { authorized: boolean; userId: string | null; adminConfigured: boolean; log: LogRow[] };
@@ -22,8 +23,7 @@ export default function AdminMarketImportPage() {
 
   const refresh = useCallback(async () => {
     try {
-      const r = await fetch('/api/market/import', { cache: 'no-store' });
-      const j = await r.json();
+      const j = await fetchJson('/api/market/import', { cache: 'no-store' });
       setStatus({ authorized: j.authorized, userId: j.userId, adminConfigured: j.adminConfigured, log: j.log ?? [] });
     } catch { setStatus(null); }
     setLoaded(true);

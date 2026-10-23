@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import type { RunLog } from '@/lib/marketUpdateRunLog';
+import { fetchJson } from '@/lib/fetchJson';
 
 type Live = { active: boolean; date?: string; mode?: string; total: number; done: number; failed: number; running: number; waiting: number; finished: boolean; pausedUntil: number; workerOnline: boolean } | null;
 
@@ -25,10 +26,9 @@ export default function UpdateRunLogPage() {
     async function poll() {
       let active = false;
       try {
-        const response = await fetch('/api/market-update-run-log', { cache: 'no-store', credentials: 'same-origin' });
-        const result = await response.json();
+        const result = await fetchJson('/api/market-update-run-log', { cache: 'no-store', credentials: 'same-origin' });
         if (!alive) return;
-        if (!response.ok || !result.ok) throw Error(result.error ?? '更新日志暂不可用');
+        if (!result.ok) throw Error(result.error ?? '更新日志暂不可用');
         setRuns(result.data.runs ?? []);
         setLive(result.data.live ?? null);
         active = !!result.data.live?.active;

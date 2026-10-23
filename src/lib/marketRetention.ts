@@ -9,10 +9,14 @@ export const retainedDate = (date: unknown, now = Date.now()) => typeof date ===
 
 export function retainMarketPayload<T>(kind: string, payload: T, now = Date.now()): T {
   const today=new Date(now+8*3600e3).toISOString().slice(0,10);
-  // Ten-year valuations need prior-year reports, announcement dates and dividend
-  // evidence at the left boundary. This buffer is input-only; charts stay ten years.
+  // Ten-year valuations need prior-year reports, announcement dates, dividend
+  // evidence and share states at the left boundary. This buffer is input-only;
+  // charts stay ten years. Share events specifically must reach back past the
+  // window start to the last report period before it: a boundary state dated at
+  // the date-granularity cutoff (e.g. 2016-10-23) is too late for sharesAt on a
+  // 2016-09-30 report, which would drop that report's valuation point entirely.
   const buffered = ['financial-history','disclosure-dates','source-sina-page','source-sina-indicators',
-    'implemented-dividends','announced-dividend-plans'].includes(kind);
+    'implemented-dividends','announced-dividend-plans','share-events'].includes(kind);
   const boundary = new Date(marketCutoff(now)+'T00:00:00Z');
   if(buffered)boundary.setUTCFullYear(boundary.getUTCFullYear()-2);
   const cutoff=boundary.toISOString().slice(0,10);
@@ -34,8 +38,8 @@ export function retainMarketPayload<T>(kind: string, payload: T, now = Date.now(
     'source-hk-indicators':'date', 'source-hk-statement':'date', 'deducted-periods':'reportDate',
   };
   if (kind === 'share-events' && Array.isArray(p)) {
-    const cutoff=marketCutoff(now), retained=p.filter((r: any)=>keep(r.date));
-    // Carry a state at the boundary, not an invented share-change event.
+    const retained=p.filter((r: any)=>keep(r.date));
+    // Carry a state at the buffered boundary, not an invented share-change event.
     const prior=[...p].filter((r: any)=>typeof r.date==='string' && r.date<cutoff).sort((a: any,b: any)=>a.date.localeCompare(b.date)).at(-1);
     if(prior && !retained.some((r: any)=>r.date===cutoff))retained.unshift({...prior,date:cutoff,baseline:true});
     return retained as T;

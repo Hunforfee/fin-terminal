@@ -22,8 +22,14 @@ test('ten-calendar-year cutoff handles leap days and prunes aligned financial co
   assert.deepEqual(series.series.roe,[2,3]);assert.deepEqual(series.periodLabels,['a','b']);
 });
 test('share boundary preserves a labelled opening state; personal notes and research are untouched',()=>{
-  const shares=retainMarketPayload('share-events',[{date:'2010-01-01',sharesWan:100},{date:'2025-01-01',sharesWan:120}],now);
-  assert.deepEqual(shares,[{date:'2016-10-21',sharesWan:100,baseline:true},{date:'2025-01-01',sharesWan:120}]);
+  // 股本输入的保留期与财报输入一致（截止日再前移 2 年）：十年窗口（2016-10-22 起）
+  // 最早需要的报告点是 2016-09-30，日期粒度截止点（2016-10-21）上合成的基线状态
+  // 晚于该报告点，sharesAt 取不到股本会整点丢弃；缓冲后 2015-05-13 的真实变更事件
+  // 以原日期保留，窗口左边界即有生效股本。
+  const shares=retainMarketPayload('share-events',[{date:'2010-01-01',sharesWan:100},{date:'2015-05-13',sharesWan:120},{date:'2025-01-01',sharesWan:130}],now);
+  assert.deepEqual(shares,[{date:'2014-10-21',sharesWan:100,baseline:true},{date:'2015-05-13',sharesWan:120},{date:'2025-01-01',sharesWan:130}]);
+  const noPrior=retainMarketPayload('share-events',[{date:'2015-05-13',sharesWan:120},{date:'2025-01-01',sharesWan:130}],now);
+  assert.deepEqual(noPrior,[{date:'2015-05-13',sharesWan:120},{date:'2025-01-01',sharesWan:130}]);
   const note={date:'2000-01-01',text:'投资记录'};assert.equal(retainMarketPayload('personal-note',note,now),note);
   const map=retainMarketPayload('disclosure-dates',new Map([['2010-12-31','2011-03-01'],['2025-12-31','2026-03-01']]),now);
   assert.deepEqual([...map],[['2025-12-31','2026-03-01']]);

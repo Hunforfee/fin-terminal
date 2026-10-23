@@ -7,7 +7,7 @@ export const MARKET_DATA_RESOURCES = {
   'financial-reports': ['GET'], 'company-learning': ['GET', 'POST'],
   search: ['GET'], peers: ['GET'], market: ['GET'], industry: ['GET'],
   'sw-industry': ['GET'], 'hk-industry': ['GET'], screen: ['GET', 'POST'], health: ['GET'],
-  records: ['GET'], 'hk-valuation': ['GET'], catalog: ['GET'],
+  diagnostics: ['GET'], records: ['GET'], 'hk-valuation': ['GET'], catalog: ['GET'],
 } as const;
 export type MarketDataResource = keyof typeof MARKET_DATA_RESOURCES;
 export function isMarketDataResource(value: string): value is MarketDataResource {
@@ -23,7 +23,7 @@ export const PUBLIC_MARKET_FAMILIES = [
   'statements-v3:', 'shares-v3:', 'disclosures-v3:', 'implemented-dividends-v4:',
   'dividend-plans-v2:', 'deducted-periods:v1:', 'source-debt-ratios:v1:',
   'source-interest-expenses:v1:', 'screen-company-input:v1:', 'watchlist-financial-inputs:v1:',
-  'market-coverage:v1:', 'security-basics:v1:', 'source-hk-indicators:v1:',
+  'market-audit:v1:', 'market-coverage:v1:', 'security-basics:v1:', 'source-hk-indicators:v1:',
   'source-hk-statement:v1:', 'source-hk-valuation:v1:', 'hk-main-currency-v4:',
   'hk-dividend-events-v4:', 'valuation-result:v1:', 'valuation-input-version:v1:',
   'display-metric:v1:', 'company-profile:v1:', 'company-business:v1:',

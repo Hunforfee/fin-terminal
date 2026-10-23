@@ -15,10 +15,10 @@ test('ten-year plan covers all twelve statement years needed at the TTM boundary
  assert.deepEqual(years,Array.from({length:12},(_,i)=>2026-i));assert.equal(plan.FULL_HISTORY_PHASES.at(-1),12);
  assert.equal(plan.collectionPhaseLabel(12),'完整性检查');assert.equal(plan.collectionPhaseLabel(13),'公司资料');
 });
-test('five-year coverage never satisfies a ten-year fill or the daily initialization gate',async()=>{
+test('five-year coverage does not expand a daily task into initialization',async()=>{
  const s=memory();await s.write(marketRecord('market-coverage:v1:sh600519:5','market-coverage','test',{status:'ready'},60000,now),null);
  const q=new MarketUpdateQueue(s,()=>now);await q.submit('daily',['600519'],false,'daily');
- assert.equal((await q.claim()).initialize,true);
+ assert.equal((await q.claim()).initialize,false);
  assert.equal(plan.coverageKey('sh600519'),'market-coverage:v1:sh600519:10');
 });
 test('old unfinished five-year queue records restart under the ten-year plan with a new lease',async()=>{
@@ -29,11 +29,12 @@ test('old unfinished five-year queue records restart under the ten-year plan wit
  assert.equal(task.mode,'ten-year');assert.equal(task.phase,0);assert.equal(task.initialize,true);
  assert.notEqual(task.lease,'old');assert.equal(await q.finish('sh600519','old'),false);
 });
-test('manual ten-year fills cannot join a weaker automatic update',async()=>{
+test('manual ten-year fills run independently from daily tasks and cannot silently change scope',async()=>{
  const s=memory(),q=new MarketUpdateQueue(s,()=>now);
  await q.submit('auto',['600519'],false,'daily');
- await assert.rejects(q.submit('user',['600519'],false,'ten-year'),/完成后再补齐十年/);
- await assert.rejects(q.submit('auto',['600519'],false,'ten-year'),/停止或完成后再补齐十年/);
+ await q.submit('user',['600519'],false,'ten-year');
+ const daily=await q.claim();assert.equal(daily.mode,'daily');await q.finish(daily.symbol,daily.lease);
+ assert.equal((await q.status('user')).done,0);assert.equal((await q.claim()).mode,'ten-year');
  const other=new MarketUpdateQueue(memory(),()=>now);
  await other.submit('user',['600519'],false,'ten-year');
  await assert.rejects(other.submit('user',['hk00700'],false,'ten-year'),/其他范围/);

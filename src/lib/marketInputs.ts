@@ -1,5 +1,5 @@
 /** Persist source inputs, not derived PE/PB/yields. Expired inputs never silently become current. */
-import { getMarketStore, marketRecord, type MarketStore, type MarketRecord } from './marketStore';
+import { getMarketStore, marketRecord, marketDigest, type MarketStore, type MarketRecord } from './marketStore';
 import { cached } from './datasource/cache';
 import { withMarketRefresh } from './marketRefresh';
 import { retainMarketPayload } from './marketRetention';
@@ -116,6 +116,11 @@ async function readOrFetchInput<T>(key: string, kind: string, source: string, tt
     } catch { /* Store outage must not prevent source access. */ }
   }
   if (databaseOnly()) throw marketDataMissing('财务或分红输入');
+  const failureKey=`market-input-failure:v1:${marketDigest(key)}`;
+  if(store && !options.forceRefresh){
+    const failed=await store.read<{until:number;message:string}>(failureKey);
+    if(failed && failed.payload.until>now)throw Error(`该输入暂不可用，重试时间 ${new Date(failed.payload.until).toISOString()}：${failed.payload.message}`);
+  }
   let value: T;
   try {
     value = retainMarketPayload(kind, await producer(),now); validate(value);
@@ -188,6 +193,11 @@ async function readOrFetchInput<T>(key: string, kind: string, source: string, tt
     }
   }
   catch (e) {
+    if(store)try {
+      const oldFailure=await store.read(failureKey);
+      const delay=/:(20\d{2})$/.test(key) && Number(key.slice(-4))<new Date(now).getUTCFullYear()-1 ? 24*3600e3 : 15*60e3;
+      await store.write(marketRecord(failureKey,'input-failure','internal',{key,until:now+delay,message:(e instanceof Error?e.message:String(e)).slice(0,300)},delay,now),oldFailure?.digest??null);
+    }catch{}
     try { await store?.incident(key, 'source_input_failed', { message: e instanceof Error ? e.message : String(e) }); } catch {}
     // Intentionally no stale fallback: callers must not combine expired inputs
     // with current prices and publish an apparently current valuation.
@@ -195,6 +205,8 @@ async function readOrFetchInput<T>(key: string, kind: string, source: string, tt
     throw e;
   }
   if (store) {
+    const failure=await store.read(failureKey).catch(()=>null);
+    if(failure && store.remove)await store.remove(failureKey,failure.digest).catch(()=>false);
     try { await store.write(marketRecord(key, kind, sourceOf?.(value)??source, wire(value), ttl, now), old?.digest ?? null); }
     catch { /* Valid current source values remain usable if writing fails. */ }
   }

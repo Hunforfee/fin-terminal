@@ -3,7 +3,7 @@
  * 只运行在服务端（Route Handler / Server Component），浏览器不直连上游。
  */
 
-import { currentUpstreamBudget } from '../upstreamBudget';
+import { acquireSharedSourceSlot, currentUpstreamBudget } from '../upstreamBudget';
 import { allowMarketNetwork, marketDataMissing } from '../marketReadPolicy';
 import { marketSourceCooldown } from './sourceCooldown';
 const UA =
@@ -52,10 +52,13 @@ export async function fetchText(url: string, opts: FetchOpts = {}): Promise<stri
     unavailable();
     const release = await budget?.enter(url);
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    let timer:ReturnType<typeof setTimeout>|undefined;
     let received=false;
+    let slot:Awaited<ReturnType<typeof acquireSharedSourceSlot>>;
     try {
+      slot=await acquireSharedSourceSlot(url,budget?.signal);
       unavailable(); // A queued request may have waited behind a failing request.
+      timer=setTimeout(() => ctrl.abort(),timeoutMs);
       const res = await fetch(url, {
         signal: budget ? AbortSignal.any([ctrl.signal, budget.signal]) : ctrl.signal,
         headers: {
@@ -67,6 +70,7 @@ export async function fetchText(url: string, opts: FetchOpts = {}): Promise<stri
         cache: 'no-store',
       });
       received=true;
+      slot?.observe(res.status,res.headers.get('retry-after'));
       budget?.observe(res.status, url);
       marketSourceCooldown.observe(url,res.status,res.headers.get('retry-after'));
       if (!res.ok && retryStatuses?.includes(res.status)) {
@@ -89,7 +93,7 @@ export async function fetchText(url: string, opts: FetchOpts = {}): Promise<stri
       if (attempt < retries) await sleep(backoffMs * (attempt + 1));
     } finally {
       clearTimeout(timer);
-      release?.();
+      try { await slot?.release(); } finally { release?.(); }
     }
   }
   throw lastErr instanceof Error ? lastErr : new UpstreamError(String(lastErr), url, 'http');

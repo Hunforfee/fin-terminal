@@ -13,6 +13,7 @@
  * 中文 key 直接用于 JSON 与前端展示，URL 传输时 encodeURIComponent 即可。
  */
 
+import { assertFinancialPage } from '../financialPageQuality';
 import { fetchText } from './http';
 import { cachedMarketInput } from '../marketInputs';
 import { financialEarliestYear } from '../marketHistoryPlan';
@@ -116,6 +117,7 @@ export function fetchStatementSourcePage(code: string, id: StatementId, year: nu
     if(!value.dates.length || !value.rows.some(r=>r.kind==='field' && r.vals.some(v=>v!=null && v.trim()!=='' && Number.isFinite(Number(v.replaceAll(',','')))))
       || value.dates.some(d=>!/^\d{4}-\d{2}-\d{2}$/.test(d))
       || options.requiredDates?.some(d=>!value.dates.includes(d)))throw Error('财报来源页缺少有效数据或应有报告期');
+    assertFinancialPage(value,id,options.requiredDates??value.dates);
   };
   return cachedMarketInput<StatementSourcePage>(`source-sina-page:v1:${code}:${id}:${year}`,'source-sina-page','sina:reported:wan',new Date().getUTCFullYear()-year<=1?1800e3:7*864e5,
     async()=>{
@@ -123,7 +125,7 @@ export function fetchStatementSourcePage(code: string, id: StatementId, year: nu
         const value=parseStatementPage(await fetchText(STATEMENT_META[id].url.replace('{code}',code).replace('{year}',String(year)),{encoding:'gbk',timeoutMs:10000,retries:0}));
         validate(value);return value;
       }catch(primary){
-        try{return await fetchEastmoneyStatement(code,id,year);}
+        try{const value=await fetchEastmoneyStatement(code,id,year);validate(value);return value;}
         catch(backup){throw Error(`公网财报均未取得有效数据（新浪：${primary instanceof Error?primary.message:'不可用'}；东方财富：${backup instanceof Error?backup.message:'不可用'}）`);}
       }
     },validate,financialPageSource,options);

@@ -15,7 +15,7 @@ const now=Date.parse('2026-10-23T04:00:00Z');
 const row=(code='600519',market='SH')=>({SECUCODE:`${code}.${market}`,SECURITY_CODE:code,CURRENCY:'CNY',
   REPORT_DATE:'2025-03-31 00:00:00',NOTICE_DATE:'2025-04-20 00:00:00',UPDATE_DATE:'2026-04-20 00:00:00',
   PARENT_NETPROFIT:123456789,NETPROFIT:124000000,BASIC_EPS:1.234,DILUTED_EPS:1.2,
-  TOTAL_PARENT_EQUITY:300000000,TOTAL_ASSETS:500000000,SHARE_CAPITAL:200000000,
+  TOTAL_PARENT_EQUITY:300000000,TOTAL_ASSETS:500000000,TOTAL_LIABILITIES:200000000,SHARE_CAPITAL:200000000,
   NETCASH_OPERATE:0,BPS:3,MGJYXJJE:0,MGWFPLR:1.5,ZCFZL:40,XSJLL:20,LD:1.8,SD:null,ROEJQ:8,EPSXS:1.2});
 const memory=()=>{const rows=new Map();return {rows,read:async k=>structuredClone(rows.get(k)??null),
   write:async(r,expected)=>{if((rows.get(r.key)?.digest??null)!==expected)return false;rows.set(r.key,structuredClone(r));return true;},incident:async()=>{}};};
@@ -73,9 +73,8 @@ test('a valid Sina page is reused without requesting a backup provider',()=>netw
   const original=globalThis.fetch;let count=0;
   globalThis.fetch=async url=>{
     count++;assert.equal(new URL(String(url)).hostname,'money.finance.sina.com.cn');
-    // Minimal GBK source fixture: report-date header and one numeric subject.
-    return new Response(Buffer.concat([Buffer.from('<tr><td>'),Buffer.from('b1a8b1edc8d5c6da','hex'),
-      Buffer.from('</td><td>2025-03-31</td></tr><tr><td style="padding-left:30px">asset</td><td>10</td></tr>')]));
+    // A genuinely usable balance sheet includes its required financial inputs.
+    return new Response(Buffer.from('3c74723e3c74643eb1a8b1edc8d5c6da3c2f74643e3c74643e323032352d30332d33313c2f74643e3c2f74723e3c74723e3c7464207374796c653d2270616464696e672d6c6566743a33307078223ed7cab2fad7dcbcc63c2f74643e3c74643e31303c2f74643e3c2f74723e3c74723e3c7464207374796c653d2270616464696e672d6c6566743a33307078223eb8bad5aebacfbcc63c2f74643e3c74643e343c2f74643e3c2f74723e3c74723e3c7464207374796c653d2270616464696e672d6c6566743a33307078223eb9e9caf4d3dac4b8b9abcbbeb9c9b6abc8a8d2e6bacfbcc63c2f74643e3c74643e363c2f74643e3c2f74723e','hex'));
   };
   try{
     const value=await fetchStatementSourcePage('600519','balance',2025);

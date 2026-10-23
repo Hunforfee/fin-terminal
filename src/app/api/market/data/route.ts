@@ -43,6 +43,14 @@ async function serve(request: NextRequest): Promise<Response> {
       limits: { requestsPerMinutePerInstance: 240, requestBytes: 65536, responseBytes: 33554432, recordsPerPage: 20 },
       updatedAt: new Date().toISOString(),
     } });
+    if (resource === 'diagnostics') {
+      const { normalizeStockCode } = await import('@/lib/datasource/codes');
+      const n=normalizeStockCode(params.get('code')??'');
+      if(!n)return json({ok:false,error:'无效股票代码'},400);
+      const store=getMarketReadStore();if(!store)return json({ok:false,error:'股票数据库尚未连接'},503);
+      const { diagnoseMarketData }=await import('@/lib/marketDiagnostics');
+      return json({ok:true,data:await diagnoseMarketData(store,n.symbol)});
+    }
     if (resource === 'records') {
       const store = getMarketReadStore();
       if (!store) return json({ ok: false, error: '股票数据库尚未连接' }, 503);

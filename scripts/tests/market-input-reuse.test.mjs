@@ -36,7 +36,7 @@ test('persistent freshness and later database writes are not hidden by a second 
   vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/marketInputs.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,{
     exports:exported,Date:Clock,
     require(name){
-      if(name==='./marketStore')return {getMarketStore:()=>store,marketRecord:(key,kind,source,payload,ttl,time)=>({key,kind,source,payload,refreshAfter:new Date(time+ttl).toISOString()})};
+      if(name==='./marketStore')return {getMarketStore:()=>store,marketDigest:value=>String(value),marketRecord:(key,kind,source,payload,ttl,time)=>({key,kind,source,payload,refreshAfter:new Date(time+ttl).toISOString()})};
       if(name==='./datasource/cache')return {cached(){throw Error('Persistent inputs must not get a second TTL');}};
       if(name==='./marketRefresh')return {withMarketRefresh:(_store,_key,work)=>work()};
       if(name==='./marketRetention')return {retainMarketPayload:(_kind,value)=>value};

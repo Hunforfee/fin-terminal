@@ -1,3 +1,4 @@
+import { financialPageGaps } from './financialPageQuality';
 import { getMarketStore, marketRecord, type MarketStore } from './marketStore';
 import { getKLine, getValuation } from './datasource';
 import { fetchStatementSourcePage } from './datasource/sinaStatements';
@@ -60,7 +61,10 @@ export async function collectHistoryPhase(symbol:string,phase:number,signal:Abor
       if(listingDate && year<Number(listingDate.slice(0,4)))return;
       const requiredDates=requiredFinancialReports(year,listingDate);
       for(const id of ['balance','profit','cashflow'] as const){
-        let page=await fetchStatementSourcePage(n.code,id,year);
+        const savedPage=await store.read<import('./datasource/eastmoneyStatements').StatementSourcePage>(`source-sina-page:v1:${n.code}:${id}:${year}`);
+        // Historical maintenance is gap-directed. Do not refresh a complete old year every Sunday.
+        if(year<new Date().getUTCFullYear()-1 && savedPage && !financialPageGaps(savedPage.payload,id,requiredDates).length)continue;
+        let page=await fetchStatementSourcePage(n.code,id,year,{requiredDates});
         if(requiredDates.some(date=>!page.dates.includes(date)))page=await fetchStatementSourcePage(n.code,id,year,{forceRefresh:true,requiredDates});
         if(requiredDates.some(date=>!page.dates.includes(date)))throw Error(`${year} 年${id}财报仍缺少已到披露期限的报告期`);
         const stored=await persistCheck(store,`source-sina-page:v1:${n.code}:${id}:${year}`);
@@ -123,7 +127,8 @@ export async function collectHistoryPhase(symbol:string,phase:number,signal:Abor
         for(const key of required){
           const row=await store.read(key);
           const annual=key.match(/^source-sina-(?:page:v1:\d+:\w+|indicators:v1:\d+):(\d{4})$/);
-          if(!row || annual && requiredFinancialReports(Number(annual[1]),listingDate).some(date=>!(row.payload as {dates?:string[]}).dates?.includes(date)))missingInputs.push(key);
+          const statement=key.match(/source-sina-page:v1:\d+:(balance|profit|cashflow):/);
+          if(!row || annual && (statement ? financialPageGaps(row.payload as import('./datasource/eastmoneyStatements').StatementSourcePage,statement[1] as 'balance'|'profit'|'cashflow',requiredFinancialReports(Number(annual[1]),listingDate)).length>0 : requiredFinancialReports(Number(annual[1]),listingDate).some(date=>!(row.payload as {dates?:string[]}).dates?.includes(date))))missingInputs.push(key);
         }
       }else{
         const secucode=`${n.code}.HK`;

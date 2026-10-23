@@ -4,15 +4,16 @@ import { normalizeStockCode } from './datasource/codes';
 import { collectionPhases, coverageKey } from './marketHistoryPlan';
 import { appendRunLog } from './marketUpdateRunLog';
 
+export const executionKey = (symbol:string, mode:UpdateMode='recent', targetDate?:string) => mode==='daily' ? `${symbol}@daily@${targetDate}` : mode==='financial' ? `${symbol}@financial` : symbol;
 const KEY = 'market-update-queue:v1';
 const COOLDOWN = 10 * 60e3;
 const LEASE = 5 * 60e3;
 type State = 'queued' | 'running' | 'done' | 'failed';
-export type UpdateMode = 'recent' | 'ten-year' | 'daily' | 'five-year'; // five-year: stored legacy jobs only.
-interface Item { symbol: string; state: State; attempts: number; nextAt: number; mode?:UpdateMode; initialize?:boolean; phase?:number; phaseErrors?:Record<string,string>; doneAt?: number; error?: string; lease?: string; leaseUntil?: number }
-interface Job { id: string; owner: string; symbols: string[]; skipped: string[]; createdAt: number; mode?:UpdateMode; finishedAt?: number; result?: { done: number; failed: number; errors: { symbol: string; message: string }[] } }
+export type UpdateMode = 'recent' | 'ten-year' | 'daily' | 'financial' | 'five-year'; // five-year: stored legacy jobs only.
+interface Item { symbol: string; state: State; attempts: number; nextAt: number; targetDate?:string; mode?:UpdateMode; initialize?:boolean; phase?:number; phaseErrors?:Record<string,string>; doneAt?: number; error?: string; lease?: string; leaseUntil?: number }
+interface Job { itemKeys?: Record<string,string>; id: string; owner: string; symbols: string[]; skipped: string[]; createdAt: number; mode?:UpdateMode; finishedAt?: number; result?: { done: number; failed: number; errors: { symbol: string; message: string }[] } }
 interface Queue { jobs: Job[]; items: Record<string, Item>; workerAt: number; pauseUntil: number }
-export interface UpdateProgress { id: string; mode?:UpdateMode; phase?:number; total: number; done: number; skipped: number; failed: number; running: number; waiting: number; finished: boolean; workerOnline: boolean; pausedUntil: number; errors: { symbol: string; message: string }[] }
+export interface UpdateProgress { reason?:'paused'|'worker-offline'|'running'|'waiting'|'finished'; id: string; mode?:UpdateMode; phase?:number; total: number; done: number; skipped: number; failed: number; running: number; waiting: number; finished: boolean; workerOnline: boolean; pausedUntil: number; errors: { symbol: string; message: string }[] }
 export class UpdateQueueError extends Error { constructor(message: string, public status = 409) { super(message); } }
 export function updateSymbols(codes: unknown): string[] {
   if (!Array.isArray(codes) || !codes.length || codes.length > 1000 || codes.some(c => typeof c !== 'string')) throw new UpdateQueueError('请选择 1—1000 家自选公司', 400);
@@ -29,23 +30,28 @@ export class MarketUpdateQueue {
       const q = row?.payload ?? { jobs: [], items: {}, workerAt: 0, pauseUntil: 0 };
       const now = this.clock();
       const justFinished: Job[] = [];
+      // Deployed daily tasks may still carry the old history/financial phase index.
+      for(const item of Object.values(q.items))if(item.mode==='daily' && ['queued','running'].includes(item.state) && (item.initialize!==false || (item.phase??0)>0)){
+        Object.assign(item,{initialize:false,phase:0,state:'queued',attempts:0,nextAt:now});
+        delete item.phaseErrors;delete item.error;delete item.lease;delete item.leaseUntil;
+      }
       // Restart unfinished legacy fills under the new plan; old leases cannot finish them.
       for (const item of Object.values(q.items)) if (item.mode === 'five-year' && ['queued','running'].includes(item.state)) {
         Object.assign(item, { mode:'ten-year', initialize:true, state:'queued', phase:0, attempts:0, nextAt:now });
         delete item.phaseErrors; delete item.error; delete item.lease; delete item.leaseUntil;
       }
       for (const job of q.jobs) if (job.mode === 'five-year' && !job.result) job.mode = 'ten-year';
-      for (const job of q.jobs) if (!job.finishedAt && job.symbols.every(s => job.skipped.includes(s) || ['done', 'failed'].includes(q.items[s]?.state))) {
+      for (const job of q.jobs) if (!job.finishedAt && job.symbols.every(s => job.skipped.includes(s) || ['done', 'failed'].includes(q.items[job.itemKeys?.[s]??s]?.state))) {
         const p = this.progress(q, job, now); job.finishedAt = now; job.result = { done: p.done, failed: p.failed, errors: p.errors };
         justFinished.push(job);
       }
       q.jobs = q.jobs.filter(j => !j.finishedAt || now - j.finishedAt < 864e5);
-      const used = new Set(q.jobs.filter(j => !j.result).flatMap(j => j.symbols.filter(s => !j.skipped.includes(s))));
+      const used = new Set(q.jobs.filter(j => !j.result).flatMap(j => j.symbols.filter(s => !j.skipped.includes(s)).map(s=>j.itemKeys?.[s]??s)));
       for (const [symbol, item] of Object.entries(q.items)) if (!used.has(symbol) && item.state !== 'running' && (item.doneAt ?? item.nextAt) < now - COOLDOWN) delete q.items[symbol];
       const result = fn(q, now);
       // 完成检测置于 fn 之后：finish/cancel 可能刚把最后一个 item 置为终态，
       // 同一次 change 即汇总结果并落运行日志，无需等下一轮 claim。
-      for (const job of q.jobs) if (!job.finishedAt && job.symbols.every(s => job.skipped.includes(s) || ['done', 'failed'].includes(q.items[s]?.state))) {
+      for (const job of q.jobs) if (!job.finishedAt && job.symbols.every(s => job.skipped.includes(s) || ['done', 'failed'].includes(q.items[job.itemKeys?.[s]??s]?.state))) {
         const p = this.progress(q, job, now); job.finishedAt = now; job.result = { done: p.done, failed: p.failed, errors: p.errors };
         justFinished.push(job);
       }
@@ -58,28 +64,33 @@ export class MarketUpdateQueue {
     throw new UpdateQueueError('队列繁忙，请稍后再试', 503);
   }
   private progress(q: Queue, j: Job, now: number): UpdateProgress {
-    if (j.result) return { id: j.id, mode:j.mode, total: j.symbols.length, skipped: j.skipped.length, ...j.result, running: 0, waiting: 0, finished: true, workerOnline: now - q.workerAt < 90e3, pausedUntil: q.pauseUntil };
-    const active = j.symbols.filter(s => !j.skipped.includes(s)).map(s => q.items[s]);
+    if (j.result) return { reason:'finished', id: j.id, mode:j.mode, total: j.symbols.length, skipped: j.skipped.length, ...j.result, running: 0, waiting: 0, finished: true, workerOnline: now - q.workerAt < 90e3, pausedUntil: q.pauseUntil };
+    const active = j.symbols.filter(s => !j.skipped.includes(s)).map(s => q.items[j.itemKeys?.[s]??s]);
     const count = (state: State) => active.filter(i => i?.state === state).length;
     const current = active.find(i=>i?.state==='running');
+    const reason=q.pauseUntil>now?'paused':now-q.workerAt>=90e3?'worker-offline':current?'running':'waiting';
     const phase = current ? collectionPhases(current.mode ?? 'recent', current.initialize ?? false)[current.phase ?? 0] : undefined;
-    return { id: j.id, mode:j.mode,phase, total: j.symbols.length, done: count('done'), skipped: j.skipped.length, failed: count('failed'), running: count('running'), waiting: count('queued'),
+    return { id: j.id, mode:j.mode,phase,reason, total: j.symbols.length, done: count('done'), skipped: j.skipped.length, failed: count('failed'), running: count('running'), waiting: count('queued'),
       finished: active.every(i => i && ['done', 'failed'].includes(i.state)), workerOnline: now - q.workerAt < 90e3,
       pausedUntil: q.pauseUntil, errors: active.filter(i => i?.state === 'failed').map(i => ({ symbol: i.symbol, message: i.error ?? '更新失败' })) };
   }
-  async submit(owner: string, codes: unknown, retry = false, mode:UpdateMode='recent'): Promise<UpdateProgress> {
+  async submit(owner: string, codes: unknown, retry = false, mode:UpdateMode='recent', targetDate?:string): Promise<UpdateProgress> {
     if (mode === 'five-year') mode = 'ten-year';
+    if(mode==='daily') {
+      targetDate ??= new Date(this.clock()+8*3600e3).toISOString().slice(0,10);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(targetDate) || !Number.isFinite(Date.parse(targetDate)) || new Date(targetDate+'T00:00:00Z').toISOString().slice(0,10)!==targetDate || targetDate>new Date(this.clock()+8*3600e3).toISOString().slice(0,10))throw new UpdateQueueError('目标交易日期无效',400);
+    }
     const symbols = updateSymbols(codes);
-    const initialization=new Map(await Promise.all(symbols.map(async symbol=>[symbol,mode==='ten-year' ||
-      (await this.store.read<{status:string}>(coverageKey(symbol)))?.payload.status!=='ready'] as const)));
+    const initialization=new Map(await Promise.all(symbols.map(async symbol=>[symbol,mode!=='daily' && mode!=='financial' && (mode==='ten-year' ||
+      (await this.store.read<{status:string}>(coverageKey(symbol)))?.payload.status!=='ready')] as const)));
     return this.change((q, now) => {
       const previous = q.jobs.filter(j => j.owner === owner).at(-1);
-      if (previous && !this.progress(q, previous, now).finished) {
+      if (previous && previous.mode===mode && !this.progress(q, previous, now).finished) {
         if(mode==='ten-year' && previous.mode!=='ten-year')throw new UpdateQueueError('当前任务进行中，请停止或完成后再补齐十年数据',409);
         if(mode==='ten-year' && symbols.some(symbol=>!previous.symbols.includes(symbol)))throw new UpdateQueueError('已有其他范围的补齐任务进行中，请停止或完成后再提交',409);
         return this.progress(q, previous, now);
       }
-      if (previous && now - previous.createdAt < 60e3) throw new UpdateQueueError('刚刚已提交，请稍后再试', 429);
+      if (previous && previous.mode===mode && now - previous.createdAt < 60e3) throw new UpdateQueueError('刚刚已提交，请稍后再试', 429);
       if (retry && (!previous || symbols.some(s => !this.progress(q, previous, now).errors.some(e => e.symbol === s)))) throw new UpdateQueueError('只能重试当前任务失败的公司', 400);
       // Retain recent results without allowing finished jobs to block new users.
       while (q.jobs.length >= 50) {
@@ -87,10 +98,10 @@ export class MarketUpdateQueue {
         if (oldest < 0) break;
         q.jobs.splice(oldest, 1);
       }
-      if (q.jobs.length >= 50 || Object.keys(q.items).length + symbols.filter(s => !q.items[s]).length > 2000) throw new UpdateQueueError('全站更新队列已满，请稍后再试', 429);
+      if (q.jobs.length >= 50 || Object.keys(q.items).length + symbols.filter(s => !q.items[executionKey(s,mode,targetDate)]).length > 2000) throw new UpdateQueueError('全站更新队列已满，请稍后再试', 429);
       const skipped: string[] = [];
       for (const symbol of symbols) {
-        const item = q.items[symbol];
+        const item = q.items[executionKey(symbol,mode,targetDate)];
         if (item?.state === 'done' && now - (item.doneAt ?? 0) < COOLDOWN && (mode==='daily' || mode==='recent' && item.mode!=='daily' || item.mode==='ten-year')) { skipped.push(symbol); continue; }
         if (item && ['queued', 'running'].includes(item.state)) {
           if(mode==='ten-year' && item.mode!=='ten-year')throw new UpdateQueueError('该股票正在更新，请完成后再补齐十年数据',409);
@@ -99,9 +110,9 @@ export class MarketUpdateQueue {
         if (item?.state === 'failed' && now - (item.doneAt ?? 0) < 60e3) throw new UpdateQueueError('失败后请稍候再重试', 429);
         const resume=retry && item?.mode===mode;
         const phase=resume?Math.min(item.phase??0,...Object.keys(item.phaseErrors??{}).map(Number)):0;
-        q.items[symbol] = { symbol, state: 'queued', attempts: 0, nextAt: now, mode,initialize:resume?item.initialize:initialization.get(symbol),phase,...(resume?{phaseErrors:item.phaseErrors}:{}) };
+        q.items[executionKey(symbol,mode,targetDate)] = { symbol, targetDate, state: 'queued', attempts: 0, nextAt: now, mode,initialize:resume?item.initialize:initialization.get(symbol),phase,...(resume?{phaseErrors:item.phaseErrors}:{}) };
       }
-      const job: Job = { id: randomUUID(), owner, symbols, skipped, createdAt: now,mode };
+      const job: Job = { id: randomUUID(), owner, symbols, skipped, createdAt: now,mode,itemKeys:Object.fromEntries(symbols.map(s=>[s,executionKey(s,mode,targetDate)])) };
       q.jobs.push(job); return this.progress(q, job, now);
     });
   }
@@ -138,7 +149,7 @@ export class MarketUpdateQueue {
     const job = q?.jobs.filter(j => j.owner === owner).at(-1);
     return q && job ? this.progress(q, job, this.clock()) : null;
   }
-  async claim(): Promise<{ symbol: string; lease: string; mode:UpdateMode;phase:number;initialize?:boolean;phaseErrors?:Record<string,string> } | null> {
+  async claim(): Promise<{ symbol: string; lease: string; mode:UpdateMode;targetDate?:string;phase:number;initialize?:boolean;phaseErrors?:Record<string,string> } | null> {
     return this.change((q, now) => {
       q.workerAt = now;
       if (q.pauseUntil > now) return null;
@@ -146,22 +157,22 @@ export class MarketUpdateQueue {
       if (running) return null; // One company across ALL server instances.
       const expired = Object.values(q.items).find(i => i.state === 'running');
       if (expired) { expired.state = expired.attempts >= 3 ? 'failed' : 'queued'; expired.error = '后台执行中断'; expired.nextAt = now + 60e3; if (expired.state === 'failed') expired.doneAt = now; }
-      const item = Object.values(q.items).find(i => i.state === 'queued' && i.nextAt <= now);
+      const item = Object.values(q.items).filter(i => i.state === 'queued' && i.nextAt <= now).sort((a,b)=>Number(b.mode==='daily')-Number(a.mode==='daily') || Number(b.mode==='financial')-Number(a.mode==='financial') || a.nextAt-b.nextAt)[0];
       if (!item) return null;
       item.state = 'running'; item.attempts++; item.lease = randomUUID(); item.leaseUntil = now + LEASE;
-      return { symbol: item.symbol, lease: item.lease,mode:item.mode??'recent',phase:item.phase??0,initialize:item.initialize,phaseErrors:item.phaseErrors };
+      return { symbol: item.symbol, lease: item.lease,mode:item.mode??'recent',targetDate:item.targetDate,phase:item.phase??0,initialize:item.initialize,phaseErrors:item.phaseErrors };
     });
   }
   async renew(symbol: string, lease: string): Promise<boolean> {
     return this.change((q, now) => {
-      q.workerAt = now; const i = q.items[symbol];
+      q.workerAt = now; const i = Object.values(q.items).find(i=>i.symbol===symbol && i.lease===lease);
       if (!i || i.state !== 'running' || i.lease !== lease || (i.leaseUntil ?? 0) <= now) return false;
       i.leaseUntil = now + LEASE; return true;
     });
   }
   async finish(symbol: string, lease: string, error?: string, limited = false, nextPhase?:number): Promise<boolean> {
     return this.change((q, now) => {
-      const i = q.items[symbol];
+      const i = Object.values(q.items).find(i=>i.symbol===symbol && i.lease===lease);
       if (!i || i.state !== 'running' || i.lease !== lease || (i.leaseUntil ?? 0) <= now) return false;
       q.workerAt = now; i.error = error?.slice(0, 180);
       if(!error && i.phaseErrors)delete i.phaseErrors[String(i.phase??0)];
@@ -191,14 +202,14 @@ export class MarketUpdateQueue {
       if (!job) return null;
       const before = this.progress(q, job, now);
       const cancelled = job.symbols.filter(symbol => !job.skipped.includes(symbol) &&
-        ['queued', 'running'].includes(q.items[symbol]?.state));
+        ['queued', 'running'].includes(q.items[job.itemKeys?.[symbol]??symbol]?.state));
       job.finishedAt = now;
       job.result = { done: before.done, failed: before.failed + cancelled.length,
         errors: [...before.errors, ...cancelled.map(symbol => ({ symbol, message: '已手动停止' }))] };
       for (const symbol of cancelled) {
         if (q.jobs.some(other => other.id !== job.id && !other.result &&
-          other.symbols.includes(symbol) && !other.skipped.includes(symbol))) continue;
-        const i = q.items[symbol];
+          other.symbols.includes(symbol) && (other.itemKeys?.[symbol]??symbol)===(job.itemKeys?.[symbol]??symbol) && !other.skipped.includes(symbol))) continue;
+        const i = q.items[job.itemKeys?.[symbol]??symbol];
         if (i && ['queued', 'running'].includes(i.state)) {
           i.state = 'failed'; i.error = '已手动停止'; i.doneAt = now; i.lease = undefined; i.leaseUntil = 0;
         }

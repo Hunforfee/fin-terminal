@@ -106,6 +106,7 @@ test('annual collection refreshes a cached partial year before accepting it as c
   exports:exported,Error,Date,AbortController,
   require(name){
    if(name==='./marketHistoryPlan')return plan;
+   if(name==='./financialPageQuality')return {financialPageGaps:()=>[{date:'2016-03-31',missing:['npParent']}]};
    if(name==='./marketStore')return {getMarketStore:()=>({read:async key=>key.startsWith('security-basics:')?{payload:{listingDate:'2002-05-09'}}:key.startsWith('kline:')?null:{refreshAfter:'2099-01-01',payload:{dates:all}}})};
    if(name==='./datasource/codes')return {normalizeStockCode:()=>({market:'SH',code:'600415',symbol:'sh600415'})};
    if(name==='./marketSecurityBasics')return {securityBasicsKey:s=>'security-basics:v1:'+s};

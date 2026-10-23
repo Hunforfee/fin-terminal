@@ -1,4 +1,5 @@
 /** Server-side public data store. Never uses browser auth or personal-data tables. */
+import { invalidateSecurityCache } from './datasource/cache';
 import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -41,6 +42,7 @@ function valuationSymbol(record: MarketRecord): string | null {
 export function trackValuationChanges(store: MarketStore): MarketStore {
   async function invalidate(symbols: Iterable<string>) {
     for(const symbol of new Set(symbols)) {
+      invalidateSecurityCache(symbol);
       const key=valuationRevisionKey(symbol);
       let written=false;
       for(let attempt=0;attempt<12 && !written;attempt++) {

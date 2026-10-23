@@ -127,7 +127,7 @@ test('close scheduler deduplicates overlapping groups and only schedules once pe
  assert.equal((await scheduleMarketClose(store,now+864e5)).scheduled,0);
 });
 
-test('daily updates schedule every registered stock; only not-ready ones initialize',async()=>{
+test('daily updates schedule every registered stock; neither ready nor not-ready stocks initialize history',async()=>{
  const store=memory();await registerCollection(store,'one',['600519','300498']);
  await store.write(marketRecord('market-coverage:v1:sh600519:10','market-coverage','test',{status:'ready'},60000,now),null);
  assert.equal((await scheduleMarketClose(store,now)).scheduled,2);
@@ -136,10 +136,10 @@ test('daily updates schedule every registered stock; only not-ready ones initial
  const ready=claimed.find(c=>c.symbol==='sh600519');
  const unready=claimed.find(c=>c.symbol==='sz300498');
  assert.ok(ready&&ready.initialize===false,'已就绪标的应跳过初始化');
- assert.ok(unready&&unready.initialize===true,'未就绪标的应在 daily 模式下初始化');
+ assert.ok(unready&&unready.initialize===false,'未就绪标的也只能更新指定日');
 });
 
-test('close pass is lightweight daily, Sunday recovery is full recent',async()=>{
+test('close pass is lightweight daily, Sunday recovery is full history',async()=>{
  const store=memory();await registerCollection(store,'one',['600519']);
  const close=await scheduleMarketClose(store,Date.parse('2026-10-21T08:30:00Z')); // 周三 16:30 北京
  assert.equal(close.scheduled,1);
@@ -149,5 +149,5 @@ test('close pass is lightweight daily, Sunday recovery is full recent',async()=>
  const full=await scheduleMarketClose(store2,Date.parse('2026-10-25T02:00:00Z')); // 周日 10:00 北京
  assert.equal(full.scheduled,1);
  const rec2=await store2.read('market-update-queue:v1');
- assert.equal(rec2.payload.jobs[0].mode,'recent');
+ assert.equal(rec2.payload.jobs[0].mode,'ten-year');
 });

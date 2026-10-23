@@ -11,6 +11,8 @@ function worker({phase=0,mode='ten-year',failure=false,initialized=false,phaseEr
   exports:exported,Error,AbortController,setTimeout,clearTimeout,setInterval,clearInterval,
   require(name){
    if(name==='./marketHistoryPlan')return plan;
+   if(name==='./marketDailyCollection')return {collectDailyPrices:async(...args)=>{calls.push(['daily',...args]);}};
+   if(name==='./marketImportedBars')return {completedDate:()=> '2026-10-22'};
    if(name==='./marketStore')return {getMarketStore:()=>({read:async()=>initialized?{payload:{status:'ready'}}:null})};
    if(name==='./marketUpdateQueue')return {MarketUpdateQueue:class{async claim(){return {symbol:'sh600519',lease:'lease',mode,phase,phaseErrors};}async finish(...args){finished.push(args);return true;}async renew(){return true;}}};
    if(name==='./upstreamBudget')return {UpstreamBudget:class{limited=false;}};
@@ -47,4 +49,10 @@ test('recent failures classify the actual collection phase and historical phase 
  const w=worker({mode:'recent',initialized:true,phase:5,failure:true,phaseErrors:{1:'价格失败',7:'资料失败'}});
  await w.run();assert.equal(w.calls[0][1],10);assert.equal(w.gaps[0][2].phase,10);
  assert.deepEqual({...w.gaps[0][2].phaseErrors},{0:'价格失败',13:'资料失败'});
+});
+
+test('daily worker never initializes historical coverage or invokes financial collection',async()=>{
+ const w=worker({mode:'daily',initialized:false});const result=await w.run();
+ assert.equal(result.ok,true);assert.equal(w.calls.length,1);assert.equal(w.calls[0][0],'daily');
+ assert.equal(w.finished[0][4],undefined);assert.equal(w.gaps.length,0);
 });

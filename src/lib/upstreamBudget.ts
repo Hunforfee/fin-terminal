@@ -39,3 +39,8 @@ export class UpstreamBudget {
 const runtime = globalThis as typeof globalThis & { finUpdateBudgetResolver?: () => UpstreamBudget | undefined };
 export const installBudgetResolver = (resolver: () => UpstreamBudget | undefined) => { runtime.finUpdateBudgetResolver = resolver; };
 export const currentUpstreamBudget = () => runtime.finUpdateBudgetResolver?.();
+
+type SourceSlot={observe(status:number,retryAfter?:string|null):void;release():Promise<void>};
+const shared=globalThis as typeof globalThis & {finSourceSlot?: (url:string,signal?:AbortSignal)=>Promise<SourceSlot|undefined>};
+export const installSourceCoordinator=(fn:NonNullable<typeof shared.finSourceSlot>)=>{shared.finSourceSlot=fn;};
+export const acquireSharedSourceSlot=(url:string,signal?:AbortSignal)=>shared.finSourceSlot?.(url,signal);

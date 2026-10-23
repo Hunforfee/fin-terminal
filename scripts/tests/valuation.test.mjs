@@ -97,7 +97,7 @@ test('market suffixes distinguish a bank from an index', () => {
 test('actual share history handles a 0.1 par value without assuming par=1',async () => {
  const original=globalThis.fetch;
  const row=(name,value)=>`<tr><td><a>${name}</a></td><td>${value}</td></tr>`;
- const html='<table><tr><td>报表日期</td><td>2025-12-31</td></tr>'+row('归属于母公司所有者的净利润','10000')+row('实收资本(或股本)','1000')+row('归属于母公司股东权益合计','20000')+row('其他权益工具','1000')+'</tbody></table>';
+ const html='<table><tr><td>报表日期</td><td>2025-12-31</td></tr>'+row('归属于母公司所有者的净利润','10000')+row('实收资本(或股本)','1000')+row('归属于母公司股东权益合计','20000')+row('其他权益工具','1000')+row('资产总计','30000')+row('负债合计','10000')+'</tbody></table>';
  // The fixture is UTF-8; production responses are GBK.
  const {TextDecoder:OriginalDecoder}=globalThis;
  globalThis.TextDecoder=class extends OriginalDecoder{constructor(){super('utf-8');}};
@@ -171,7 +171,7 @@ test('many custom fields fetch each statement once per year', async () => {
  const source=await load('datasource/sinaStatements');
  const original=globalThis.fetch,Decoder=globalThis.TextDecoder;let requests=0;
  globalThis.TextDecoder=class extends Decoder{constructor(){super('utf-8');}};
- globalThis.fetch=async()=>{requests++;return new Response('<table><tr><td>报表日期</td><td>2025-12-31</td></tr>'+Array.from({length:60},(_,i)=>`<tr><td style="padding-left:30px">Field${i}</td><td>1</td></tr>`).join('')+'</table>');};
+ globalThis.fetch=async()=>{requests++;return new Response('<table><tr><td>报表日期</td><td>2025-12-31</td></tr>'+['资产总计','负债合计','归属于母公司股东权益合计','归属于母公司所有者的净利润','经营活动产生的现金流量净额'].map(name=>`<tr><td style="padding-left:30px">${name}</td><td>1</td></tr>`).join('')+Array.from({length:60},(_,i)=>`<tr><td style="padding-left:30px">Field${i}</td><td>1</td></tr>`).join('')+'</table>');};
  const fields=[...Array.from({length:60},(_,i)=>'bs_Field'+i),'pl_Field0','cf_Field0'];
  try {const result=await source.fetchCustomFinancials('600415',fields,2);assert.equal(requests,9);assert.equal(Object.keys(result.series).length,62);assert.equal(result.series.bs_Field0[0],1);}
  finally{globalThis.fetch=original;globalThis.TextDecoder=Decoder;}

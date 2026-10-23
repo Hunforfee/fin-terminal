@@ -11,6 +11,8 @@ import { fetchShareHistory, shareHistorySource } from './datasource/sinaFinance'
 import { getWatchlistFinancialInputs } from './watchlistFinancialInputs';
 import { collectHistoryPhase, coverageKey } from './marketHistoryCollection';
 import { recordGapAfterFailure } from './marketFillGaps';
+import { collectDailyPrices } from './marketDailyCollection';
+import { completedDate } from './marketImportedBars';
 import { collectionPhases } from './marketHistoryPlan';
 
 /** One short-range stock per tick. Slow work never runs in the browser POST. */
@@ -32,22 +34,24 @@ export async function runMarketUpdateTick() {
     const coverage=await store.read<{status:string}>(coverageKey(task.symbol));
     // New/partial stocks must initialize from website APIs even when added after
     // deployment or submitted by the daily scheduler. No broker seed.
-    const initialize=task.initialize??(task.mode==='ten-year' || coverage?.payload.status!=='ready');
+    const initialize=task.mode==='daily' || task.mode==='financial' ? false : task.initialize??(task.mode==='ten-year' || coverage?.payload.status!=='ready');
     // 轻量模式：仅当日价格增量 + 最新财报/分红(phase 2) 与库内完整性校验(phase 12)；
     // 完整历史复核由周日 recent 任务承担。未就绪标的仍走全量初始化。
     phases = collectionPhases(task.mode, initialize);
     const phase=phases[task.phase];
     if(phase===undefined)throw Error('后台任务阶段无效');
     await withUpstreamBudget(budget, async () => {
-      if(phase!==2){
+      if(phase===19){
+        await collectDailyPrices(task.symbol,task.targetDate??completedDate(Date.now()));
+      }else if(phase!==2 && phase!==20){
         await collectHistoryPhase(task.symbol,phase,abort.signal);
       }else{
       const n = normalizeStockCode(task.symbol)!;
       const start = new Date(Date.now() - 60 * 864e5).toISOString().slice(0, 10);
-      const prices = await getKLine(n.symbol, 'day', 'none', 40, start, true);
-      if (prices.stale || prices.complete === false || prices.storage?.backend !== 'persistent') throw Error('近期价格未确认完整入库');
+      const prices = phase===20 ? null : await getKLine(n.symbol, 'day', 'none', 40, start, true);
+      if (prices && (prices.stale || prices.complete === false || prices.storage?.backend !== 'persistent')) throw Error('近期价格未确认完整入库');
       if (n.market === 'HK') {
-        const value = await getHkCurrentValuation(n.symbol, prices.candles.at(-1)?.close ?? null);
+        const value = await getHkCurrentValuation(n.symbol, prices?.candles.at(-1)?.close ?? null);
         if (value.pb == null) throw Error('港股财务输入暂无法核验');
         for (const key of [`hk-main-currency-v4:${n.symbol}`, `hk-dividend-events-v4:${n.symbol}`]) {
           const row = await store.read(key);
@@ -91,7 +95,7 @@ export async function runMarketUpdateTick() {
     const actualPhase = phases[task.phase];
     const actualErrors = Object.fromEntries(Object.entries(task.phaseErrors ?? {}).flatMap(([position, message]) =>
       phases[Number(position)] === undefined ? [] : [[String(phases[Number(position)]), message]]));
-    if (!abort.signal.aborted && actualPhase !== undefined) await recordGapAfterFailure(store, task.symbol, {
+    if (task.mode!=='daily' && !abort.signal.aborted && actualPhase !== undefined) await recordGapAfterFailure(store, task.symbol, {
       mode: task.mode, phase: actualPhase, error, phaseErrors: actualErrors, startedAt,
     }).catch(() => null);
   } finally {

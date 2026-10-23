@@ -1,5 +1,6 @@
 import { marketRecord, marketDigest, type MarketStore } from './marketStore';
-import { reportCutoff } from './marketHistoryPlan';
+import { financialPageGaps } from './financialPageQuality';
+import { requiredFinancialReports, reportCutoff } from './marketHistoryPlan';
 
 /**
  * 财务/分红的 QMT 导入写入器。记录写入与现有读取器完全相同的键位与 payload 结构：
@@ -73,7 +74,9 @@ export async function writeFinanceStatements(store: MarketStore, input: FinanceI
     if (!byYear.has(y)) byYear.set(y, []);
     byYear.get(y)!.push(i);
   });
+  const basics=await store.read<{listingDate?:string}>(`security-basics:v1:${/^6/.test(code)?'sh':/^[48]/.test(code)?'bj':'sz'}${code}`);
   const written: { key: string; dates: number }[] = [];
+  const reconciliation: {key:string;requestedDates:string[];savedDates:string[];missingRequestedDates:string[];expectedDates:string[];missingInputs:{date:string;missing:string[]}[];status:'inserted'|'updated'|'unchanged';digest:string}[]=[];
   let identical = 0;
   for (const [year, idx] of [...byYear.entries()].sort()) {
     const key = `source-sina-page:v1:${code}:${input.statement}:${year}`;
@@ -99,16 +102,27 @@ export async function writeFinanceStatements(store: MarketStore, input: FinanceI
       const ni=nextIndex.get(d),oi=oldIndex.get(d);
       return (ni!==undefined?announce?.[ni]:null) ?? (oi!==undefined?prior?.announceDates?.[oi]:null) ?? null;
     });
+    const receipt=async(status:'inserted'|'updated'|'unchanged')=>{
+      const saved=await store.read<Page>(key);
+      if(!saved)throw Error(`导入后读取失败: ${key}`);
+      const requestedDates=idx.map(i=>dates[i]).sort(),savedDates=[...saved.payload.dates].sort();
+      const missingRequestedDates=requestedDates.filter(d=>!savedDates.includes(d));
+      if(missingRequestedDates.length)throw Error(`导入后缺少请求报告期: ${missingRequestedDates.join(',')}`);
+      const expectedDates=[...new Set([...requiredFinancialReports(Number(year),basics?.payload.listingDate,now),...requestedDates])].sort();
+      reconciliation.push({key,requestedDates,savedDates,missingRequestedDates,expectedDates,missingInputs:financialPageGaps(saved.payload,input.statement,expectedDates),status,digest:saved.digest});
+    };
     // 相同内容幂等跳过（digest 对键序不敏感，规避 PG jsonb 重排）
     if (old && marketDigest(old.payload) === marketDigest(payload)) {
       identical++;
-      written.push({ key, dates: yearDates.length }); continue;
+      written.push({ key, dates: yearDates.length });
+      await receipt('unchanged');continue;
     }
     if (!await store.write(marketRecord(key, 'source-sina-page', 'sina:reported:wan', payload, 7 * 864e5, now), old?.digest ?? null))
       throw Error(`写入版本冲突: ${key}`);
     written.push({ key, dates: yearDates.length });
+    await receipt(old?'updated':'inserted');
   }
-  return { code, statement: input.statement, written, totalDates: dates.length,
+  return { code, statement: input.statement, written, totalDates: dates.length,reconciliation,complete:reconciliation.every(r=>!r.missingInputs.length),
     ...(identical === byYear.size ? { skipped: true } : {}) };
 }
 

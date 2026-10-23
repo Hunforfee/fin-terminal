@@ -145,7 +145,7 @@ test('oversized response headers and chunked bodies are bounded', async () => {
 test('public resource registry exactly covers the static dispatchers and special read-only handlers', () => {
   const source = fs.readFileSync('src/lib/marketDataHandlers.ts', 'utf8');
   const paths = [...source.matchAll(/import\('\.\.\/app\/api\/([^']+)\/route'\)/g)].map(m => m[1]);
-  assert.deepEqual([...paths, 'records', 'hk-valuation', 'catalog'].sort(), Object.keys(resources.MARKET_DATA_RESOURCES).sort());
+  assert.deepEqual([...paths, 'records', 'hk-valuation', 'catalog', 'diagnostics'].sort(), Object.keys(resources.MARKET_DATA_RESOURCES).sort());
   for (const route of paths) assert.ok(fs.existsSync('src/app/api/' + route + '/route.ts'));
   assert.match(fs.readFileSync('next.config.mjs', 'utf8'), /'\/api\/market\/data':\s*\['\.\/src\/data\/analyses/);
 });

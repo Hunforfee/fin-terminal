@@ -2,7 +2,8 @@ import { timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { runMarketUpdateTick } from '@/lib/marketUpdateWorker';
 import { runMarketMaintenance } from '@/lib/marketMaintenance';
-import { scheduleMarketClose } from '@/lib/marketCollection';
+import { scheduleMarketClose, scheduleFinancialRefresh } from '@/lib/marketCollection';
+import { auditSavedMarketData } from '@/lib/marketAudit';
 import { getMarketStore } from '@/lib/marketStore';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,9 @@ export async function POST(request: NextRequest) {
     const maintenance=await runMarketMaintenance().catch(()=>{console.error('Market data retention sweep failed; records preserved');return {enabled:true,error:true};});
     const store=getMarketStore();
     const schedule=process.env.MARKET_CLOSE_UPDATE_ENABLED==='1' && store ? await scheduleMarketClose(store).catch(()=>({error:true})) : {enabled:false};
-    return NextResponse.json({ ok: true, data: { ...await runMarketUpdateTick(),maintenance,schedule } }, { headers: { 'Cache-Control': 'no-store' } });
+    const financialSchedule=process.env.MARKET_CLOSE_UPDATE_ENABLED==='1' && store ? await scheduleFinancialRefresh(store).catch(()=>({error:true})) : {enabled:false};
+    const audit=store ? await auditSavedMarketData(store).catch(()=>({error:true})) : {enabled:false};
+    return NextResponse.json({ ok: true, data: { ...await runMarketUpdateTick(),maintenance,schedule,financialSchedule,audit } }, { headers: { 'Cache-Control': 'no-store' } });
   }
   catch { return NextResponse.json({ ok: false, error: '后台更新暂不可用' }, { status: 503 }); }
 }

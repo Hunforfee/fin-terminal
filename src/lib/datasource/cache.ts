@@ -85,3 +85,10 @@ export function cacheStats(): { size: number; pending: number } {
   return { size: store.size, pending: inflight.size };
 }
 
+
+/** Also detach old in-flight requests so a late response cannot refill invalidated data. */
+export function invalidateSecurityCache(symbol:string):void {
+ const code=symbol.replace(/^(sh|sz|bj|hk)/,'');
+ for(const key of store.keys())if(key.includes(symbol) || key.includes(code))store.delete(key);
+ for(const key of inflight.keys())if(key.includes(symbol) || key.includes(code))inflight.delete(key);
+}

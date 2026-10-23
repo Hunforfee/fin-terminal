@@ -232,6 +232,8 @@ export interface ValuationStats {
 }
 
 export interface ValuationPoint {
+  /** Missing inputs are distinct from a valid loss/negative-equity observation. */
+  missingInputs?: ('shares' | 'profit-ttm' | 'equity')[];
   date: string;
   pe: number | null;
   pb: number | null;

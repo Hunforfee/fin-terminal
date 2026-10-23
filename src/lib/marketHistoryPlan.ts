@@ -22,6 +22,15 @@ export function historyStart(now = Date.now()) {
 export const financialEarliestYear = (now = Date.now()) =>
   new Date(now + 8 * 3600e3).getUTCFullYear() - HISTORY_YEARS - 1;
 export const reportCutoff = (now = Date.now()) => `${financialEarliestYear(now)}-01-01`;
+/** Only reports already due for a listed A share are mandatory. A nonempty
+ * imported annual page is not proof that all its published quarters are saved. */
+export function requiredFinancialReports(year: number, listingDate?: string, now = Date.now()): string[] {
+  const today = new Date(now + 8 * 3600e3).toISOString().slice(0, 10);
+  return [['03-31', `${year}-05-01`], ['06-30', `${year}-09-01`],
+    ['09-30', `${year}-11-01`], ['12-31', `${year + 1}-05-01`]]
+    .filter(([period, due]) => due <= today && (!listingDate || `${year}-${period}` >= listingDate))
+    .map(([period]) => `${year}-${period}`);
+}
 // Keep IDs 10–13 stable for existing gap records and the independent resolve API.
 export function financialYearForPhase(phase: number, now = Date.now()): number | null {
   const offset = phase >= 3 && phase <= 9 ? phase - 3 : phase >= 14 && phase <= 18 ? phase - 7 : null;

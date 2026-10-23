@@ -5,6 +5,7 @@ import { readRemoteMarketData, remoteMarketDataEnabled } from '../marketDataClie
 import { cachedValuationResult, valuationInputVersion, type ValuationCacheOptions } from '../valuationResultCache';
 import { sharedQuotes } from '../quoteInputs';
 import { getValuationPlans, getValuationDividends } from '../valuationInputs';
+import { getFinancialHistoryInput } from '../financialHistoryInputs';
 import { fetchHkRatioHistory, attachHkValuationHistory } from './hkValuationHistory';
 import { getWatchlistFinancialInputs, WATCHLIST_FINANCIAL_FIELDS } from '../watchlistFinancialInputs';
 import { cachedMarketInput as storedMarketInput, validateDatedRows } from '../marketInputs';
@@ -53,7 +54,6 @@ import {
   summarizeReal,
   seriesStats,
 } from '../valuation';
-import * as sinaFinStmt from './sinaFinStatements';
 import { buildDividendYieldByDate, adjustCandlesForChart } from '../analytics';
 import type { Candle, SeriesStats, Valuation, ValuationMethod, ValuationPoint, ValuationStats } from './types';
 import { INDICES, STOCKS, FUNDS, peersOf, industryOf } from '../universe';
@@ -433,7 +433,7 @@ export async function getMinute(input: string): Promise<MinutePoint[]> {
  * 历史序列用**已披露定期报告**还原当期 TTM EPS 与 BPS（见 `lib/valuation.ts`），
  * 价格为不复权收盘价 —— 与前复权价倒推的旧口径相比，不会因除权而低估历史 PE。
  */
-export async function getValuation(input: string, years = 5, method: ValuationMethod = 'disclosure', options: ValuationCacheOptions = {}): Promise<Valuation> {
+export async function getValuation(input: string, years = 10, method: ValuationMethod = 'disclosure', options: ValuationCacheOptions = {}): Promise<Valuation> {
   if (remoteMarketDataEnabled()) return readRemoteMarketData<Valuation>('valuation', { code: input, years, method });
   const n=normalizeStockCode(input);
   if(!n || n.kind!=='stock')throw Error('真实财报估值仅支持 A 股 / 港股股票');
@@ -453,7 +453,7 @@ export async function getValuation(input: string, years = 5, method: ValuationMe
       stale:!quote || quote.stale};
   } catch {return {...value,stale:true,warnings:[...(value.warnings??[]),'当前港股估值刷新失败，保留已保存数据，请留意日期。']};}
 }
-async function calculateValuation(input: string, years = 5, method: ValuationMethod = 'disclosure'): Promise<Valuation> {
+async function calculateValuation(input: string, years = 10, method: ValuationMethod = 'disclosure'): Promise<Valuation> {
   const n = normalizeStockCode(input);
   if (!n || n.kind !== 'stock') throw new Error('真实财报估值仅支持 A 股 / 港股股票');
   if (n.market === 'HK') {
@@ -485,8 +485,8 @@ async function calculateValuation(input: string, years = 5, method: ValuationMet
     // qfq 仅用于价格曲线；缺失时留空，不能缩短用 raw 计算的估值历史。
     const [q, points, shares, dates, dividends, plans] = await Promise.all([
       getQuote(n.symbol),
-      storedMarketInput(`statements-v3:${n.code}:${span + 1}`, 'financial-history', 'public-statements:CNY:yuan:current-revisions', 1800e3, () => sinaFinStmt.fetchStatementHistory(n.code, span + 1), rows => validateDatedRows(rows as unknown as Record<string, unknown>[], 'date', ['npParent', 'equityParent'])),
-      storedMarketInput(`shares-v3:${n.code}`, 'share-events', 'sina-shares:10000shares', 1800e3, () => sinaFinance.fetchShareHistory(n.code), rows => { validateDatedRows(rows as unknown as Record<string, unknown>[], 'date', ['sharesWan']); if (rows.some(r => !(r.sharesWan > 0))) throw Error('股本数值无效'); }),
+      getFinancialHistoryInput(n.code, span + 1),
+      storedMarketInput(`shares-v3:${n.code}`, 'share-events', 'public-shares:10000shares', 1800e3, () => sinaFinance.fetchShareHistory(n.code), rows => { validateDatedRows(rows as unknown as Record<string, unknown>[], 'date', ['sharesWan']); if (rows.some(r => !(r.sharesWan > 0))) throw Error('股本数值无效'); },sinaFinance.shareHistorySource),
       storedMarketInput(`disclosures-v3:${n.code}:${span + 2}`, 'disclosure-dates', 'sina+eastmoney:first-original-publication', 1800e3, () => fetchDisclosureDates(n.code, new Date().getUTCFullYear() - span - 2), dates => { if (!dates.size) throw Error('缺少原始公告日期'); const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10); for (const [report, published] of dates) if (!/^\d{4}-\d{2}-\d{2}$/.test(published) || published <= report || published > today) throw Error('公告日期无效'); }),
       getValuationDividends(n.code).catch(() => null),
       getValuationPlans(n.code).catch(() => null),
@@ -533,7 +533,7 @@ async function calculateValuation(input: string, years = 5, method: ValuationMet
     const missingDates = points.filter(p => !dates.has(p.date) && effectiveDate(p.date) >= cutoff && p.date <= last.date).length;
     if (missingDates) warnings.push(`${missingDates} 个报告期未取得原始公告日期，不用于建立新估值点。`);
     if (completePoints.some(p => !points.includes(p) && p.date >= cutoff)) warnings.push('部分已公告报告缺少财务金额，相应区间不计算估值。');
-    if (history.length < candles.length) warnings.push('部分交易日缺少已披露财报，估值不计算。');
+    if (history.length < candles.length || history.some(p => p.missingInputs?.length)) warnings.push('部分交易日缺少已披露财报、股本或财务金额，相应估值不计算。');
     const missingAdjusted = history.filter(p => p.close === null).length;
     if (missingAdjusted) warnings.push(`${missingAdjusted} 个交易日前复权价格缺失，价格曲线留空；估值仍按不复权价格与当日股本计算。`);
     if (raw.complete===false || Date.parse(history[0].date)-Date.parse(cutoff)>14*864e5) warnings.push('估值数据覆盖不足所选区间，请以实际起止日期和样本数为准。');
@@ -548,7 +548,7 @@ async function calculateValuation(input: string, years = 5, method: ValuationMet
         expectedPerShare: main.dividendYield === null ? null : main.dividendYield * lastRawClose / 100,
         staticPerShare: main.staticDividendYield === null ? null : main.staticDividendYield * lastRawClose / 100 },
       netProfit: lastFin?.npTTM ?? null,
-      netAssets: lastFin?.bps != null && lastFin.shares != null ? lastFin.bps * lastFin.shares : null,
+      netAssets: lastFin?.equityYi ?? (lastFin?.bps != null && lastFin.shares != null ? lastFin.bps * lastFin.shares : null),
       marketComparison: { pe: q.pe, pb: q.pb, ts: q.ts },
       fin: { report: lastFin?.report ?? null, npTTM: lastFin?.npTTM ?? null,
         shares: lastFin?.shares ?? null, bps: lastFin?.bps ?? null, points: points.length,
@@ -647,7 +647,7 @@ import * as sinaFinancial from './sinaFinancial';
  */
 export async function getFinancialCompare(
   codes: string[],
-  years = 5,
+  years = 10,
   granularity: sinaFinancial.Granularity = 'semi',
 ) {
   if (remoteMarketDataEnabled()) return readRemoteMarketData<{
@@ -757,7 +757,7 @@ function hkDefaultFields(catalog: { id: string; groups: { fields: { key: string 
 export async function getCustomFinancialCompare(
   codes: string[],
   fields: string[],
-  years = 5,
+  years = 10,
   granularity: sinaFinancial.Granularity = 'semi',
 ) {
   if (remoteMarketDataEnabled()) return readRemoteMarketData<{ companies: sinaStatements.CustomFinancials[] }>('finance-compare', {}, { codes, fields, years, granularity });

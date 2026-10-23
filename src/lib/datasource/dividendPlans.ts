@@ -1,4 +1,7 @@
 import { fetchJson, UpstreamError } from './http';
+import { cached } from './cache';
+import { normalizeStockCode } from './codes';
+import { databaseOnly, marketDataMissing } from '../marketReadPolicy';
 
 /** 每股金额均为税前；公告方案与已经除息的事件分开保存。 */
 export interface DividendPlan {
@@ -43,23 +46,44 @@ export function parseDividendPlans(rows: Row[]): DividendPlan[] {
 
 /** 方案包含董事会预案、零分红和实施方案；不把仅有政策上限的预披露当成具体金额。 */
 export async function fetchDividendPlans(code: string): Promise<DividendPlan[]> {
-  if (!/^\d{6}$/.test(code)) throw new Error('股票代码无效');
+  const plans = parseDividendPlans(await fetchDividendPlanRows(code));
+  if (!plans.length) throw new Error('缺少有效分红公告');
+  return plans;
+}
+/** Raw implementation and proposal readers share one bounded current response.
+ * This is not a persistent freshness layer or a database-mode fallback.
+ */
+export function fetchDividendPlanRows(code:string):Promise<Row[]>{
+  if(!/^\d{6}$/.test(code) || !normalizeStockCode(code))throw Error('股票代码无效');
+  if(databaseOnly())throw marketDataMissing('分红来源');
+  return cached(`dividend-raw:v1:${code}`,60e3,()=>fetchAllDividendPlanRows(code),{staleOnError:false});
+}
+async function fetchAllDividendPlanRows(code:string):Promise<Row[]>{
+  const n=normalizeStockCode(code)!,secucode=`${code}.${n.market}`;
   const rows: Row[] = [];
+  const signatures=new Set<string>();let pages:number|undefined,count:number|undefined;
   for (let page = 1; ; page++) {
     const url = new URL('https://datacenter-web.eastmoney.com/api/data/v1/get');
     url.search = new URLSearchParams({ reportName: 'RPT_SHAREBONUS_DET', columns: 'ALL',
       filter: `(SECURITY_CODE="${code}")`, pageSize: '100', pageNumber: String(page),
       sortColumns: 'PLAN_NOTICE_DATE,REPORT_DATE', sortTypes: '-1,-1' }).toString();
-    const data = await fetchJson<Response>(url.toString(), { timeoutMs: 15000 });
+    const data = await fetchJson<Response>(url.toString(), { timeoutMs: 12000,retries:0 });
     if (!data.success || !data.result || !Array.isArray(data.result.data) || !(data.result.pages >= 1)) {
       // 接口空响应也可能是限流或字段变化，不能当成确认不分红。
       throw new UpstreamError('分红方案数据不可用', url.toString(), 'parse');
     }
+    if(!Number.isSafeInteger(data.result.pages) || data.result.pages>20 || !Number.isSafeInteger(data.result.count) || data.result.count<1)
+      throw Error('分红来源分页元数据无效');
+    pages??=data.result.pages;count??=data.result.count;
+    const signature=JSON.stringify(data.result.data);
+    if(pages!==data.result.pages || count!==data.result.count || signatures.has(signature) || !data.result.data.length)
+      throw Error('分红来源分页不完整、重复或发生变化');
+    signatures.add(signature);
+    if(data.result.data.some(row=>row.SECUCODE!==secucode || row.SECURITY_CODE!==code))throw Error('分红来源证券身份不匹配');
     rows.push(...data.result.data);
     if (page >= data.result.pages) break;
     if (page >= 20) throw new UpstreamError('分红方案分页不完整', url.toString(), 'parse');
   }
-  const plans = parseDividendPlans(rows);
-  if (!plans.length) throw new Error('缺少有效分红公告');
-  return plans;
+  if(rows.length!==count)throw Error('分红来源记录数不完整');
+  return rows;
 }

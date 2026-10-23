@@ -5,6 +5,7 @@
 
 import { currentUpstreamBudget } from '../upstreamBudget';
 import { allowMarketNetwork, marketDataMissing } from '../marketReadPolicy';
+import { marketSourceCooldown } from './sourceCooldown';
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
@@ -40,10 +41,21 @@ export async function fetchText(url: string, opts: FetchOpts = {}): Promise<stri
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     const budget = currentUpstreamBudget();
+    budget?.signal.throwIfAborted();
+    const unavailable=()=>{
+      const state=marketSourceCooldown.active(url);
+      if(!state)return;
+      budget?.observe(state.status,url);
+      const reason=[403,429].includes(state.status)?'来源限流，冷却中': '来源冷却中';
+      throw new UpstreamError(state.status?`HTTP ${state.status} ${reason}，稍后重试`:'来源连接暂时不可用，稍后重试',url,state.status?'http':'timeout');
+    };
+    unavailable();
     const release = await budget?.enter(url);
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    let received=false;
     try {
+      unavailable(); // A queued request may have waited behind a failing request.
       const res = await fetch(url, {
         signal: budget ? AbortSignal.any([ctrl.signal, budget.signal]) : ctrl.signal,
         headers: {
@@ -54,7 +66,9 @@ export async function fetchText(url: string, opts: FetchOpts = {}): Promise<stri
         },
         cache: 'no-store',
       });
+      received=true;
       budget?.observe(res.status, url);
+      marketSourceCooldown.observe(url,res.status,res.headers.get('retry-after'));
       if (!res.ok && retryStatuses?.includes(res.status)) {
         // 命中可重试状态（如 WAF 501）：抛普通错误以便重试 / 交由上层切换数据源
         throw new Error(`HTTP ${res.status}`);
@@ -62,12 +76,15 @@ export async function fetchText(url: string, opts: FetchOpts = {}): Promise<stri
       if (!res.ok) throw new UpstreamError(`HTTP ${res.status}`, url, 'http');
       const buf = Buffer.from(await res.arrayBuffer());
       if (buf.length === 0) throw new UpstreamError('empty body', url, 'empty');
+      marketSourceCooldown.succeeded(url);
       return encoding === 'gbk' ? new TextDecoder('gbk').decode(buf) : buf.toString('utf-8');
     } catch (e) {
       lastErr = e;
       if (e instanceof Error && e.name === 'AbortError') {
         lastErr = new UpstreamError(`timeout ${timeoutMs}ms`, url, 'timeout');
       }
+      if(!received && !budget?.signal.aborted)marketSourceCooldown.failed(url);
+      if(marketSourceCooldown.active(url) || budget?.signal.aborted)break;
       // 最后一次尝试不再等待
       if (attempt < retries) await sleep(backoffMs * (attempt + 1));
     } finally {

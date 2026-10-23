@@ -109,12 +109,13 @@ function parseStatementPage(html: string): { dates: string[]; rows: ParsedRow[];
 }
 
 /** Shared source page: field catalogs, custom reports and valuation read the same rows. */
-export function fetchStatementSourcePage(code: string, id: StatementId, year: number) {
+export function fetchStatementSourcePage(code: string, id: StatementId, year: number, options: { forceRefresh?: boolean; requiredDates?: string[] } = {}) {
   if (!/^\d{6}$/.test(code) || !STATEMENT_META[id] || !Number.isInteger(year) || year < financialEarliestYear())
     throw Error('财报范围超出十年保留期限');
   const validate=(value:StatementSourcePage)=>{
     if(!value.dates.length || !value.rows.some(r=>r.kind==='field' && r.vals.some(v=>v!=null && v.trim()!=='' && Number.isFinite(Number(v.replaceAll(',','')))))
-      || value.dates.some(d=>!/^\d{4}-\d{2}-\d{2}$/.test(d)))throw Error('财报来源页缺少有效数据');
+      || value.dates.some(d=>!/^\d{4}-\d{2}-\d{2}$/.test(d))
+      || options.requiredDates?.some(d=>!value.dates.includes(d)))throw Error('财报来源页缺少有效数据或应有报告期');
   };
   return cachedMarketInput<StatementSourcePage>(`source-sina-page:v1:${code}:${id}:${year}`,'source-sina-page','sina:reported:wan',new Date().getUTCFullYear()-year<=1?1800e3:7*864e5,
     async()=>{
@@ -125,7 +126,7 @@ export function fetchStatementSourcePage(code: string, id: StatementId, year: nu
         try{return await fetchEastmoneyStatement(code,id,year);}
         catch(backup){throw Error(`公网财报均未取得有效数据（新浪：${primary instanceof Error?primary.message:'不可用'}；东方财富：${backup instanceof Error?backup.message:'不可用'}）`);}
       }
-    },validate,financialPageSource);
+    },validate,financialPageSource,options);
 }
 
 function stripTags(s: string): string {

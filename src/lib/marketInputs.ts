@@ -7,11 +7,12 @@ import { databaseOnly, marketDataMissing } from './marketReadPolicy';
 import { dividendIdentity, mergeHkDividendEvents } from './hkDividendEvents';
 
 export function cachedMarketInput<T>(key: string, kind: string, source: string, ttl: number,
-  producer: () => Promise<T>, validate: (value: T) => void, sourceOf?: (value: T) => string): Promise<T> {
+  producer: () => Promise<T>, validate: (value: T) => void, sourceOf?: (value: T) => string,
+  options: { forceRefresh?: boolean } = {}): Promise<T> {
   const store = getMarketStore();
   // The persistent record owns freshness. A second full TTL on a nearly expired
   // record would hide later writes and extend its effective lifetime.
-  if (store || databaseOnly()) return storedMarketInput(key, kind, source, ttl, producer, validate, store, Date.now(), sourceOf);
+  if (store || databaseOnly() || options.forceRefresh) return storedMarketInput(key, kind, source, ttl, producer, validate, store, Date.now(), sourceOf, options);
   return cached(`market-input:${key}`, ttl, () => storedMarketInput(key, kind, source, ttl, producer, validate, null, Date.now(), sourceOf));
 }
 
@@ -75,11 +76,12 @@ function mergeSourcePage(prior: any, next: any, priorSource: string, nextSource:
 }
 export async function storedMarketInput<T>(key: string, kind: string, source: string, ttl: number,
   producer: () => Promise<T>, validate: (value: T) => void,
-  store: MarketStore | null = getMarketStore(), now = Date.now(), sourceOf?: (value: T) => string): Promise<T> {
+  store: MarketStore | null = getMarketStore(), now = Date.now(), sourceOf?: (value: T) => string,
+  options: { forceRefresh?: boolean } = {}): Promise<T> {
   const owner = store ?? withoutStore;
   let pending = pendingInputs.get(owner);
   if (!pending) { pending = new Map(); pendingInputs.set(owner, pending); }
-  const identity = JSON.stringify([key, kind, source, ttl, databaseOnly()]);
+  const identity = JSON.stringify([key, kind, source, ttl, databaseOnly(), !!options.forceRefresh]);
   const existing = pending.get(identity);
   if (existing) { const value = await existing as T; validate(value); return value; }
   const work = (async()=>{
@@ -88,13 +90,13 @@ export async function storedMarketInput<T>(key: string, kind: string, source: st
         if (databaseOnly()) throw Error(`数据库读取或校验失败：${error instanceof Error ? error.message : String(error)}`);
         return null;
       });
-      if (row && (Date.parse(row.refreshAfter)>now || databaseOnly())) {
+      if (row && (!options.forceRefresh && Date.parse(row.refreshAfter)>now || databaseOnly())) {
         try { const value=retainMarketPayload(kind,decode<T>(row.payload),now);validate(value);return value; }
         catch (error) { if (databaseOnly()) throw Error(`数据库输入未通过校验：${error instanceof Error ? error.message : String(error)}`); }
       }
     }
     if (databaseOnly()) throw marketDataMissing('财务或分红输入');
-    return withMarketRefresh(store, key, () => readOrFetchInput(key, kind, source, ttl, producer, validate, store, now, sourceOf));
+    return withMarketRefresh(store, key, () => readOrFetchInput(key, kind, source, ttl, producer, validate, store, now, sourceOf, options));
   })()
     .finally(() => pending!.delete(identity));
   pending.set(identity, work);
@@ -102,12 +104,13 @@ export async function storedMarketInput<T>(key: string, kind: string, source: st
 }
 async function readOrFetchInput<T>(key: string, kind: string, source: string, ttl: number,
   producer: () => Promise<T>, validate: (value: T) => void,
-  store: MarketStore | null, now: number, sourceOf?: (value: T) => string): Promise<T> {
+  store: MarketStore | null, now: number, sourceOf?: (value: T) => string,
+  options: { forceRefresh?: boolean } = {}): Promise<T> {
   let old;
   if (store) {
     try {
       old = await store.read(key);
-      if (old && (Date.parse(old.refreshAfter) > now || databaseOnly())) {
+      if (old && (!options.forceRefresh && Date.parse(old.refreshAfter) > now || databaseOnly())) {
         const value = retainMarketPayload(kind, decode<T>(old.payload),now); validate(value); return value;
       }
     } catch { /* Store outage must not prevent source access. */ }
@@ -140,6 +143,25 @@ async function readOrFetchInput<T>(key: string, kind: string, source: string, tt
           }
           if (repaired) try { await store?.incident(key, 'source_amounts_partial', { key, keptFrom: 'local' }); } catch {}
         }
+        if(kind==='share-events')for(const row of prior){
+          const target=byDate.get(row.date);
+          if(!target || row.baseline || target.baseline || typeof row.sharesWan!=='number' || typeof target.sharesWan!=='number')continue;
+          const tolerance=Math.max(row.precisionShares??1,target.precisionShares??1)/2+.00001;
+          if(Math.abs(row.sharesWan-target.sharesWan)*1e4>tolerance)throw Error('实际股本来源冲突，未覆盖已有历史');
+        }
+      }
+      if(kind==='implemented-dividends' && Array.isArray(prior) && Array.isArray(next)){
+        const events=new Map(next.map(r=>[r.exDate,r]));
+        for(const row of prior){
+          const target=events.get(row.exDate);
+          if(!target){events.set(row.exDate,row);continue;}
+          const tolerance=Math.max(row.precisionPerShare??0,target.precisionPerShare??0)/2+1e-10;
+          if(Math.abs(row.perShare-target.perShare)>tolerance
+            || row.perShareStock!=null && target.perShareStock!=null && Math.abs(row.perShareStock-target.perShareStock)>1e-10)
+            throw Error('已实施分红来源冲突，未覆盖已有现金或送转记录');
+          if((row.precisionPerShare??0)<(target.precisionPerShare??0))events.set(row.exDate,row);
+        }
+        value=[...events.values()].sort((a,b)=>a.exDate.localeCompare(b.exDate)) as T;
       }
       // Same rule for disclosure maps: a thinner upstream reply must not erase
       // publication dates that are already verified and stored.

@@ -2,10 +2,9 @@ import { getMarketStore, marketRecord, type MarketStore } from './marketStore';
 import { getKLine, getValuation } from './datasource';
 import { fetchStatementSourcePage } from './datasource/sinaStatements';
 import { fetchIndicatorSourceYear } from './datasource/sinaFinancial';
-import { fetchStatementHistory } from './datasource/sinaFinStatements';
 import { fetchDisclosureDates } from './datasource/disclosures';
 import { fetchHkIndicatorPoints, fetchHkStatement } from './datasource/hkFinance';
-import { cachedMarketInput, validateDatedRows } from './marketInputs';
+import { cachedMarketInput } from './marketInputs';
 import { importedBarsKey, type ImportedBars } from './marketImportedBars';
 import { normalizeStockCode } from './datasource/codes';
 import { withUpstreamBudget } from './marketUpdateContext';
@@ -21,8 +20,9 @@ import { fetchDeductedPeriods } from './datasource/deductedPe';
 import { getSecurityBasics,securityBasicsKey,type SecurityBasics } from './marketSecurityBasics';
 import { applyGapClassification, classifyCoverage } from './marketFillGaps';
 import { completeHkStatement } from './marketHkStatements';
+import { rebuildFinancialHistoryInput } from './financialHistoryInputs';
 import { fetchHkRatioHistory, hkRatioHistoryKey, hkValuationHistoryCovered } from './datasource/hkValuationHistory';
-import { HISTORY_YEARS, HISTORY_BAR_COUNT, FINANCIAL_LOOKBACK, historyStart, financialYearForPhase, coverageKey } from './marketHistoryPlan';
+import { HISTORY_YEARS, HISTORY_BAR_COUNT, FINANCIAL_LOOKBACK, historyStart, financialYearForPhase, coverageKey, requiredFinancialReports } from './marketHistoryPlan';
 
 export const COLLECTION_LAST_PHASE=18;
 export { coverageKey, historyStart };
@@ -58,12 +58,19 @@ export async function collectHistoryPhase(symbol:string,phase:number,signal:Abor
       const basics=await store.read<SecurityBasics>(securityBasicsKey(symbol));
       const listingDate=basics?.payload.listingDate??imported?.payload.listingDate;
       if(listingDate && year<Number(listingDate.slice(0,4)))return;
+      const requiredDates=requiredFinancialReports(year,listingDate);
       for(const id of ['balance','profit','cashflow'] as const){
-        await fetchStatementSourcePage(n.code,id,year);
-        await persistCheck(store,`source-sina-page:v1:${n.code}:${id}:${year}`);
+        let page=await fetchStatementSourcePage(n.code,id,year);
+        if(requiredDates.some(date=>!page.dates.includes(date)))page=await fetchStatementSourcePage(n.code,id,year,{forceRefresh:true,requiredDates});
+        if(requiredDates.some(date=>!page.dates.includes(date)))throw Error(`${year} 年${id}财报仍缺少已到披露期限的报告期`);
+        const stored=await persistCheck(store,`source-sina-page:v1:${n.code}:${id}:${year}`);
+        if(requiredDates.some(date=>!(stored.payload as {dates:string[]}).dates.includes(date)))throw Error(`${year} 年${id}完整报告期尚未确认入库`);
       }
-      await fetchIndicatorSourceYear(n.code,year);
-      await persistCheck(store,`source-sina-indicators:v1:${n.code}:${year}`);
+      let indicators=await fetchIndicatorSourceYear(n.code,year);
+      if(requiredDates.some(date=>!indicators.dates.includes(date)))indicators=await fetchIndicatorSourceYear(n.code,year,{forceRefresh:true});
+      if(requiredDates.some(date=>!indicators.dates.includes(date)))throw Error(`${year} 年财务指标仍缺少已到披露期限的报告期`);
+      const storedIndicators=await persistCheck(store,`source-sina-indicators:v1:${n.code}:${year}`);
+      if(requiredDates.some(date=>!(storedIndicators.payload as {dates:string[]}).dates.includes(date)))throw Error(`${year} 年完整财务指标尚未确认入库`);
     }
   }else if((phase===10 || phase===11) && n.market==='HK'){
     const metric=phase===10?'pe':'pb';
@@ -73,8 +80,7 @@ export async function collectHistoryPhase(symbol:string,phase:number,signal:Abor
     }
   }else if(phase===10 && n.market!=='HK'){
     for(const span of [HISTORY_YEARS,5]) {
-      await cachedMarketInput(`statements-v3:${n.code}:${span+1}`,'financial-history','public-statements:CNY:yuan:current-revisions',1800e3,
-        ()=>withUpstreamBudget(new UpstreamBudget(signal,1500,40,true),()=>fetchStatementHistory(n.code,span+1)),rows=>validateDatedRows(rows as unknown as Record<string,unknown>[],'date',['npParent','equityParent']));
+      await rebuildFinancialHistoryInput(n.code,span+1,store);
       // A broader input may be reused without copying it to the narrower key.
       await persistCheck(store,`statements-v3:${n.code}:${HISTORY_YEARS+1}`);
     }
@@ -114,7 +120,11 @@ export async function collectHistoryPhase(symbol:string,phase:number,signal:Abor
           for(const id of ['balance','profit','cashflow'])required.push(`source-sina-page:v1:${n.code}:${id}:${year}`);
           required.push(`source-sina-indicators:v1:${n.code}:${year}`);
         }
-        for(const key of required)if(!await store.read(key))missingInputs.push(key);
+        for(const key of required){
+          const row=await store.read(key);
+          const annual=key.match(/^source-sina-(?:page:v1:\d+:\w+|indicators:v1:\d+):(\d{4})$/);
+          if(!row || annual && requiredFinancialReports(Number(annual[1]),listingDate).some(date=>!(row.payload as {dates?:string[]}).dates?.includes(date)))missingInputs.push(key);
+        }
       }else{
         const secucode=`${n.code}.HK`;
         const required=[`source-hk-indicators:v1:${secucode}`,`watchlist-financial-inputs:v1:${symbol}`,
@@ -137,7 +147,8 @@ export async function collectHistoryPhase(symbol:string,phase:number,signal:Abor
         // Warm both visible chart ranges from saved inputs after the update.
         await getValuation(symbol,5,'disclosure',{force:true}).catch(()=>null);
         valuationMissing=n.market==='HK' ? !hkValuationHistoryCovered(valuation,expected,prices.candles.at(-1)!.date)
-          : !valuation.history.length || valuation.history[0].date>prices.candles[0].date || valuation.history.length<prices.candles.length;
+          : !valuation.history.length || valuation.history[0].date>prices.candles[0].date || valuation.history.length<prices.candles.length
+            || valuation.history.some(p=>p.missingInputs?.length);
       }catch(error){valuationMissing=true;valuationError=error instanceof Error?error.message:'估值输入未通过校验';}
       const gaps=[...(!rangeCovered?['历史起点覆盖不足，或缺少已核实的上市日期']:[]),...(valuationMissing?[n.market==='HK'?'港股历史估值样本暂缺、过旧或覆盖不足':'部分交易日缺少已披露财报、股本或复权数据']:[]),
         ...(missingInputs.length?[`${missingInputs.length} 项财报或分红基础数据尚未入库`]:[]),

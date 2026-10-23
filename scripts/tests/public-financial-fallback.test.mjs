@@ -10,6 +10,7 @@ const {clearCache}=await load('datasource/cache');
 const {UpstreamBudget}=await load('upstreamBudget');
 const {withUpstreamBudget}=await load('marketUpdateContext');
 const {retainMarketPayload}=await load('marketRetention');
+const {marketSourceCooldown}=await load('datasource/sourceCooldown');
 const now=Date.parse('2026-10-23T04:00:00Z');
 const row=(code='600519',market='SH')=>({SECUCODE:`${code}.${market}`,SECURITY_CODE:code,CURRENCY:'CNY',
   REPORT_DATE:'2025-03-31 00:00:00',NOTICE_DATE:'2025-04-20 00:00:00',UPDATE_DATE:'2026-04-20 00:00:00',
@@ -21,7 +22,7 @@ const memory=()=>{const rows=new Map();return {rows,read:async k=>structuredClon
 const restoreEnv=values=>{for(const [k,v] of Object.entries(values))if(v===undefined)delete process.env[k];else process.env[k]=v;};
 async function networkFixture(run,primaryStatus=200){
   const original=globalThis.fetch,env=Object.fromEntries(['MARKET_READ_MODE','MARKET_DATA_STORE','MARKET_DATA_MODE'].map(k=>[k,process.env[k]]));
-  process.env.MARKET_DATA_STORE='off';delete process.env.MARKET_READ_MODE;delete process.env.MARKET_DATA_MODE;clearCache();
+  process.env.MARKET_DATA_STORE='off';delete process.env.MARKET_READ_MODE;delete process.env.MARKET_DATA_MODE;clearCache();marketSourceCooldown.clear();
   const calls=[];
   globalThis.fetch=async raw=>{
     const url=new URL(String(raw));calls.push(url);
@@ -30,7 +31,7 @@ async function networkFixture(run,primaryStatus=200){
     const [,code,market]=url.searchParams.get('filter').match(/SECUCODE="(\d+)\.(SH|SZ|BJ)"/);
     return Response.json({success:true,result:{data:[row(code,market)],pages:1}});
   };
-  try{return await run(calls);}finally{globalThis.fetch=original;restoreEnv(env);clearCache();}
+  try{return await run(calls);}finally{globalThis.fetch=original;restoreEnv(env);clearCache();marketSourceCooldown.clear();}
 }
 
 test('fallback keeps CNY amounts, real zero cash flows and per-share units distinct',()=>{

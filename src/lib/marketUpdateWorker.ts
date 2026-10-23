@@ -7,7 +7,7 @@ import { normalizeStockCode } from './datasource/codes';
 import { fetchValueScreenReports, getValueScreenMeta } from './datasource/valueScreen';
 import { getValuationDividends, getValuationPlans } from './valuationInputs';
 import { cachedMarketInput, validateDatedRows } from './marketInputs';
-import { fetchShareHistory } from './datasource/sinaFinance';
+import { fetchShareHistory, shareHistorySource } from './datasource/sinaFinance';
 import { getWatchlistFinancialInputs } from './watchlistFinancialInputs';
 import { collectHistoryPhase, coverageKey } from './marketHistoryCollection';
 import { recordGapAfterFailure } from './marketFillGaps';
@@ -63,10 +63,10 @@ export async function runMarketUpdateTick() {
         const events = await getValuationDividends(n.code);
         const previousYear = new Date(); previousYear.setUTCFullYear(previousYear.getUTCFullYear() - 1);
         if (events.some(e => e.cashConflict && e.exDate >= previousYear.toISOString().slice(0, 10))) throw Error('近期分红来源存在冲突，未按成功处理');
-        await cachedMarketInput(`shares-v3:${n.code}`, 'share-events', 'sina-shares:10000shares', 1800e3, () => fetchShareHistory(n.code), rows => {
+        await cachedMarketInput(`shares-v3:${n.code}`, 'share-events', 'public-shares:10000shares', 1800e3, () => fetchShareHistory(n.code), rows => {
           validateDatedRows(rows as unknown as Record<string, unknown>[], 'date', ['sharesWan']);
           if (rows.some(r => !(r.sharesWan > 0))) throw Error('股本数值无效');
-        });
+        },shareHistorySource);
         for (const key of [`dividend-plans-v2:${n.code}`, `implemented-dividends-v4:${n.code}`, `shares-v3:${n.code}`]) {
           const row = await store.read(key);
           if (!row || Date.parse(row.refreshAfter) <= Date.now()) throw Error('分红记录尚未确认入库');

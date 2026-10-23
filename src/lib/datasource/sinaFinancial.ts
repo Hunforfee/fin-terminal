@@ -160,7 +160,7 @@ export async function fetchSinaFinancial(
 }
 
 /** Annual source unit for bounded background collection; foreground readers share these rows. */
-export function fetchIndicatorSourceYear(code:string,year:number){
+export function fetchIndicatorSourceYear(code:string,year:number,options: { forceRefresh?: boolean } = {}){
   const url=URL_TEMPLATE.replace('{code}',code).replace('{year}',String(year));
   const age=new Date().getUTCFullYear()-year;
   const validate=(value:IndicatorSourcePage)=>{if(!value.dates.length || !value.rows.size
@@ -172,7 +172,7 @@ export function fetchIndicatorSourceYear(code:string,year:number){
         try{return await fetchEastmoneyIndicators(code,year);}
         catch(backup){throw Error(`公网财务指标均不可用（新浪：${primary instanceof Error?primary.message:'不可用'}；东方财富：${backup instanceof Error?backup.message:'不可用'}）`);}
       }
-    },validate,value=>financialPageSource(value,'sina:reported-indicators'));
+    },validate,value=>financialPageSource(value,'sina:reported-indicators'),options);
 }
 
 /**

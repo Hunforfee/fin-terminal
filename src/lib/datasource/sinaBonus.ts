@@ -11,6 +11,7 @@
  */
 
 import { fetchText } from './http';
+import { fetchEastmoneyImplementedDividends } from './eastmoneyBonus';
 
 export const PROVIDER_NAME = 'sina-bonus';
 
@@ -23,16 +24,28 @@ export interface DividendEvent {
   perShareStock?: number;
   /** Monetary resolution of this source's displayed amount, CNY/share. */
   precisionPerShare?: number;
-  cashSource?: 'sina' | 'sina+eastmoney-rounding-reconciled';
+  cashSource?: 'sina' | 'sina+eastmoney-rounding-reconciled' | 'eastmoney-implemented';
+  implementationEvidence?: { reportDate:string; noticeDate:string; profile:string }[];
   /** Unresolved values remain evidence, and MUST NOT enter rolling cash-yield sums. */
   cashConflict?: { sina: number; eastmoney: number };
 }
 
 /** 抓取并解析分红事件（仅「实施」），按除权日升序 */
 export async function fetchDividends(code: string): Promise<DividendEvent[]> {
+  if(!/^\d{6}$/.test(code))throw Error('分红股票代码无效');
   const url = `https://money.finance.sina.com.cn/corp/go.php/vISSUE_ShareBonus/stockid/${code}.phtml`;
-  const html = await fetchText(url, { timeoutMs: 15000, encoding: 'gbk' });
-  return parseBonusPage(html);
+  try{
+    const html = await fetchText(url, { timeoutMs: 10000, encoding: 'gbk',retries:0 });
+    const events=parseBonusPage(html);
+    if(!events.length)throw Error('新浪未返回已实施分红');
+    return events;
+  }catch(primary){
+    try{
+      const events=await fetchEastmoneyImplementedDividends(code);
+      if(!events.length)throw Error('东方财富未返回可核验的已实施分红');
+      return events;
+    }catch(backup){throw Error(`公网已实施分红均不可用（新浪：${primary instanceof Error?primary.message:'不可用'}；东方财富：${backup instanceof Error?backup.message:'不可用'}）`);}
+  }
 }
 
 export function parseBonusPage(html: string): DividendEvent[] {

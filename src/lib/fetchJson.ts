@@ -17,7 +17,7 @@ export class FetchJsonError extends Error {
 }
 
 /** 取 JSON；空 body / 非 JSON / 非 2xx 一律抛出带可读信息的 FetchJsonError（AbortError 原样抛出，保留取消语义） */
-export async function fetchJson<T = any>(input: string, init?: RequestInit): Promise<T> {
+async function readJson<T = any>(input: string, init?: RequestInit): Promise<T> {
   const isAbort = (e: unknown): boolean => e instanceof Error && e.name === 'AbortError';
   let response: Response;
   try {
@@ -49,4 +49,19 @@ export async function fetchJson<T = any>(input: string, init?: RequestInit): Pro
   } catch {
     throw new FetchJsonError('服务返回的数据无法解析，请稍后重试', response.status);
   }
+}
+
+/** Bound both headers and body reads; navigation cancellation retains AbortError semantics. */
+export async function fetchJson<T = any>(input: string, init?: RequestInit, timeoutMs?: number): Promise<T> {
+  if (timeoutMs === undefined) return readJson<T>(input, init);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await readJson<T>(input, { ...init, signal: init?.signal
+      ? AbortSignal.any([init.signal, controller.signal]) : controller.signal });
+  } catch (error) {
+    if (init?.signal?.aborted) throw error;
+    if (controller.signal.aborted) throw new FetchJsonError('请求超时，请稍后重试', 0);
+    throw error;
+  } finally { clearTimeout(timer); }
 }

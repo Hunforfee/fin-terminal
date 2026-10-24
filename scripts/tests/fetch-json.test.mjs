@@ -68,3 +68,13 @@ test('fetchJson: AbortError 原样抛出，保留取消语义', async () => {
   stubFetch(async () => { throw abortErr; });
   await assert.rejects(fetchJson('/api/x'), (e) => e === abortErr && e.name === 'AbortError');
 });
+
+test('fetchJson: timeout bounds response headers and body, while caller cancellation is preserved', async()=>{
+  stubFetch(async(_input,{signal})=>new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true})));
+  await assert.rejects(fetchJson('/api/x',undefined,10), /请求超时/);
+  stubFetch(async(_input,{signal})=>({ok:true,status:200,text:()=>{signal.throwIfAborted();return new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));}}));
+  await assert.rejects(fetchJson('/api/x',undefined,10), /请求超时/);
+  const controller=new AbortController();
+  const pending=fetchJson('/api/x',{signal:controller.signal},1000);controller.abort();
+  await assert.rejects(pending,{name:'AbortError'});
+});

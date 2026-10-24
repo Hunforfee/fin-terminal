@@ -99,6 +99,10 @@ export default function ResearchDesk({
   const [finLoading, setFinLoading] = useState(false);
   const [error, setError] = useState('');
   const [finErrors, setFinErrors] = useState<string[]>([]);
+  const [finPending, setFinPending] = useState<string[]>([]);
+  const [finRetryVersion, setFinRetryVersion] = useState(0);
+  const [finPollPaused, setFinPollPaused] = useState(false);
+  const [finReasons, setFinReasons] = useState<Record<string,string>>({});
   const priority=useRef<string[]>([]);
   const hydratedFor=useRef<string|null>(null);
   const hasSnapshot=useRef(false);
@@ -281,7 +285,13 @@ export default function ResearchDesk({
     if (!ready) return;
     let alive = true;
     const controller=new AbortController(),limited=requestLimiter(2,controller.signal);
-    const read=(url:string,init?:RequestInit)=>limited(()=>fetch(url,{...init,signal:controller.signal}).then(r=>r.json()));
+    const read=(url:string,init?:RequestInit)=>limited(async()=>{
+      try { return await fetchJson(url,{...init,signal:controller.signal},20_000); }
+      catch(error) {
+        if(controller.signal.aborted)throw error;
+        throw Error(`${url.split('?')[0]}：${error instanceof Error?error.message:'请求失败'}`);
+      }
+    });
     const metricTimers=new Set<ReturnType<typeof setTimeout>>();
     type MetricRow={symbol:string;dy?:number|null;pe?:number|null;calculatedAt?:string;stale?:boolean};
     const applyMetrics=(rows:MetricRow[],metric:'dy'|'peDeducted')=>{
@@ -305,7 +315,7 @@ export default function ResearchDesk({
       ),
     );
     setError('');
-    setFinErrors([]);setReadStatus({});
+    setFinErrors([]);setFinReasons({});setFinPending([]);setReadStatus({});
     setLoading(!hasSnapshot.current);
     setFinLoading(false);
     async function load() {
@@ -325,6 +335,7 @@ export default function ResearchDesk({
         const waitingQuotes=new Set(codes);
         while(waitingQuotes.size && alive) {
           const batch = takePrioritized(waitingQuotes,priority.current,100);
+          try {
           const q = await read(
             `/api/quote?codes=${encodeURIComponent(batch.join(','))}`,
           );
@@ -335,6 +346,12 @@ export default function ResearchDesk({
           const merged=(previous:Quote[],kind:boolean)=>[...previous.filter(q=>codes.includes(q.symbol) && !all.some(next=>next.symbol===q.symbol)),...all.filter(q=>(q.kind==='stock')===kind)];
           setQuotes(prev=>merged(prev,true));setOtherAssets(prev=>merged(prev,false));
           setLoading(false);
+          } catch(error) {
+            if(!alive)return;
+            setError(error instanceof Error?error.message:'部分行情刷新失败');
+            // The failed batch is already removed; later batches still run.
+          }
+
         }
         setLoading(false);
         }
@@ -359,9 +376,12 @@ export default function ResearchDesk({
                 if (!alive) return;
                 if (!j.ok) throw Error(j.error ?? '财报获取失败');
                 setReadStatus(prev=>({dataStatus:{snapshots:[...(prev.dataStatus?.snapshots??[]),...(j.data.dataStatus?.snapshots??[])],persistenceFailed:[...(prev.dataStatus?.persistenceFailed??[]),...(j.data.dataStatus?.persistenceFailed??[])]}}));
+                const updating=j.data.companies.filter((c:Financial & {refresh?:{state:string}})=>['pending','busy'].includes(c.refresh?.state??''));
+                setFinPending(prev=>[...new Set([...prev,...updating.map((c:Financial)=>c.code)])]);
                 const failed=new Set((j.data.errors??[]).map((e:{code:string})=>e.code));
+                setFinReasons(prev=>({...prev,...Object.fromEntries((j.data.errors??[]).map((e:{code:string;error:string})=>[e.code,e.error]))}));
                 if(failed.size)setFinErrors(prev=>[...new Set([...prev,...batch.filter(r=>failed.has(normalizeCode(r.symbol)?.code??r.symbol)).map(r=>r.name)])]);
-                j.data.companies=j.data.companies.filter((c:Financial)=>!failed.has(c.code));
+                j.data.companies=j.data.companies.filter((c:Financial)=>c.periods?.length);
                 setFinancials((prev) => [
                   ...prev.filter(
                     (f) =>
@@ -371,7 +391,8 @@ export default function ResearchDesk({
                   ),
                   ...j.data.companies,
                 ]);
-              } catch {
+              } catch (error) {
+                if(alive)setFinReasons(prev=>({...prev,...Object.fromEntries(batch.map(r=>[normalizeCode(r.symbol)?.code??r.symbol,error instanceof Error?error.message:'财报刷新失败']))}));
                 if (alive)
                   setFinErrors((prev) => [
                     ...prev,
@@ -501,37 +522,65 @@ export default function ResearchDesk({
   const visibleSignature = pageRows.map(q => q.symbol).join(',');
   priority.current=[...new Set([...pageRows.map(q=>q.symbol),...savedCodes])];
   useEffect(() => {
-    if (!updateVersion || !visibleSignature) return;
+    if (!ready || !visibleSignature) return;
     const controller = new AbortController();
     const symbols = visibleSignature.split(',');
-    const read = (url: string, init?: RequestInit) => fetchJson(url, { ...init, signal: controller.signal });
-    // Completion refreshes only the visible page. Do not restart the full
-    // watchlist loader or interrupt its existing sequential requests.
-    void (async () => {
-      try {
-        const q = await read(`/api/quote?codes=${encodeURIComponent(visibleSignature)}`);
-        if (q.ok && Array.isArray(q.data)) {
-          const fresh = new Map<string, Quote>(q.data.map((v: Quote) => [v.symbol, v]));
-          setQuotes(prev => prev.map(v => fresh.get(v.symbol) ?? v));
+    setFinPollPaused(false);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let attempts=0;
+    const read = (url: string, init?: RequestInit) => fetchJson(url, { ...init, signal: controller.signal },20_000);
+    const poll = async () => {
+      let pending=false;
+      for (let i=0;i<symbols.length && !controller.signal.aborted;i+=4) {
+        const batch=symbols.slice(i,i+4), codes=batch.map(s=>normalizeCode(s)?.code??s);
+        try {
+          const f=await read('/api/finance-compare',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({codes:batch,years:2,granularity:'quarter',fields:['roe','netMargin','ocfPerShare','debtRatio']})});
+          if(controller.signal.aborted)return;
+          if(!f.ok || !Array.isArray(f.data?.companies))throw Error(f.error??'财报响应格式错误');
+          setError(prev=>prev.startsWith('/api/finance-compare：')?'':prev);
+          const companies=f.data.companies;
+          const updating=companies.filter((c:Financial & {refresh?:{state:string}})=>['pending','busy'].includes(c.refresh?.state??''));
+          const failed=new Set((f.data.errors??[]).map((e:{code:string})=>e.code));
+          setFinReasons(prev=>({...Object.fromEntries(Object.entries(prev).filter(([code])=>!codes.includes(code))),...Object.fromEntries((f.data.errors??[]).map((e:{code:string;error:string})=>[e.code,e.error]))}));
+          pending ||= updating.length>0;
+          setFinPending(prev=>[...prev.filter(c=>!codes.includes(c)),...updating.map((c:Financial)=>c.code)]);
+          const names=batch.map(s=>quotes.find(q=>q.symbol===s)?.name??s);
+          setFinErrors(prev=>[...prev.filter(name=>!names.includes(name)),...batch.filter(s=>failed.has(normalizeCode(s)?.code??s)).map(s=>quotes.find(q=>q.symbol===s)?.name??s)]);
+          const available=companies.filter((c:Financial)=>c.periods?.length);
+          setFinancials(prev=>[...prev.filter(v=>!available.some((c:Financial)=>c.code===v.code)),...available]);
+          setReadStatus(prev=>({dataStatus:{snapshots:[...(prev.dataStatus?.snapshots??[]).filter(s=>!codes.some(code=>s.key.includes(code))),...(f.data.dataStatus?.snapshots??[])],persistenceFailed:[...new Set([...(prev.dataStatus?.persistenceFailed??[]),...(f.data.dataStatus?.persistenceFailed??[])])]}}));
+        } catch(error) {
+          if(controller.signal.aborted)return;
+          pending=true;
+          setError(`/api/finance-compare：${error instanceof Error?error.message:'刷新失败'}`);
         }
-        for (let i = 0; i < symbols.length && !controller.signal.aborted; i += 4) {
-          const f = await read('/api/finance-compare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codes: symbols.slice(i, i + 4), years: 2, granularity: 'quarter', fields: ['roe', 'netMargin', 'ocfPerShare', 'debtRatio'] }) });
-          if (f.ok && Array.isArray(f.data?.companies)) setFinancials(prev => [...prev.filter(v => !f.data.companies.some((n: Financial) => n.code === v.code)), ...f.data.companies]);
+      }
+      // Bounded polling only for the visible page; switching pages cancels it.
+      if(pending && !controller.signal.aborted) {
+        if(++attempts<18)timer=setTimeout(()=>void poll(),5000);
+        else setFinPollPaused(true);
+      }
+    };
+    // Initial loading already requests this page; avoid duplicating those batches.
+    timer=setTimeout(()=>void poll(),updateVersion?0:5000);
+    if(updateVersion || finRetryVersion) {
+      void read(`/api/quote?codes=${encodeURIComponent(visibleSignature)}`).then(q=>{
+        if(!controller.signal.aborted && q.ok && Array.isArray(q.data)) {
+          const fresh=new Map<string,Quote>(q.data.map((v:Quote)=>[v.symbol,v]));
+          setQuotes(prev=>prev.map(v=>fresh.get(v.symbol)??v));
+          setError(prev=>prev.startsWith('/api/quote：')?'':prev);
         }
-        if (controller.signal.aborted) return;
-        const dividends = await read(`/api/dividend-yield?codes=${encodeURIComponent(visibleSignature)}`);
-        if (dividends.ok && Array.isArray(dividends.data)) setDividendYields(prev => {
-          const next = new Map(prev); for (const row of dividends.data) next.set(row.symbol, row.dy); return next;
-        });
-        if (controller.signal.aborted) return;
-        const deducted = await read(`/api/deducted-pe?codes=${encodeURIComponent(visibleSignature)}`);
-        if (deducted.ok && Array.isArray(deducted.data)) setDeductedPes(prev => {
-          const next = new Map(prev); for (const row of deducted.data) next.set(row.symbol, row.pe); return next;
-        });
-      } catch { /* Keep dated prior rows if a display-only refresh is unavailable. */ }
-    })();
-    return () => controller.abort();
-  }, [updateVersion, visibleSignature]);
+      }).catch(()=>{});
+      for(const [path,metric] of [['dividend-yield','dy'],['deducted-pe','pe']] as const) {
+        void read(`/api/${path}?codes=${encodeURIComponent(visibleSignature)}`).then(j=>{
+          if(controller.signal.aborted || !j.ok || !Array.isArray(j.data))return;
+          const update=(prev:Map<string,number|null>)=>{const next=new Map(prev);for(const row of j.data)next.set(row.symbol,row[metric]??null);return next;};
+          if(metric==='dy')setDividendYields(update);else setDeductedPes(update);
+        }).catch(()=>{});
+      }
+    }
+    return()=>{controller.abort();clearTimeout(timer);};
+  },[updateVersion,visibleSignature,ready,owner,finRetryVersion]); // eslint-disable-line react-hooks/exhaustive-deps
   // 翻页后列表不再有内部滚动条，把整个表格滚回视口顶部
   const goToPage = (p: number) => {
     // 用绝对行位置换算（不能用「页码 × 每页行数」以外的旧值，缩放后 pageSize 已改变）
@@ -1054,11 +1103,14 @@ export default function ResearchDesk({
         <div className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-2 border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
           {snapshotAt && <span title="首次显示上次保存的数据，行情时间与财报报告期以各行显示为准">已显示缓存 · 保存于 {new Date(snapshotAt).toLocaleString('zh-CN',{hour12:false})}</span>}
           {finLoading && <span role="status">财报后台刷新中，优先处理当前页…</span>}
+          {finPending.length > 0 && <span role="status">{finPending.length} 家财报等待后台更新，{finPollPaused?'自动重查已暂停，可点击重试。':'当前页会自动重查。'}</span>}
+          {(finPollPaused || finErrors.length > 0 || error) && <button type="button" className="text-blue-600 hover:underline" onClick={()=>visibleSignature?setFinRetryVersion(v=>v+1):window.location.reload()}>{visibleSignature?'重查当前页':'重新加载'}</button>}
           {finErrors.length > 0 && (
             <span className="text-amber-700" title={finErrors.join('、')}>
               财报更新暂不可用，已显示的数值可能为上次结果：{finErrors.length} 家公司
             </span>
           )}
+          {Object.keys(finReasons).length>0 && <details className="basis-full text-amber-700"><summary className="cursor-pointer">查看财报失败原因</summary><ul>{Object.entries(finReasons).slice(0,20).map(([code,reason])=><li key={code}>{code}：{reason}</li>)}</ul>{Object.keys(finReasons).length>20 && <p>其余公司可切换到对应页面重查。</p>}</details>}
           {rows.length > pageSize ? (
             <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
               <span className="tabular">

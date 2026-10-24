@@ -1,5 +1,7 @@
 import { HISTORY_YEARS } from '@/lib/marketHistoryPlan';
-import type { NextRequest } from 'next/server';
+import { after, type NextRequest } from 'next/server';
+import { getWatchlistFinancialDisplay } from '@/lib/watchlistFinancialDisplay';
+import { WATCHLIST_FINANCIAL_FIELDS } from '@/lib/watchlistFinancialInputs';
 import { marketOk, fail, sp } from '@/lib/api';
 import { getFinancialCompare, getCustomFinancialCompare } from '@/lib/datasource';
 
@@ -33,6 +35,9 @@ async function readComparison(p: URLSearchParams) {
   if (fields.length > 512) return fail('最多支持 512 个原始字段', 400);
 
   try {
+    const watchlist = years === 2 && granularity === 'quarter' && fields.length === WATCHLIST_FINANCIAL_FIELDS.length
+      && WATCHLIST_FINANCIAL_FIELDS.every(field => fields.includes(field));
+    if (watchlist) return await marketOk(() => getWatchlistFinancialDisplay(list, work => after(work)));
     if (fields.length > 0) {
       return await marketOk(() => getCustomFinancialCompare(list, fields, years, granularity));
     }

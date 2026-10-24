@@ -283,6 +283,8 @@ if __name__ == "__main__":
             print(__doc__)
             sys.exit(1)
         sys.exit(prune(args[1], int(args[2]), args[3] if len(args) > 3 else ""))
+    if args and args[0] == "upload":
+        args = args[1:]  # 兼容 "upload <文件> [fid]" 子命令形式
 
     if len(args) < 1:
         print(__doc__)

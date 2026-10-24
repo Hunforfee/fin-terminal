@@ -154,7 +154,71 @@ docker compose --env-file deploy/.env.deploy stop postgres     # 再停数据库
 
 ---
 
-## 八、数据迁移（从既有服务器搬到新服务器）
+## 八、进程托管与保活（单机/沙箱部署）
+
+不用 Docker 的单机场景（含沙箱/开发机），最大的运维风险不是配置错误，而是
+**进程被平台回收后无人拉起**。本仓库的生产沙箱实测：平台会在固定时刻
+（20:08 / 21:33）SIGKILL 回收未注册进程，`watchdog + cron` 两层保活会因自身
+一并被杀而失效，PostgreSQL 两次非正常退出（日志无 FATAL/PANIC，直接断在
+checkpoint 中途，属硬杀特征）。
+
+**正解：把服务注册进平台的进程管理器**，由它 `autorestart=true` 自动拉起。
+
+### 8.1 平台 supervisord drop-in（本沙箱实际采用）
+
+平台用 supervisord（docker-init 之上）托管自身组件，主配置
+`[include] files = .../supervisord-conf/*.conf` 支持 drop-in，放入文件后
+**无需重启平台**即可生效：
+
+```bash
+# 1. 放入 drop-in 目录（路径按平台实际调整）
+cp deploy/supervisor/fin-terminal.conf /path/to/supervisord-conf/
+
+# 2. 让 supervisord 重新读取配置（返回 [新增组, 变更组, 移除组]）
+supervisorctl reread        # 无 supervisorctl 时走 XML-RPC：supervisor.reloadConfig()
+
+# 3. 启动新增组（参数为 组名:进程名）
+supervisorctl update        # 等价于对每个变更组 addProcessToGroup
+```
+
+模板见 `deploy/supervisor/fin-terminal.conf`，注册五个程序：
+`fin-postgres`（前台 postgres，`user=postgres`，`stopsignal=INT`）、
+`fin-viewer`（3112）、`fin-web`（3000）、`fin-worker`
+（bash 加载 `.env.local` 后 exec node）、`fin-watchdog`
+（仅每日备份 + 心跳）。按 `priority=10→50` 保证数据库先起。
+
+> **服务整体交给 supervisord 后，watchdog 必须去掉服务巡检段**，只保留备份等
+> 定时职责；否则两边同时启动会 `EADDRINUSE`，且 supervisord 内会留下 FATAL 记录。
+
+### 8.2 两个实测坑（supervisor 3.0）
+
+1. **`user=` 不加载补充组**：supervisord 的 `user=postgres` 只 setuid/setgid，
+   不做 `initgroups`。Debian 的 postgres 默认 `ssl=on`，私钥
+   `/etc/ssl/private/ssl-cert-snakeoil.key` 属 `root:ssl-cert 640`；postgres 用户
+   虽在 ssl-cert 组却读不到，报
+   `FATAL: could not access private key file`。`pg_ctlcluster` 内部走 `su`
+   会初始化补充组，所以手工启动无感、托管启动必炸。
+   处置：本地专用实例直接关 SSL（库只听 127.0.0.1、web/viewer 均本地连接，
+   无需加密）——
+   ```bash
+   sed -i 's/^ssl = on$/ssl = off/' /etc/postgresql/16/main/postgresql.conf
+   ```
+2. **`reloadConfig()` 变更检测失效**：该构建下修改已注册程序的 `command` 后
+   reread 返回空变更列表，内存配置不更新，`startProcess` 仍用旧命令。
+   处置：**已注册程序的 command 保持不变**；需要调整行为时，改「被调用程序
+   自己读取的配置文件」（如 postgresql.conf），或摘除整个 drop-in 重新注册。
+
+### 8.3 验证托管生效（必做）
+
+```bash
+# 杀掉任一服务，确认平台在秒级自动拉起（PID 变更即证明）
+kill -9 $(ss -ltnp | grep ':5432 ' | grep -oP 'pid=\K[0-9]' | head -1)
+sleep 15 && ss -ltn | grep ':5432 '   # 应恢复监听，且进程 PPID 指向 supervisord
+```
+
+---
+
+## 九、数据迁移（从既有服务器搬到新服务器）
 
 应用表结构自动创建，所以**迁移只需搬数据**，无需执行建表脚本：
 
@@ -176,7 +240,7 @@ docker compose exec -T postgres pg_restore -U fin_market -d fin_market \
 
 ---
 
-## 九、备份与恢复
+## 十、备份与恢复
 
 ```bash
 ./deploy/backup.sh                    # 备份到 ./backups，默认滚动 7 天
@@ -198,7 +262,7 @@ KEEP_DAYS=30 ./deploy/backup.sh       # 自定义保留天数
 
 ---
 
-## 十、反向代理
+## 十一、反向代理
 
 参考 `deploy/nginx/fin-terminal.conf` + `deploy/nginx/fin-proxy.inc`：
 
@@ -219,7 +283,7 @@ nginx -t && systemctl reload nginx
 
 ---
 
-## 十一、回滚步骤
+## 十二、回滚步骤
 
 ### 代码回滚（发布后功能异常）
 
@@ -248,7 +312,7 @@ docker compose --env-file deploy/.env.deploy start postgres web worker   # 注�
 
 ---
 
-## 十二、验收清单
+## 十三、验收清单
 
 ```bash
 # 1. 服务状态
@@ -276,7 +340,7 @@ docker compose exec -T postgres psql -U fin_market -d fin_market -c 'SELECT coun
 
 ---
 
-## 十三、常见问题
+## 十四、常见问题
 
 **Q：页面能打开但数据一直加载失败？**
 服务器访问不了上游。在服务器上逐个验证：`curl -I https://money.finance.sina.com.cn/`、
@@ -292,7 +356,7 @@ docker compose exec -T postgres psql -U fin_market -d fin_market -c 'SELECT coun
 
 **Q：请求偶发空响应 / JSON 截断？**
 多为冷启动同步抓取耗时超过链路等待上限，连接被客户端断开。
-确保反向代理 `proxy_read_timeout` 足够（见第十节），并优先用 worker 预填充数据。
+确保反向代理 `proxy_read_timeout` 足够（见第十一节），并优先用 worker 预填充数据。
 
 **Q：`000001` 为什么是上证指数不是平安银行？**
 代码重叠，本项目按指数优先。查平安银行请用 `sz000001`。

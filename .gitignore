@@ -10,6 +10,13 @@ dist
 .env
 .env.local
 .env*.local
+
+# 部署环境变量（含真实密码与密钥，只保留 .example 模板）
+deploy/.env.deploy
+deploy/.env.remote
+
+# 数据库备份产物
+backups/
 coverage
 __pycache__/
 *.py[cod]

@@ -1,24 +1,105 @@
+# fin-terminal —— 独立部署（源服务器）全栈编排
+#
+# 启动前请先准备 deploy/.env.deploy（参考 deploy/.env.deploy.example）：
+#   cp deploy/.env.deploy.example deploy/.env.deploy && vi deploy/.env.deploy
+#   docker compose --env-file deploy/.env.deploy up -d --build
+#
+# 若部署的是「远程 API 模式」消费者（不持有数据库、不跑 worker），
+# 请改用 deploy/docker-compose.remote.yml。
+#
+# 本文件中所有密钥均为占位符，真实值只存在于未纳入版本库的 deploy/.env.deploy。
+
 services:
-  fin-terminal:
-    build: .
-    image: fin-terminal:latest
-    container_name: fin-terminal
+  # ---------------- PostgreSQL：公共市场数据持久化 ----------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: fin-postgres
     restart: unless-stopped
-    ports:
-      - '3000:3000'
     environment:
-      # 上游超时（毫秒）
-      UPSTREAM_TIMEOUT_MS: '8000'
-      TZ: 'Asia/Shanghai'
-      MARKET_READ_MODE: '${MARKET_READ_MODE:-hybrid}'
-      # 接入同花顺 iFinD 后取消注释，即可把财务摘要切换为真实财报口径
-      # IFIND_BASE_URL: 'https://your-ifind-gateway/v1'
-      # IFIND_TOKEN: 'your-token'
-      # 若走 MCP 网关（当前账号侧注册未完成，会返回 17008）
-      # IFIND_MCP_URL: 'http://iFinD-MCP.agent-gateway.auth-proxy.local/ds-mcp-servers/hexin-ifind-financial-mcp'
+      POSTGRES_DB: ${POSTGRES_DB:-fin_market}
+      POSTGRES_USER: ${POSTGRES_USER:?请在 deploy/.env.deploy 中设置 POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 deploy/.env.deploy 中设置 POSTGRES_PASSWORD}
+      # 中文排序与日期风格；保持 C 可避免索引行为差异
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+      TZ: Asia/Shanghai
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB:-fin_market}"']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    # 不对外暴露，仅供同网络内的 web 访问
+    expose:
+      - '5432'
+
+  # ---------------- Web：Next.js 服务 ----------------
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fin-terminal:latest
+    container_name: fin-web
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: '3000'
+      TZ: Asia/Shanghai
+      NODE_ENV: production
+      # ---- 市场数据库（独立部署必填）----
+      MARKET_DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-fin_market}
+      # 缓存复用 + 缺失/过期按需联网抓取
+      MARKET_READ_MODE: ${MARKET_READ_MODE:-hybrid}
+      # 保留 12 年历史（存储与采集上限）
+      MARKET_RETENTION_YEARS: ${MARKET_RETENTION_YEARS:-12}
+      # 收盘后自动更新（16:30 调度 / 06:30 补偿 / 周日复核），需同时运行 worker
+      MARKET_CLOSE_UPDATE_ENABLED: ${MARKET_CLOSE_UPDATE_ENABLED:-1}
+      # ---- 后台更新授权（worker 与维护端共用）----
+      MARKET_UPDATE_WORKER_ENABLED: '1'
+      MARKET_UPDATE_WORKER_TOKEN: ${MARKET_UPDATE_WORKER_TOKEN:?请设置至少 32 字符随机密钥}
+      # ---- 对外数据 API 密钥（供远程消费者接入，独立部署也建议设置）----
+      MARKET_DATA_API_TOKEN: ${MARKET_DATA_API_TOKEN:?请设置至少 32 字符随机密钥}
+      # ---- 可选：手机号登录会话密钥 ----
+      AUTH_SESSION_SECRET: ${AUTH_SESSION_SECRET:-}
+      APP_ORIGIN: ${PUBLIC_ORIGIN:?请设置公网访问地址，例如 https://fin.example.com}
+      # ---- 可选：接入同花顺 iFinD 后财务摘要切换为真实三表 ----
+      UPSTREAM_TIMEOUT_MS: ${UPSTREAM_TIMEOUT_MS:-8000}
+      # IFIND_BASE_URL: https://your-ifind-gateway/v1
+      # IFIND_TOKEN: your-token
+    ports:
+      # 只监听本机，公网访问一律经反向代理
+      - '127.0.0.1:${WEB_PORT:-3000}:3000'
     healthcheck:
       test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 60s
-      timeout: 10s
+      timeout: 15s
       retries: 3
-      start_period: 20s
+      start_period: 30s
+
+  # ---------------- Worker：行情更新执行器 ----------------
+  #
+  # 注意：worker 启动时会校验 MARKET_UPDATE_ORIGIN —— 必须是 https:// 开头，
+  # 或主机名为 127.0.0.1 / localhost。因此这里必须填公网 HTTPS 地址，
+  # 不能填 http://web:3000（容器名 hostname 会被拒绝）。
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fin-terminal:latest
+    container_name: fin-worker
+    restart: unless-stopped
+    # 复用 web 镜像，仅覆盖入口命令
+    command: ['node', 'scripts/market-update-worker.mjs']
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      TZ: Asia/Shanghai
+      MARKET_UPDATE_ORIGIN: ${PUBLIC_ORIGIN:?请设置公网 HTTPS 地址，worker 不接受 http 非本机地址}
+      MARKET_UPDATE_WORKER_TOKEN: ${MARKET_UPDATE_WORKER_TOKEN:?请设置至少 32 字符随机密钥}
+
+volumes:
+  pgdata:

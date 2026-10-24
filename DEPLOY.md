@@ -260,6 +260,30 @@ KEEP_DAYS=30 ./deploy/backup.sh       # 自定义保留天数
   主机故障时会和应用一起丢失。
 - 「校验通过」不等于「能恢复成功」，上线前请至少做一次真实恢复演练。
 
+### 10.1 备份同步到网盘（netdrive / 百度网盘连接）
+
+平台 netdrive（`baidu-netdisk` 连接器，底层 COS，域名 `smhwb-gz-002.data-tencentsmh.com`）
+提供 `tdrive.*` 系列 MCP 工具。上传走「申请票据 → curl PUT → 确认落库」三步：
+
+```bash
+# 1. tdrive.file_upload(dir_id, file_name, file_size) → 临时 URL + headers + confirm_key + task_id
+# 2. 把返回的 headers 原样写入文件（每行一个 "Name: Value"），再：
+curl -sS -X PUT -H @/tmp/headers.txt -T "/abs/path/backup.sql.gz" "https://<domain><path>"
+# 3. tdrive.file_upload_complete(dir_id, file_name, file_size, confirm_key, task_id)
+```
+
+实测要点（2026-10-25）：
+
+- **headers 必须走文件传递**（`-H @file`）。超长 `x-cos-security-token`（约 1KB）
+  内联在命令行里会被截断，COS 报 `InvalidAccessKeyId`（403），且报错信息有误导性。
+- **必须用 `-T`** 读文件流式上传；`--data-binary` 不带 `@` 会把路径字符串当成 body。
+- 目标目录要传**真实 file_id**：`dir_list("/")` 看到的沙箱虚拟根不在上传服务的目录树里，
+  传它会报「文件不存在」。真实根是 `YvsOMnIwESfH`，本项目备份目录
+  「行情数据备份」`YhHLFNdbXnCC`（路径 `p_7f7d2cd3…/行情数据备份`）。
+  不知道 file_id 时先用 `tdrive.search_content` 全盘搜，从返回条目的 `path` 链推根。
+- 票据有效期约 2 小时（`q-key-time`），550MB 文件实测 30s（约 18MB/s）。
+- 上传前先 `gzip -t` 校验：2026-10-24 11:08 那份备份就是截坏的（PG 崩溃窗口期生成），已跳过未传。
+
 ---
 
 ## 十一、反向代理

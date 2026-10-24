@@ -333,6 +333,9 @@ export default function ResearchDesk({
         const all: Quote[] = [];
         // Imports can exceed the quote API's 200-symbol request limit.
         const waitingQuotes=new Set(codes);
+        // 失败批只重试一次：冷抓批次偶发超时/限频，直接丢弃会让这批股票整页无行情；
+        // 用集合记录已重试批次，避免持续失败时无限循环。
+        const retried=new Set<string>();
         while(waitingQuotes.size && alive) {
           const batch = takePrioritized(waitingQuotes,priority.current,100);
           try {
@@ -349,7 +352,9 @@ export default function ResearchDesk({
           } catch(error) {
             if(!alive)return;
             setError(error instanceof Error?error.message:'部分行情刷新失败');
-            // The failed batch is already removed; later batches still run.
+            // 失败批放回队列末尾重试一次，后续批次继续跑
+            const signature=batch.join(',');
+            if(!retried.has(signature)){retried.add(signature);for(const c of batch)waitingQuotes.add(c);}
           }
 
         }
@@ -528,7 +533,9 @@ export default function ResearchDesk({
     setFinPollPaused(false);
     let timer: ReturnType<typeof setTimeout> | undefined;
     let attempts=0;
-    const read = (url: string, init?: RequestInit) => fetchJson(url, { ...init, signal: controller.signal },20_000);
+    // 60s：休市期缓存过期后整批 50 只要走「读库→抓上游→写库」，冷抓客观需要时间；
+    // 20s 会在抓取完成前掐断请求，失败批又不重试，用户只看到「请求超时」。
+    const read = (url: string, init?: RequestInit) => fetchJson(url, { ...init, signal: controller.signal },60_000);
     const poll = async () => {
       let pending=false;
       for (let i=0;i<symbols.length && !controller.signal.aborted;i+=4) {

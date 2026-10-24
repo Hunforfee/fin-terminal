@@ -28,8 +28,10 @@ export async function sharedQuotes(symbols: string[], fetcher: (symbols: string[
     const promise=gate.then(()=>results.get(symbol)??null);inflight.set(symbol,promise);waits.set(symbol,promise);
   }
   const results=new Map<string,Quote>();
-  async function acquire(index: number): Promise<void>{
-    if(index<owned.length)return withMarketRefresh(store,'quote:'+owned[index],()=>acquire(index+1));
+  // 整批共用一把抓取租约：fetcher 本就是批量一次请求，锁粒度必须匹配。
+  // 旧实现对 50 只一批逐只串行抢租约（每只 2 次 PG 往返 + 与 worker 跨进程互斥），
+  // 一批最坏要等数分钟，前端 20s 即超时——这是自选页「请求超时」的根因。
+  async function fetchPending(): Promise<void>{
     const pending: string[]=[], digests=new Map<string,string|null>();
     for(const symbol of owned){
       const row=await store?.read<Quote>(key(symbol));
@@ -59,7 +61,8 @@ export async function sharedQuotes(symbols: string[], fetcher: (symbols: string[
         acquiredAt:old.acquiredAt,reason:String(reason).slice(0,300)}));
     }
   }
-  try {if(owned.length)await acquire(0);fallback('当前来源未返回该证券，使用最近一次成功行情');}
+  // 批租约 identity：与本批 latest-quote 键列表绑定，同批并发请求共享同一把锁
+  try {if(owned.length)await withMarketRefresh(store,'quote-batch:'+owned.map(key).join(','),fetchPending);fallback('当前来源未返回该证券，使用最近一次成功行情');}
   catch(error){fallback(error);if(!results.size)throw error;}
   finally { release();for(const symbol of owned)inflight.delete(symbol); }
   for(const [symbol,promise]of waits){const row=await promise;if(row)found.set(symbol,observeMarketValue(row));}

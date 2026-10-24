@@ -22,12 +22,12 @@ function remember<T>(key: string, value: T, ttlMs: number): void {
   while (store.size > MAX_ENTRIES) store.delete(store.keys().next().value!);
 }
 
-/** 默认 TTL：交易时段 15s，非交易时段 10 分钟（收盘后数据不再变化） */
+/** 默认 TTL：交易时段 15s，非交易时段 30 分钟（收盘后数据不再变化，缩短重抓频率） */
 export function defaultTtl(market: 'A' | 'HK' = 'A', date?: Date): number {
   const trading = market === 'HK'
     ? isHongKongTradingTime(date)
     : isShanghaiTradingTime(date);
-  return trading ? 15_000 : 600_000;
+  return trading ? 15_000 : 1_800_000;
 }
 
 export async function cached<T>(key: string, ttlMs: number, producer: () => Promise<T>, options: { staleOnError?: boolean } = {}): Promise<T> {

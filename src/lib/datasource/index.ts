@@ -329,7 +329,10 @@ async function fetchQuotesRawUpstream(symbols: string[]): Promise<Quote[]> {
   } catch {
     /* 落到下一级 */
   }
-  return snapshot.snapshotQuotes(symbols);
+  // 不再在这里返回 snapshot 旧数据：那会让「全 stale 结果」被 cached() 按正常 TTL
+  // 缓存十分钟，期间所有请求都拿到旧价。抛错走 sharedQuotes 的 saved fallback
+  // （同样返回旧值但带 warnings，且不污染缓存，下个 TTL 会真正重试）。
+  throw new Error('实时行情源暂不可用（腾讯/新浪均未返回有效数据）');
 }
 
 /* ------------------------------------------------------------------ K 线 */

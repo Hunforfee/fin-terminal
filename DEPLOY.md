@@ -284,6 +284,29 @@ curl -sS -X PUT -H @/tmp/headers.txt -T "/abs/path/backup.sql.gz" "https://<doma
 - 票据有效期约 2 小时（`q-key-time`），550MB 文件实测 30s（约 18MB/s）。
 - 上传前先 `gzip -t` 校验：2026-10-24 11:08 那份备份就是截坏的（PG 崩溃窗口期生成），已跳过未传。
 
+### 10.2 从平台网盘下载备份
+
+文件有**永久 file_id**，下载链接是**临时签名**（约 2 小时，勿缓存）。三条路径：
+
+1. **平台文件界面**（日常首选）：进网盘「行情数据备份」文件夹，点文件直接下载。
+2. **让 Agent 现签链接**：报文件名或 file_id，用 `tdrive.file_download(file_id)` 即得
+   `download_url`（自带 Token 签名，**必须原样使用**，禁止拆分/解析/修改），然后：
+   ```bash
+   curl -sSL -o backup.sql.gz "<download_url>"
+   ```
+3. 已归档备份的 file_id 见下方台账；校验用 `gzip -t`，恢复用 `pg_restore`。
+
+备份台账（截至 2026-10-25，目录 `YhHLFNdbXnCC`）：
+
+| 文件 | 大小（字节） | file_id |
+|---|---|---|
+| fin-market-db-20261025-000351.sql.gz | 551,723,713 | `YxBOlfFzyQXj` |
+| fin-market-db-20261024-111347.sql.gz | 347,092,023 | `YXGkgJfnmxTJ` |
+| fin-market-db-20261024-110942.sql.gz | 345,060,675 | `YQxFuARtCVmi` |
+
+> 注意：netdrive 是**平台自有存储**（COS 后端），不是用户百度账户。
+> 传进去的文件只在平台网盘内可见，不会出现在用户百度网盘客户端。
+
 ---
 
 ## 十一、反向代理

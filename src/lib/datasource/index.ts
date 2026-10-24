@@ -8,6 +8,7 @@ import { readRemoteMarketData, remoteMarketDataEnabled } from '../marketDataClie
 import { cachedValuationResult, valuationInputVersion, type ValuationCacheOptions } from '../valuationResultCache';
 import { sharedQuotes } from '../quoteInputs';
 import { searchSources } from '../searchSources';
+import { securityDirectory } from '../securityDirectory';
 import { getValuationPlans, getValuationDividends } from '../valuationInputs';
 import { getFinancialHistoryInput } from '../financialHistoryInputs';
 import { fetchHkRatioHistory, attachHkValuationHistory } from './hkValuationHistory';
@@ -88,38 +89,22 @@ function ymdYearsAgo(years: number): string {
 
 /* ------------------------------------------------------------------ 搜索 */
 
-/** 代码 / 名称 / 拼音搜索：东财联想 → 腾讯联想 → 本地池兜底 */
+/** 数据库证券目录 → 进程内匹配；未收录的查询才联网补充。远程部署仍统一走源站 API。 */
 export async function search(keyword: string): Promise<SearchHit[]> {
   if (remoteMarketDataEnabled()) return readRemoteMarketData<SearchHit[]>('search', { q: keyword });
   const kw = keyword.trim().toLowerCase();
   if (!kw) return [];
-  return cached(`search-markets-v3:${kw}`, 5 * 60 * 1000, () => searchSources([
-    signal=>eastmoney.fetchSearch(kw,12,signal),
-    signal=>tencent.fetchSearch(kw,signal),
-  ],localSearch(kw)),{staleOnError:false});
-}
-
-function localSearch(kw: string): SearchHit[] {
-  const lower = kw.toLowerCase();
-  const out: SearchHit[] = [];
-  const tryPush = (code: string, name: string, kind: SearchHit['kind'], board: string) => {
-    if (!code.includes(lower) && !name.toLowerCase().includes(lower)) return;
-    const n = kind === 'stock' ? normalizeStockCode(code) : normalizeCode(code);
-    if (!n) return;
-    out.push({
-      code,
-      symbol: n.symbol,
-      name,
-      market: n.market,
-      kind,
-      board,
-      secid: n.secid,
-    });
-  };
-  for (const i of INDICES) tryPush(i.code, i.name, 'index', '指数');
-  for (const s of STOCKS) tryPush(s.code, s.name, 'stock', s.board);
-  for (const f of FUNDS) tryPush(f.code, f.name, 'fund', f.board);
-  return out.slice(0, 12);
+  const hits = await securityDirectory.search(kw);
+  if (hits.length) return hits;
+  return cached(`search-directory-miss-v1:${kw}`, 5 * 60 * 1000, async () => {
+    const results = await searchSources([
+      signal=>eastmoney.fetchSearch(kw,12,signal),
+      signal=>tencent.fetchSearch(kw,signal),
+    ]);
+    // Storage failure must not discard a successful search response.
+    await securityDirectory.remember(results).catch(() => {});
+    return results;
+  },{staleOnError:false});
 }
 
 /* ------------------------------------------------------------------ 行情 */

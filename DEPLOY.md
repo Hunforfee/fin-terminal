@@ -255,9 +255,12 @@ KEEP_DAYS=30 ./deploy/backup.sh       # 自定义保留天数
 - 采用 `pg_dump -Fc`：可压缩、`pg_restore` 可选择性恢复单表、可跨版本。
   另存 `pg_dumpall --globals-only`，否则**角色不会被备份**，恢复后只读查看器会连不上。
 - 备份完成后自动执行 `pg_restore --list` 校验，失败即删除，不留下坏备份。
-- 脚本经 `docker compose exec` 走 stdout 落盘，容器内不留残留。
+- 连接方式自动探测：compose 栈在跑走 `docker compose exec`（生产）；
+  **裸机/本沙箱自动切直连模式**（postgres 系统进程在 `127.0.0.1:5432`，本机 pg_dump 直连，
+  连接串取自 `.env.local` 的 `MARKET_DATABASE_URL`，角色导出走 `su postgres`）。
+  可用 `DIRECT=1` 强制直连、`PGURL=<连接串>` 指定连接串。
 - 建议再配一层异地（对象存储或另一台主机）。**只放在应用同机等于没备份**——
-  主机故障时会和应用一起丢失。
+  主机故障时会和应用一起丢失。已通过 10.3 的每日自动同步落地。
 - 「校验通过」不等于「能恢复成功」，上线前请至少做一次真实恢复演练。
 
 ### 10.1 备份同步到网盘（netdrive / 百度网盘连接）
@@ -306,6 +309,46 @@ curl -sS -X PUT -H @/tmp/headers.txt -T "/abs/path/backup.sql.gz" "https://<doma
 
 > 注意：netdrive 是**平台自有存储**（COS 后端），不是用户百度账户。
 > 传进去的文件只在平台网盘内可见，不会出现在用户百度网盘客户端。
+
+### 10.3 每日自动备份（平台自动化任务 + 双通道同步）
+
+`deploy/backup-and-sync.sh` 把「备份 → 打包 → 双通道上传 → 滚动保留」串成一键流程，
+由平台自动化任务 **每天 03:00（Asia/Shanghai）** 触发，无需人工干预：
+
+```
+backup.sh（pg_dump -Fc + 角色 + pg_restore 校验；本地 tar 包保留 7 天）
+  → 打包为 fin-market-db-<时间戳>.tar.gz（gzip -t 校验后才删除未打包目录）
+  → tdrive「行情数据备份」上传     【必做通道：脚本走本地网关直连 MCP，零登录态、零扫码】
+  → 夸克 workbuddy 文件夹上传      【cookie 有效才做；失效不阻塞，仅记录】
+  → 双通道滚动保留 7 份（夸克旧档进回收站，可恢复）
+```
+
+退出码约定（自动化任务据此决定是否通知用户）：
+
+| 退出码 | 含义 | 处理 |
+|---|---|---|
+| 0 | 全部成功（或显式 SKIP_QUARK） | 简报即可 |
+| 2 | tdrive 成功但夸克失败（多为 cookie 过期） | 提醒用户扫码刷新 cookie |
+| 1 | 备份或 tdrive 失败（硬失败） | 立即报错详情 |
+
+可用环境变量：`TDRIVE_DIR_FID` / `QUARK_DIR_FID` / `KEEP_REMOTE`（默认 7）/
+`KEEP_LOCAL_DAYS`（默认 7）/ `SKIP_QUARK=1` / `PGURL` / `DIRECT`。
+
+相关脚本：
+
+- `deploy/backup-and-sync.sh`——主编排（见上）
+- `scripts/tdrive-tool.mjs`——tdrive 命令行工具（`upload` / `list` / `prune` / `delete`），
+  经 `http://netdrive.agent-gateway.auth-proxy.local/mcp` 直连，不依赖 agent 会话
+- `deploy/quark_upload.py`——夸克上传 / cookie 校验（`--check`）/ 滚动保留（`prune`），
+  登录态复用 quark-drive skill 的 `cookie.txt`
+
+维护要点：
+
+- **夸克 cookie 过期**是唯一需要人工介入的场景：任务退出码 2 并通知，
+  重跑 quark-drive skill 的 `get_cookie.py` 扫码刷新（预计几周一次）。
+  刷新前 tdrive 通道不受任何影响，备份不会断。
+- 手动全流程：项目根目录执行 `./deploy/backup-and-sync.sh`。
+- 沙箱宿主机 cron 未启用且休眠恢复不保证，**不作为**定时通道，仅平台自动化任务触发。
 
 ---
 
